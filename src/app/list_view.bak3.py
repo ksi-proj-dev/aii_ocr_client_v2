@@ -1,3 +1,5 @@
+import os
+import json
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt6.QtCore import Qt
 from config_manager import ConfigManager
@@ -36,31 +38,26 @@ class ListView(QWidget):
         # self.apply_sort_order()      # populate_table内で実行
 
     def populate_table(self, files_data):
-        self.table.setUpdatesEnabled(False) # 更新を一時停止
-        try:
-            self.file_list_data = files_data
-            self.table.setSortingEnabled(False) # (1) ソートを一時的に無効化
-            self.table.setRowCount(0)           # (2) テーブル内容をクリア
-            self.table.setRowCount(len(self.file_list_data)) # (3) 新しい行数を設定
-            for idx, file_info in enumerate(self.file_list_data):
-                no_item = QTableWidgetItem(str(file_info.get("no", idx + 1)))
-                no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(idx, 0, no_item)
-                self.table.setItem(idx, 1, QTableWidgetItem(file_info.get("name", "")))
-                self.table.setItem(idx, 2, QTableWidgetItem(file_info.get("status", "")))
-                self.table.setItem(idx, 3, QTableWidgetItem(file_info.get("ocr_result_summary", "")))
-                self.table.setItem(idx, 4, QTableWidgetItem(file_info.get("searchable_pdf_status", "-")))
-                size_kb = file_info.get("size", 0) / 1024
-                size_item = QTableWidgetItem(f"{size_kb:,.1f} KB")
-                size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(idx, 5, size_item)
-            # 列幅とソートの適用はアイテムセット後が良い場合がある
-            self.table.resizeColumnsToContents()    # (4) 列幅自動調整
-            self.restore_column_widths()            # (5) 保存された列幅を適用
-            self.apply_sort_order()                 # (6) 保存されたソート順を適用
-        finally:
-            self.table.setSortingEnabled(True)      # (7) ソートを再度有効化
-            self.table.setUpdatesEnabled(True) # 更新を再開 (paintEventが呼ばれる)
+        self.file_list_data = files_data
+        self.table.setSortingEnabled(False) # (1) ソートを一時的に無効化
+        self.table.setRowCount(0)           # (2) テーブル内容をクリア
+        self.table.setRowCount(len(self.file_list_data)) # (3) 新しい行数を設定
+        for idx, file_info in enumerate(self.file_list_data):
+            no_item = QTableWidgetItem(str(file_info.get("no", idx + 1)))
+            no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(idx, 0, no_item)
+            self.table.setItem(idx, 1, QTableWidgetItem(file_info.get("name", "")))
+            self.table.setItem(idx, 2, QTableWidgetItem(file_info.get("status", "")))
+            self.table.setItem(idx, 3, QTableWidgetItem(file_info.get("ocr_result_summary", "")))
+            self.table.setItem(idx, 4, QTableWidgetItem(file_info.get("searchable_pdf_status", "-")))
+            size_kb = file_info.get("size", 0) / 1024
+            size_item = QTableWidgetItem(f"{size_kb:,.1f} KB")
+            size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(idx, 5, size_item)
+        self.table.resizeColumnsToContents()    # (4) 列幅自動調整
+        self.restore_column_widths()            # (5) 保存された列幅を適用
+        self.apply_sort_order()                 # (6) 保存されたソート順を適用
+        self.table.setSortingEnabled(True)      # (7) ソートを再度有効化
 
     def update_files(self, files_data):
         self.populate_table(files_data)
@@ -78,8 +75,7 @@ class ListView(QWidget):
         column = last_sort.get("column", default_sort["column"])
         order_str = last_sort.get("order", default_sort["order"])
         sort_order = Qt.SortOrder.AscendingOrder if order_str == "asc" else Qt.SortOrder.DescendingOrder
-        if 0 <= column < self.table.columnCount():
-            self.table.sortItems(column, sort_order)
+        if 0 <= column < self.table.columnCount(): self.table.sortItems(column, sort_order)
 
     def get_column_widths(self):
         if hasattr(self, 'table') and self.table.columnCount() > 0:
@@ -91,4 +87,4 @@ class ListView(QWidget):
             header = self.table.horizontalHeader()
             return {"column": header.sortIndicatorSection(),
                     "order": "asc" if header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder else "desc"}
-        return self.config.get("sort_order", {"column": 0, "order": "asc"})
+        return {"column": 0, "order": "asc"}

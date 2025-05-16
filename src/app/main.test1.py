@@ -56,9 +56,9 @@ class OcrWorker(QThread):
     all_files_processed = pyqtSignal()
 
     def __init__(self, api_client, files_to_process, output_folder_for_results, create_searchable_pdf,
-                 move_on_success_enabled, success_move_target_folder_root,
-                 move_on_failure_enabled, failure_move_target_folder_root,
-                 collision_action, input_root_folder, log_manager):
+                move_on_success_enabled, success_move_target_folder_root,
+                move_on_failure_enabled, failure_move_target_folder_root,
+                collision_action, input_root_folder, log_manager):
         super().__init__()
         self.api_client = api_client
         self.files_to_process = files_to_process
@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
         self.log_manager.info("オプションダイアログを開きます。", context="UI_ACTION")
         dialog = OptionDialog(self)
         if dialog.exec():
-            self.config = ConfigManager.load()
+            self.config = ConfigManager.load() # 保存された設定を再ロード
             self.log_manager.info("オプション設定が保存・再読み込みされました。", context="CONFIG_UPDATE")
             self.api_client = CubeApiClient(self.config, self.log_manager)
         else:
@@ -398,6 +398,8 @@ class MainWindow(QMainWindow):
             is_valid = False
             error_message = "出力フォルダ（結果）は入力フォルダのサブフォルダに設定できません。"
         
+        # 実行中でなければ、フォルダの妥当性に基づいて開始ボタンの有効性を設定
+        # 実行中であれば、開始ボタンは常に無効
         self.start_ocr_action.setEnabled(is_valid and not self.is_ocr_running)
 
         if error_message:
@@ -419,7 +421,7 @@ class MainWindow(QMainWindow):
         collected_files = []
         supported_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
         for root, dirs, files in os.walk(self.input_folder_path, topdown=True, followlinks=False):
-            current_depth = root.replace(self.input_folder_path, '').count(os.sep) + 1
+            current_depth = root.replace(self.input_folder_path, '').count(os.sep) + 1 # 簡易的な深さ計算
             if current_depth > recursion_depth_limit:
                 self.log_manager.info(f"  深さ制限超過 ({current_depth}/{recursion_depth_limit}): スキップ中 '{root}'", context="FILE_SCAN_DETAIL")
                 dirs[:] = []
@@ -427,7 +429,7 @@ class MainWindow(QMainWindow):
             for filename in sorted(files):
                 if len(collected_files) >= max_files:
                     self.log_manager.info(f"  最大ファイル数 {max_files} に到達。収集終了。", context="FILE_SCAN")
-                    return sorted(list(set(collected_files)))
+                    return sorted(list(set(collected_files))) # ここでソートと重複排除
                 file_path = os.path.join(root, filename)
                 if os.path.islink(file_path):
                     self.log_manager.info(f"  シンボリックリンクスキップ: {file_path}", context="FILE_SCAN_SKIP")
@@ -435,11 +437,11 @@ class MainWindow(QMainWindow):
                 file_ext = os.path.splitext(filename)[1].lower()
                 if file_ext in supported_extensions:
                     collected_files.append(file_path)
-        unique_sorted_files = sorted(list(set(collected_files)))
+        unique_sorted_files = sorted(list(set(collected_files))) # 最後に全体でソートと重複排除
         self.log_manager.info(f"ファイル収集完了: {len(unique_sorted_files)} 件発見。", context="FILE_SCAN", found_count=len(unique_sorted_files))
         if len(unique_sorted_files) > max_files:
-             self.log_manager.info(f"最大ファイル数 {max_files} に切り詰めます。", context="FILE_SCAN")
-             return unique_sorted_files[:max_files]
+            self.log_manager.info(f"最大ファイル数 {max_files} に切り詰めます。", context="FILE_SCAN")
+            return unique_sorted_files[:max_files]
         return unique_sorted_files
 
     def _create_confirmation_summary(self, files_to_process_count, create_searchable_pdf_flag):
@@ -450,6 +452,7 @@ class MainWindow(QMainWindow):
         file_actions_config = self.config.get("file_actions", {})
         move_on_success = file_actions_config.get("move_on_success_enabled", False)
         success_folder_cfg = file_actions_config.get("success_folder", "OCR成功")
+        # UIで選択されたフルパスがあればそれを、なければ設定名と出力フォルダから組み立てる
         actual_success_folder = self.success_move_folder_path or \
                                 (os.path.join(self.output_folder_path, success_folder_cfg) if self.output_folder_path else success_folder_cfg)
         summary_lines.append(f"成功ファイル移動先: {actual_success_folder if move_on_success else '(移動しない)'}")
@@ -473,7 +476,7 @@ class MainWindow(QMainWindow):
         summary_lines.append("<strong>【主要OCRオプション】</strong>")
         summary_lines.append(f"回転補正: {'ON' if ocr_opts.get('adjust_rotation', 0) == 1 else 'OFF'}")
         summary_lines.append(f"文字情報抽出: {'ON' if ocr_opts.get('character_extraction', 0) == 1 else 'OFF'}")
-        summary_lines.append(f"強制結合: {'ON' if ocr_opts.get('concatenate', 1) == 1 else 'OFF'}")
+        summary_lines.append(f"強制結合: {'ON' if ocr_opts.get('concatenate', 1) == 1 else 'OFF'}") # デフォルトON考慮
         summary_lines.append(f"チェックボックス認識: {'ON' if ocr_opts.get('enable_checkbox', 0) == 1 else 'OFF'}")
         summary_lines.append(f"テキスト出力モード: {'全文テキストのみ' if ocr_opts.get('fulltext_output_mode', 0) == 1 else '詳細情報'}")
         summary_lines.append(f"全文テキスト改行: {'付加する' if ocr_opts.get('fulltext_linebreak_char', 0) == 1 else '付加しない'}")
@@ -515,6 +518,7 @@ class MainWindow(QMainWindow):
 
         self.log_manager.info("ユーザー確認OK。OCR処理を開始します。", context="OCR_FLOW_START")
         self.log_manager.info("--- OCR実行設定スナップショット ---", context="OCR_CONFIG_BEGIN")
+        # (ログ出力は _create_confirmation_summary と重複しないように主要なもの、または詳細をここに書く)
         self.log_manager.info(f"入力フォルダ: {self.input_folder_path}", context="OCR_CONFIG_BEGIN")
         self.log_manager.info(f"出力フォルダ(結果): {self.output_folder_path}", context="OCR_CONFIG_BEGIN")
         file_actions_cfg = self.config.get("file_actions", {})
@@ -535,15 +539,22 @@ class MainWindow(QMainWindow):
         self.list_view.update_files(self.processed_files_info)
         if hasattr(self.summary_view, 'start_processing'): self.summary_view.start_processing(len(files_to_process))
 
+        file_actions_cfg = self.config.get("file_actions", {})
         def get_abs_move_path_for_worker(user_selected_path, config_folder_name, default_subfolder_name, base_output_folder_for_results):
-            if user_selected_path and os.path.isabs(user_selected_path): return user_selected_path
+            # Workerに渡すパスは、ユーザーがUIでフルパスを指定していたらそれを最優先
+            if user_selected_path and os.path.isabs(user_selected_path):
+                return user_selected_path
+            # 次にconfigファイル内の値（フルパスまたはサブフォルダ名）
             path_from_conf = config_folder_name
-            if os.path.isabs(path_from_conf): return path_from_conf
+            if os.path.isabs(path_from_conf):
+                return path_from_conf
+            # 上記以外（サブフォルダ名または空）の場合は、OCR結果出力フォルダを基準にする
+            # OCR結果出力フォルダが未選択の場合は、サブフォルダ名だけを返す（Worker側でエラー処理かカレント基準）
             if not base_output_folder_for_results:
                 # ベースとなる出力フォルダが指定されていない場合、カレントディレクトリ基準の相対パスとして扱うか、
                 # もしくはエラーとするか、または単なる名前としてWorkerに渡す。ここでは単なる名前として渡す。
                 self.log_manager.warning(f"移動先フォルダの基準となる出力フォルダ(結果)が未選択です。移動先 '{path_from_conf or default_subfolder_name}' は相対パスとして扱われる可能性があります。", context="OCR_CONFIG_WARN")
-                return path_from_conf or default_subfolder_name
+                return path_from_conf or default_subfolder_name # これだと相対パスになる可能性
             return os.path.join(base_output_folder_for_results, path_from_conf or default_subfolder_name)
 
         actual_success_move_folder = get_abs_move_path_for_worker(self.success_move_folder_path, file_actions_cfg.get("success_folder"), "OCR成功", self.output_folder_path)
@@ -571,14 +582,13 @@ class MainWindow(QMainWindow):
                 self.ocr_worker.stop()
                 self.log_manager.info("OCR処理の中止をユーザーが指示しました。", context="OCR_FLOW_CONTROL")
         else:
-            self.is_ocr_running = False
+            self.is_ocr_running = False # 実行中でないなら状態を更新
             self.update_ocr_controls()
             self.log_manager.info("中止試行: OCR処理は実行されていません。", context="OCR_FLOW_CONTROL")
 
     def update_ocr_controls(self):
         running = self.is_ocr_running
-        
-        # 開始ボタンの有効性は check_both_folders_validity の結果を尊重する
+        # 開始ボタンの有効性は check_both_folders_validity にも依存するので、その結果を尊重する
         # check_both_folders_validity は self.start_ocr_action.setEnabled() を直接呼んでいるので、
         # ここでは running 状態に基づいてさらに上書きする。
         if running:
@@ -588,19 +598,15 @@ class MainWindow(QMainWindow):
             self.check_both_folders_validity() # これでstart_ocr_actionの有効性が設定される
 
         self.stop_ocr_action.setEnabled(running)
-        
         can_reset = not running and (len(self.processed_files_info) > 0 or bool(self.input_folder_path))
         self.reset_action.setEnabled(can_reset)
-        
-        for action in [self.input_folder_action, 
-                       self.output_folder_action, 
-                       self.success_move_folder_action, 
-                       self.failure_move_folder_action, 
-                       self.option_action]:
+        for action in [ self.input_folder_action,
+                        self.output_folder_action,
+                        self.success_move_folder_action,
+                        self.failure_move_folder_action,
+                        self.option_action]:
             action.setEnabled(not running)
-        
         # self.log_manager.debug(f"update_ocr_controls: running={running}, start_enabled={self.start_ocr_action.isEnabled()}, stop_enabled={self.stop_ocr_action.isEnabled()}, reset_enabled={self.reset_action.isEnabled()}", context="UI_CONTROL_DEBUG")
-
 
     def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, error_info):
         target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
@@ -625,12 +631,12 @@ class MainWindow(QMainWindow):
                 self.log_manager.error(f"結果JSON解析エラー ({target_file_info['name']})", context="UI_UPDATE_ERROR", exception_info=e, path=file_path)
             self.log_manager.info(f"ファイル '{target_file_info['name']}' OCR成功。", context="OCR_RESULT_UI", path=file_path)
             if hasattr(self.summary_view, 'increment_completed_count'): self.summary_view.increment_completed_count()
-        else:
+        else: # Should not happen if error_info is also None
             target_file_info["status"] = "OCR状態不明"
             target_file_info["ocr_result_summary"] = "レスポンスなし"
             self.log_manager.warning(f"ファイル '{target_file_info['name']}' OCRレスポンスなし(エラー情報もなし)。", context="OCR_RESULT_UI", path=file_path)
-            if hasattr(self.summary_view, 'increment_error_count'): self.summary_view.increment_error_count()
-        self.list_view.update_files(self.processed_files_info)
+            if hasattr(self.summary_view, 'increment_error_count'): self.summary_view.increment_error_count() # 不明な場合はエラー扱いも検討
+        self.list_view.update_files(self.processed_files_info) # 全体更新がシンプルで確実
         if hasattr(self.summary_view, 'increment_processed_count'): self.summary_view.increment_processed_count()
 
     def on_file_searchable_pdf_processed(self, file_idx, file_path, pdf_content, pdf_error_info):
@@ -691,8 +697,8 @@ class MainWindow(QMainWindow):
                     self.processed_files_info.append({"no": i + 1, "path": f_path, "name": os.path.basename(f_path), "size": f_size, "status": "待機中(再読込)", "ocr_result_summary": "", "searchable_pdf_status": "-"})
                 self.list_view.update_files(self.processed_files_info)
                 if hasattr(self.summary_view, 'start_processing'):
-                    self.summary_view.reset_summary()
-                    self.summary_view.total_files = len(collected_files)
+                    self.summary_view.reset_summary() #カウンターリセット
+                    self.summary_view.total_files = len(collected_files) #総数のみ更新
                     self.summary_view.update_display()
                 self.log_manager.info(f"再スキャン完了: {len(collected_files)} 件発見。", context="RESET_FLOW_SCAN", count=len(collected_files))
             else: self.log_manager.info("再スキャン結果: 対象ファイルなし。", context="RESET_FLOW_SCAN")
@@ -700,6 +706,7 @@ class MainWindow(QMainWindow):
         self.is_ocr_running = False
         self.update_ocr_controls() # ボタン状態を更新
         self.check_both_folders_validity() # これも呼んで開始ボタンの妥当性を再評価
+        self.log_manager.info("リセット処理完了。", context="RESET_FLOW")
 
     def closeEvent(self, event):
         if self.is_ocr_running:

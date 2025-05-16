@@ -1,9 +1,9 @@
 import json
-import os
+import os # os.path.join を使う可能性のため (今回は未使用)
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox, QHBoxLayout,
-    QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton,
-    QFileDialog, QVBoxLayout, QLabel
+    QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton, QVBoxLayout, QLabel, # 追加
+    QFileDialog # フォルダ選択ダイアログ用
 )
 from config_manager import ConfigManager
 
@@ -11,17 +11,17 @@ class OptionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定 (AI inside Cube)")
-        self.config = ConfigManager().load() # 常に最新の設定をロード
+        self.config = ConfigManager().load()
         self.cube_options_key = self.config.get("api_type", "cube_fullocr")
         self.init_ui()
-        self.resize(500, 600)
+        self.resize(500, 600) # ウィンドウサイズを調整 (縦長に)
 
     def init_ui(self):
-        main_layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self) # QVBoxLayout をメインレイアウトに
 
         # --- 1. 基本設定グループ ---
         basic_group = QGroupBox("基本設定")
-        basic_form_layout = QFormLayout()
+        basic_form_layout = QFormLayout() # QFormLayoutをグループ内で使用
 
         self.api_key_edit = QLineEdit(self.config.get("api_key", ""))
         basic_form_layout.addRow("APIキー:", self.api_key_edit)
@@ -50,20 +50,22 @@ class OptionDialog(QDialog):
         file_search_form_layout = QFormLayout()
 
         self.max_files_spinbox = QSpinBox()
-        self.max_files_spinbox.setRange(1, 999)
+        self.max_files_spinbox.setRange(1, 999) # 1-999
         self.max_files_spinbox.setValue(self.config.get("options", {}).get(self.cube_options_key, {}).get("max_files_to_process", 100))
+        self.max_files_spinbox.setToolTip("一度に処理する最大ファイル数 (1-999)")
         file_search_form_layout.addRow("最大処理ファイル数:", self.max_files_spinbox)
 
         self.recursion_depth_spinbox = QSpinBox()
-        self.recursion_depth_spinbox.setRange(1, 10)
+        self.recursion_depth_spinbox.setRange(1, 10) # 1-10
         self.recursion_depth_spinbox.setValue(self.config.get("options", {}).get(self.cube_options_key, {}).get("recursion_depth", 5))
+        self.recursion_depth_spinbox.setToolTip("入力フォルダの再帰検索の深さ (1でカレントのみ, 最大10)")
         file_search_form_layout.addRow("再帰検索の深さ:", self.recursion_depth_spinbox)
         file_search_group.setLayout(file_search_form_layout)
         main_layout.addWidget(file_search_group)
 
         # --- 3. OCRオプション（Cube API）グループ ---
         cube_ocr_group = QGroupBox("全文OCRオプション (Cube API)")
-        cube_ocr_form_layout = QFormLayout()
+        cube_ocr_form_layout = QFormLayout() # QFormLayoutを使用
 
         current_ocr_options = self.config.get("options", {}).get(self.cube_options_key, {})
 
@@ -103,13 +105,12 @@ class OptionDialog(QDialog):
         file_move_group = QGroupBox("ファイル移動設定")
         file_move_form_layout = QFormLayout()
 
-        file_actions_config = self.config.get("file_actions", {})
-
+        # OCR成功時のファイル移動
         self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")
-        self.move_on_success_chk.setChecked(file_actions_config.get("move_on_success_enabled", False))
+        self.move_on_success_chk.setChecked(self.config.get("file_actions", {}).get("move_on_success_enabled", False))
         file_move_form_layout.addRow(self.move_on_success_chk)
 
-        self.success_folder_edit = QLineEdit(file_actions_config.get("success_folder", "OCR成功"))
+        self.success_folder_edit = QLineEdit(self.config.get("file_actions", {}).get("success_folder", "OCR成功"))
         success_folder_button = QPushButton("選択...")
         success_folder_button.clicked.connect(lambda: self.select_folder_for_edit(self.success_folder_edit, "成功ファイル移動先フォルダを選択"))
         success_folder_layout = QHBoxLayout()
@@ -117,11 +118,12 @@ class OptionDialog(QDialog):
         success_folder_layout.addWidget(success_folder_button)
         file_move_form_layout.addRow("成功ファイル移動先:", success_folder_layout)
 
+        # OCR失敗時のファイル移動
         self.move_on_failure_chk = QCheckBox("OCR失敗時にファイルを移動する")
-        self.move_on_failure_chk.setChecked(file_actions_config.get("move_on_failure_enabled", False))
+        self.move_on_failure_chk.setChecked(self.config.get("file_actions", {}).get("move_on_failure_enabled", False))
         file_move_form_layout.addRow(self.move_on_failure_chk)
 
-        self.failure_folder_edit = QLineEdit(file_actions_config.get("failure_folder", "OCR失敗"))
+        self.failure_folder_edit = QLineEdit(self.config.get("file_actions", {}).get("failure_folder", "OCR失敗"))
         failure_folder_button = QPushButton("選択...")
         failure_folder_button.clicked.connect(lambda: self.select_folder_for_edit(self.failure_folder_edit, "失敗ファイル移動先フォルダを選択"))
         failure_folder_layout = QHBoxLayout()
@@ -129,20 +131,21 @@ class OptionDialog(QDialog):
         failure_folder_layout.addWidget(failure_folder_button)
         file_move_form_layout.addRow("失敗ファイル移動先:", failure_folder_layout)
 
+        # ファイル名衝突時の処理
         collision_label = QLabel("ファイル名衝突時の処理:")
         self.collision_overwrite_radio = QRadioButton("上書きする")
         self.collision_rename_radio = QRadioButton("リネームする (例: file (1).txt)")
         self.collision_skip_radio = QRadioButton("スキップ（移動しない）")
 
-        collision_action = file_actions_config.get("collision_action", "rename")
+        collision_action = self.config.get("file_actions", {}).get("collision_action", "rename") # デフォルトはリネーム
         if collision_action == "overwrite":
             self.collision_overwrite_radio.setChecked(True)
         elif collision_action == "skip":
             self.collision_skip_radio.setChecked(True)
-        else:
+        else: # "rename" または不明な値の場合
             self.collision_rename_radio.setChecked(True)
 
-        collision_layout = QVBoxLayout()
+        collision_layout = QVBoxLayout() # ラジオボタンを縦に並べる
         collision_layout.addWidget(self.collision_overwrite_radio)
         collision_layout.addWidget(self.collision_rename_radio)
         collision_layout.addWidget(self.collision_skip_radio)
@@ -151,49 +154,58 @@ class OptionDialog(QDialog):
         main_layout.addWidget(file_move_group)
 
         # --- ボタン ---
-        button_layout_bottom = QHBoxLayout() # 変数名変更
+        button_layout = QHBoxLayout()
         save_btn = QPushButton("保存")
         cancel_btn = QPushButton("キャンセル")
-        save_btn.clicked.connect(self.save_settings)
+        save_btn.clicked.connect(self.save_settings) # メソッド名変更
         cancel_btn.clicked.connect(self.reject)
-        button_layout_bottom.addStretch()
-        button_layout_bottom.addWidget(save_btn)
-        button_layout_bottom.addWidget(cancel_btn)
-        main_layout.addLayout(button_layout_bottom)
+        button_layout.addStretch() # ボタンを右寄せ
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
 
     def select_folder_for_edit(self, line_edit_widget, dialog_title):
+        """指定されたラインエディットウィジェットにフォルダ選択ダイアログの結果を設定する"""
         current_path = line_edit_widget.text()
-        # QFileDialogに渡す初期パスを決定
-        # ユーザーが絶対パスを入力していればそれを、そうでなければ最後に使った結果フォルダなどを基準にする
-        if os.path.isabs(current_path) and os.path.isdir(current_path):
-            initial_dir = current_path
-        else: # 相対パスや単なる名前、または存在しないパスの場合
-            # MainWindowの結果フォルダのパスを取得できればそれを基準にするのが良い
-            # ここではconfigからlast_result_dirを読むか、ホームディレクトリをデフォルトに
-            initial_dir = self.config.get("last_result_dir", os.path.expanduser("~"))
-            if not os.path.isdir(initial_dir) : # それも無効ならホームへ
-                initial_dir = os.path.expanduser("~")
-
+        # QFileDialogに渡す初期パスは既存のパスか、なければユーザーのホームディレクトリ
+        # ただし、デフォルトの "OCR成功" などはパスではないので、その場合はホームディレクトリ
+        if not os.path.isdir(current_path) and not os.path.isabs(current_path) : # 相対パスや単なる名前の場合
+            initial_dir = self.config.get("last_result_dir", os.path.expanduser("~")) # 結果フォルダを基準に
+        else:
+            initial_dir = current_path or os.path.expanduser("~")
 
         folder = QFileDialog.getExistingDirectory(self, dialog_title, initial_dir)
         if folder:
             line_edit_widget.setText(folder)
 
-    def save_settings(self):
-        if not self.base_uri_edit.text(): # APIキーはダミーモードなら不要なためチェックを緩める
+
+    def save_settings(self): # メソッド名変更 save -> save_settings
+        # 基本設定のバリデーション
+        if not self.api_key_edit.text() and not self.api_client.dummy_mode: # ダミーモードでない場合のみAPIキー必須
+             # ダミーモードの場合はAPIキーがなくても動作するようにするため、このチェックは条件付きにする
+             # self.api_client は MainWindow から渡す必要がある、またはここでインスタンス化？
+             # → OptionDialogは独立してConfigを扱うので、ここではAPIキーの有無だけチェックする
+            pass # APIキーの必須チェックは実際のAPIコール前に行うのが適切かもしれない
+
+        if not self.base_uri_edit.text():
             QMessageBox.warning(self, "入力エラー", "ベースURIは必須項目です。")
             return
 
+        # 設定を self.config に保存
         self.config["api_key"] = self.api_key_edit.text()
         self.config["base_uri"] = self.base_uri_edit.text()
 
+        # optionsセクションがなければ作成し、API種別キーもなければ作成
         self.config.setdefault("options", {}).setdefault(self.cube_options_key, {})
         cube_opts = self.config["options"][self.cube_options_key]
 
+        # ファイル検索設定
         cube_opts["max_files_to_process"] = self.max_files_spinbox.value()
         cube_opts["recursion_depth"] = self.recursion_depth_spinbox.value()
+
+        # OCRオプション
         cube_opts["adjust_rotation"] = 1 if self.adjust_rotation_chk.isChecked() else 0
         cube_opts["character_extraction"] = 1 if self.character_extraction_chk.isChecked() else 0
         cube_opts["concatenate"] = 1 if self.concatenate_chk.isChecked() else 0
@@ -202,6 +214,7 @@ class OptionDialog(QDialog):
         cube_opts["fulltext_linebreak_char"] = 1 if self.fulltext_linebreak_char_chk.isChecked() else 0
         cube_opts["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0]
 
+        # ファイル移動設定
         self.config.setdefault("file_actions", {})
         file_actions = self.config["file_actions"]
         file_actions["move_on_success_enabled"] = self.move_on_success_chk.isChecked()
@@ -213,7 +226,7 @@ class OptionDialog(QDialog):
             file_actions["collision_action"] = "overwrite"
         elif self.collision_skip_radio.isChecked():
             file_actions["collision_action"] = "skip"
-        else:
+        else: # リネームがデフォルト
             file_actions["collision_action"] = "rename"
 
         ConfigManager().save(self.config)

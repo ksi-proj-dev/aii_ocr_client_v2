@@ -31,17 +31,21 @@ class ListView(QWidget):
         self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
         self.setLayout(layout)
-        self.populate_table(self.file_list_data)
-        # self.restore_column_widths() # populate_table内で実行
-        # self.apply_sort_order()      # populate_table内で実行
+        
+        # populate_table の前に列幅とソート順を復元する方が自然かもしれない
+        # ただし、テーブルにデータがない状態でのソートは意味がないので、populate_table の後で良い
+        self.populate_table(self.file_list_data) # 初期データでテーブルを構築
+        # self.restore_column_widths() # populate_table 内に移動
+        # self.apply_sort_order()      # populate_table 内に移動
 
     def populate_table(self, files_data):
-        self.table.setUpdatesEnabled(False) # 更新を一時停止
+        self.table.setUpdatesEnabled(False) # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 追加
         try:
             self.file_list_data = files_data
-            self.table.setSortingEnabled(False) # (1) ソートを一時的に無効化
-            self.table.setRowCount(0)           # (2) テーブル内容をクリア
-            self.table.setRowCount(len(self.file_list_data)) # (3) 新しい行数を設定
+            self.table.setSortingEnabled(False)
+            self.table.setRowCount(0) # アイテムをクリアするため先に実行
+            self.table.setRowCount(len(self.file_list_data))
+
             for idx, file_info in enumerate(self.file_list_data):
                 no_item = QTableWidgetItem(str(file_info.get("no", idx + 1)))
                 no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -54,13 +58,14 @@ class ListView(QWidget):
                 size_item = QTableWidgetItem(f"{size_kb:,.1f} KB")
                 size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self.table.setItem(idx, 5, size_item)
-            # 列幅とソートの適用はアイテムセット後が良い場合がある
-            self.table.resizeColumnsToContents()    # (4) 列幅自動調整
-            self.restore_column_widths()            # (5) 保存された列幅を適用
-            self.apply_sort_order()                 # (6) 保存されたソート順を適用
+            
+            # アイテム設定後に列幅調整とソートを行う
+            self.table.resizeColumnsToContents() # 一旦内容に合わせる
+            self.restore_column_widths()         # 保存された幅があればそれで上書き
+            self.apply_sort_order()              # 保存されたソート順を適用
         finally:
-            self.table.setSortingEnabled(True)      # (7) ソートを再度有効化
-            self.table.setUpdatesEnabled(True) # 更新を再開 (paintEventが呼ばれる)
+            self.table.setSortingEnabled(True)
+            self.table.setUpdatesEnabled(True)  # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 追加 (必ず実行されるようにfinally内)
 
     def update_files(self, files_data):
         self.populate_table(files_data)
@@ -79,6 +84,8 @@ class ListView(QWidget):
         order_str = last_sort.get("order", default_sort["order"])
         sort_order = Qt.SortOrder.AscendingOrder if order_str == "asc" else Qt.SortOrder.DescendingOrder
         if 0 <= column < self.table.columnCount():
+            # ここでソートを実行する前にテーブルが描画更新されていないか確認
+            # Qtが内部的に行うため直接制御は難しいが、setUpdatesEnabledで抑制できていることを期待
             self.table.sortItems(column, sort_order)
 
     def get_column_widths(self):
@@ -91,4 +98,5 @@ class ListView(QWidget):
             header = self.table.horizontalHeader()
             return {"column": header.sortIndicatorSection(),
                     "order": "asc" if header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder else "desc"}
+        # デフォルトは保存されたものか、さらにそのデフォルト
         return self.config.get("sort_order", {"column": 0, "order": "asc"})
