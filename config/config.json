@@ -1,0 +1,53 @@
+{
+  "api_key": "YOUR_CUBE_API_KEY_IF_NEEDED",
+  "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
+  "options": {
+    "cube_fullocr": {
+      "adjust_rotation": 0,
+      "character_extraction": 0,
+      "concatenate": 1,
+      "enable_checkbox": 0,
+      "fulltext_output_mode": 0,
+      "fulltext_linebreak_char": 0,
+      "ocr_model": "katsuji"
+    }
+  },
+  "target_dir": "C:\\Users\\YourUser\\Desktop\\OCR_Input",
+  "result_dir": "C:\\Users\\YourUser\\Desktop\\OCR_Output",
+  "last_target_dir": "C:\\Users\\YourUser\\Desktop\\OCR_Input",
+  "last_result_dir": "C:\\Users\\YourUser\\Desktop\\OCR_Output",
+  "upload_interval_ms": 3000,
+  "upload_retry_limit": 30,
+  "retry_timeout_sec": 180,
+  "retry_interval_ms": 3000,
+  "retry_count_max": 30,
+  "last_view": "list",
+  "column_widths": [
+    53,
+    219,
+    88,
+    134
+  ],
+  "sort_order": {
+    "column": 3,
+    "order": "asc"
+  },
+  "window_size": {
+    "width": 697,
+    "height": 574
+  },
+  "window_state": "normal",
+  "current_view": 0,
+  "window_position": {
+    "x": 738,
+    "y": 422
+  },
+  "log_visible": true,
+  "api_type": "cube_fullocr",
+  "endpoints": {
+    "cube_fullocr": {
+      "read_document": "/fullocr-read-document",
+      "make_searchable_pdf": "/make-searchable-pdf"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+<<  JSON形式で出力するコマンド例　>>
+curl -X POST "http://192.168.1.2/api/v1/domains/aiinside/endpoints/fullocr-read-document" -F "document=@c:¥xxxx¥契約書_240407.pdf" > resultjson.txt
+
+<<  サーチャブルPDF形式で出力するコマンド例　>>
+curl -X POST "http://192.168.1.2/api/v1/domains/aiinside/endpoints/make-searchable-pdf" -F "document=@c:¥xxxx¥契約書_240407.pdf" > resultpdf.pdf
