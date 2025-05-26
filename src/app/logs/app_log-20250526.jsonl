@@ -1,0 +1,57 @@
+{"timestamp": "2025-05-26T13:10:47.002310", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:10:47.091768", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:10:58.697282", "level": "INFO", "context": "RESET_FLOW", "message": "リセット処理開始。"}
+{"timestamp": "2025-05-26T13:10:58.703213", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:10:58.708231", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:10:58.712295", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:10:58.717479", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:11:03.522420", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:11:03.525902", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:11:03.535071", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:11:03.540492", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:11:04.956017", "level": "INFO", "context": "OCR_CONFIG_USER_CHOICE", "message": "サーチャブルPDF作成選択: いいえ"}
+{"timestamp": "2025-05-26T13:11:06.220750", "level": "INFO", "context": "OCR_FLOW_START", "message": "ユーザー確認OK。OCR処理を開始します。"}
+{"timestamp": "2025-05-26T13:11:06.234749", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "23 件のファイルのOCR処理を開始します。"}
+{"timestamp": "2025-05-26T13:11:06.240101", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (1/23): 'AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-26T13:11:06.243023", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:11:07.157292", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-26T13:11:07.168840", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\AI inside Cube アプリケーション取扱説明書（全文OCR）.json'"}
+{"timestamp": "2025-05-26T13:11:07.182335", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (2/23): 'AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-26T13:11:07.185316", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:11:08.481595", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-26T13:11:08.491367", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.json'"}
+{"timestamp": "2025-05-26T13:11:08.504249", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (3/23): 'test-01-1.pdf'"}
+{"timestamp": "2025-05-26T13:11:08.507447", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-1.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:27:27.665600", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:27:27.774138", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:27:37.416777", "level": "INFO", "context": "RESET_FLOW", "message": "リセット処理開始。"}
+{"timestamp": "2025-05-26T13:27:37.422415", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:27:37.425344", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:27:37.429001", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:27:37.433589", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:27:50.506657", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "設定を保存し、アプリケーションを終了します。"}
+{"timestamp": "2025-05-26T13:27:54.483669", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:27:54.585969", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:28:04.201726", "level": "INFO", "context": "RESET_FLOW", "message": "リセット処理開始。"}
+{"timestamp": "2025-05-26T13:28:04.206743", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:28:04.210226", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:28:04.213924", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:28:04.218911", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:28:06.768418", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "設定を保存し、アプリケーションを終了します。"}
+{"timestamp": "2025-05-26T13:28:29.342986", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:28:29.445419", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:28:37.809707", "level": "INFO", "context": "RESET_FLOW", "message": "リセット処理開始。"}
+{"timestamp": "2025-05-26T13:28:37.814374", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:28:37.817119", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:28:37.821147", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:28:37.825698", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:28:39.079323", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: SummaryView"}
+{"timestamp": "2025-05-26T13:28:39.758467", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: ListView"}
+{"timestamp": "2025-05-26T13:28:42.906424", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "設定を保存し、アプリケーションを終了します。"}
+{"timestamp": "2025-05-26T13:28:53.521078", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:28:53.618310", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:28:56.765611", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: ListView"}
+{"timestamp": "2025-05-26T13:29:03.042984", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "設定を保存し、アプリケーションを終了します。"}
+{"timestamp": "2025-05-26T13:29:35.574584", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:29:35.680502", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:29:55.004656", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "設定を保存し、アプリケーションを終了します。"}

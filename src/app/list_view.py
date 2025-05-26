@@ -60,7 +60,6 @@ class ListView(QWidget):
             self.apply_sort_order()                 # (6) 保存されたソート順を適用
         finally:
             self.table.setSortingEnabled(True)      # (7) ソートを再度有効化
-            self.table.setUpdatesEnabled(True) # 更新を再開 (paintEventが呼ばれる)
 
     def update_files(self, files_data):
         self.populate_table(files_data)

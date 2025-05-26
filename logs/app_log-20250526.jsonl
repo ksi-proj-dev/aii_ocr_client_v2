@@ -1,0 +1,49 @@
+{"timestamp": "2025-05-26T13:30:51.532603", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:30:51.604947", "level": "INFO", "context": "SYSTEM", "message": "アプリケーション起動完了"}
+{"timestamp": "2025-05-26T13:31:01.489635", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: SummaryView"}
+{"timestamp": "2025-05-26T13:31:02.296150", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: ListView"}
+{"timestamp": "2025-05-26T13:31:03.888650", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: SummaryView"}
+{"timestamp": "2025-05-26T13:31:04.679992", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: ListView"}
+{"timestamp": "2025-05-26T13:31:51.454625", "level": "INFO", "context": "UI_FOLDER_SELECT", "message": "入力フォルダ選択: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ"}
+{"timestamp": "2025-05-26T13:31:55.906078", "level": "INFO", "context": "UI_ACTION", "message": "ビューを切り替えました: SummaryView"}
+{"timestamp": "2025-05-26T13:32:15.553242", "level": "INFO", "context": "UI_ACTION", "message": "オプションダイアログを開きます。"}
+{"timestamp": "2025-05-26T13:32:33.673061", "level": "INFO", "context": "CONFIG_UPDATE", "message": "オプション設定が保存・再読み込みされました。"}
+{"timestamp": "2025-05-26T13:32:33.674627", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-26T13:32:43.194156", "level": "INFO", "context": "UI_ACTION", "message": "オプションダイアログを開きます。"}
+{"timestamp": "2025-05-26T13:32:45.399643", "level": "INFO", "context": "UI_ACTION", "message": "オプション設定はキャンセルされました。"}
+{"timestamp": "2025-05-26T13:32:50.855879", "level": "INFO", "context": "UI_FOLDER_SELECT", "message": "入力フォルダ選択: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ"}
+{"timestamp": "2025-05-26T13:32:54.427541", "level": "INFO", "context": "FILE_SCAN", "message": "ファイル収集開始: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ', MaxFiles=100, DepthLimit=5"}
+{"timestamp": "2025-05-26T13:32:54.429854", "level": "INFO", "context": "FILE_SCAN_EXCLUDE", "message": "  除外サブフォルダ名（これらの名前のフォルダはスキップ）: ['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-26T13:32:54.432308", "level": "INFO", "context": "DEBUG_FILE_SCAN_EXCLUDE_DIR", "message": "  除外フォルダ 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果' をこれ以上探索しません。"}
+{"timestamp": "2025-05-26T13:32:54.435856", "level": "INFO", "context": "FILE_SCAN_COMPLETE", "message": "ファイル収集完了: 23 件発見。", "found_count": 23}
+{"timestamp": "2025-05-26T13:32:56.776988", "level": "INFO", "context": "OCR_CONFIG_USER_CHOICE", "message": "サーチャブルPDF作成選択: いいえ"}
+{"timestamp": "2025-05-26T13:32:58.096595", "level": "INFO", "context": "OCR_FLOW_START", "message": "ユーザー確認OK。OCR処理を開始します。"}
+{"timestamp": "2025-05-26T13:32:58.108495", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "23 件のファイルのOCR処理を開始します。"}
+{"timestamp": "2025-05-26T13:32:58.110866", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (1/23): 'AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-26T13:32:58.112013", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:32:59.079108", "level": "ERROR", "context": "API_DUMMY_READ", "message": "ダミーエラー: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf のOCR処理に失敗しました。", "filename": "AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "error_code": "DUMMY_OCR_ERROR"}
+{"timestamp": "2025-05-26T13:32:59.081985", "level": "ERROR", "context": "WORKER_OCR_ERROR", "message": "OCR処理失敗 (AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf)", "error_details": {"error_code": "DUMMY_OCR_ERROR", "message": "ダミーエラー: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf のOCR処理に失敗しました。"}}
+{"timestamp": "2025-05-26T13:32:59.100081", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (2/23): 'AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-26T13:32:59.101607", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:32:59.697864", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-26T13:32:59.711796", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.json'"}
+{"timestamp": "2025-05-26T13:32:59.723810", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (3/23): 'test-01-1.pdf'"}
+{"timestamp": "2025-05-26T13:32:59.725262", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-1.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:33:00.311564", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-1.pdf"}
+{"timestamp": "2025-05-26T13:33:00.325721", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\test-01-1.json'"}
+{"timestamp": "2025-05-26T13:33:00.338150", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (4/23): 'test-01-10.pdf'"}
+{"timestamp": "2025-05-26T13:33:00.340316", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-10.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:33:01.409041", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-10.pdf"}
+{"timestamp": "2025-05-26T13:33:01.421673", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\test-01-10.json'"}
+{"timestamp": "2025-05-26T13:33:01.433292", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (5/23): 'test-01-11.pdf'"}
+{"timestamp": "2025-05-26T13:33:01.434978", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-11.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:33:02.200755", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-11.pdf"}
+{"timestamp": "2025-05-26T13:33:02.203781", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\test-01-11.json'"}
+{"timestamp": "2025-05-26T13:33:02.220806", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (6/23): 'test-01-12.pdf'"}
+{"timestamp": "2025-05-26T13:33:02.222675", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-12.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:33:03.085784", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-12.pdf"}
+{"timestamp": "2025-05-26T13:33:03.099535", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\test-01-12.json'"}
+{"timestamp": "2025-05-26T13:33:03.111764", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "処理開始 (7/23): 'test-01-13.pdf'"}
+{"timestamp": "2025-05-26T13:33:03.113009", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-13.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 0, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-26T13:33:05.452212", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-13.pdf"}
+{"timestamp": "2025-05-26T13:33:05.456004", "level": "INFO", "context": "FILE_IO_SAVE", "message": "結果JSON保存成功: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ\\OCR結果\\test-01-13.json'"}
