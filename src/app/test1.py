@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QFrame
-from PyQt6.QtCore import Qt # Qtをインポート
+from PyQt6.QtCore import Qt
 
 class StatusCard(QFrame):
     def __init__(self, title: str, color: str):
@@ -16,16 +16,14 @@ class StatusCard(QFrame):
         # --- ここから変更 ---
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter) # 文字列を中央揃えに設定
         # --- ここまで変更 ---
-        
+
         self.count_label = QLabel("0件")
         self.count_label.setStyleSheet("font-size: 16pt; font-weight: bold; color: #555; qproperty-alignment: 'AlignCenter';")
-        
         self.progress = QProgressBar()
         self.progress.setMaximum(100)
         self.progress.setValue(0)
         self.progress.setTextVisible(False)
         self.progress.setFixedHeight(8)
-        
         layout.addWidget(self.title_label)
         layout.addWidget(self.count_label)
         layout.addWidget(self.progress)
@@ -78,7 +76,6 @@ class SummaryView(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(15)
-        
         status_card_layout = QHBoxLayout()
         status_card_layout.setSpacing(10)
         self.cards = {
@@ -89,7 +86,6 @@ class SummaryView(QWidget):
         status_card_layout.addWidget(self.cards["pending"])
         status_card_layout.addWidget(self.cards["completed"])
         status_card_layout.addWidget(self.cards["error"])
-        
         info_layout = QHBoxLayout()
         info_layout.setSpacing(10)
         self.info_cards = {
@@ -102,7 +98,6 @@ class SummaryView(QWidget):
         info_layout.addWidget(self.info_cards["start_time"])
         info_layout.addWidget(self.info_cards["elapsed_time"])
         info_layout.addWidget(self.info_cards["avg_time"])
-        
         main_layout.addLayout(status_card_layout)
         main_layout.addLayout(info_layout)
         self.setLayout(main_layout)
@@ -130,30 +125,19 @@ class SummaryView(QWidget):
 
     def increment_completed_count(self):
         self.ocr_completed_count += 1
-        # self.update_display() # processed_countが増えたときにまとめて呼ばれるので、個別呼び出しは不要かも
 
     def increment_error_count(self):
         self.ocr_error_count += 1
-        # self.update_display() # processed_countが増えたときにまとめて呼ばれるので、個別呼び出しは不要かも
 
-    # SummaryViewの更新メソッド (MainWindow.on_file_ocr_processedから呼び出されることを想定)
-    # (このメソッドは例示です。MainWindow側の on_file_ocr_processed で
-    #  SummaryViewの各 increment メソッドを呼ぶ形になっています)
     def update_counts_from_status_change(self, status_string):
         """OCR処理結果のステータス文字列に応じてカウントを更新する"""
-        # このメソッドは現在 MainWindowからは直接呼ばれていませんが、
-        # もし SummaryView 側で状態遷移ロジックを持つならこのように実装できます。
-        # 現状は MainWindow.on_file_ocr_processed 内で SummaryView の
-        # increment_completed_count や increment_error_count が呼ばれています。
         pass
-
 
     def update_display(self):
         pending_count = self.total_files - self.processed_count
         self.cards["pending"].update_data(pending_count, self.total_files)
         self.cards["completed"].update_data(self.ocr_completed_count, self.total_files)
         self.cards["error"].update_data(self.ocr_error_count, self.total_files)
-        
         self.info_cards["total"].update_value(f"{self.total_files} 件")
         if self.start_time:
             self.info_cards["start_time"].update_value(self.start_time.strftime("%H:%M:%S"))

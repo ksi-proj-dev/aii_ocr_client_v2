@@ -221,16 +221,78 @@ LISTVIEW_UPDATE_INTERVAL_MS = 300
 class MainWindow(QMainWindow):
     def __init__(self):
         # (変更なし)
-        super().__init__(); self.log_manager = LogManager(); self.log_manager.debug("MainWindow initializing...", context="MAINWIN_LIFECYCLE"); self.setWindowTitle("AI inside Cube Client Ver.0.0.6"); self.config = ConfigManager.load(); self.log_widget = QTextEdit(); self.log_manager.log_message_signal.connect(self.append_log_message_to_widget); self.api_client = CubeApiClient(self.config, self.log_manager); self.ocr_worker = None; self.update_timer = QTimer(self); self.update_timer.setSingleShot(True); self.update_timer.timeout.connect(self.perform_batch_list_view_update); size_cfg = self.config.get("window_size", {"width": 1000, "height": 700}); state_cfg = self.config.get("window_state", "normal"); pos_cfg = self.config.get("window_position"); self.resize(size_cfg["width"], size_cfg["height"]);
+        super().__init__(); self.log_manager = LogManager();
+        self.log_manager.debug("MainWindow initializing...", context="MAINWIN_LIFECYCLE");
+        self.setWindowTitle("AI inside Cube Client Ver.0.0.6");
+        self.config = ConfigManager.load();
+        self.log_widget = QTextEdit();
+        self.log_manager.log_message_signal.connect(self.append_log_message_to_widget);
+        self.api_client = CubeApiClient(self.config, self.log_manager);
+        self.ocr_worker = None; self.update_timer = QTimer(self);
+        self.update_timer.setSingleShot(True);
+        self.update_timer.timeout.connect(self.perform_batch_list_view_update);
+        size_cfg = self.config.get("window_size", {"width": 1000, "height": 700});
+        state_cfg = self.config.get("window_state", "normal");
+        pos_cfg = self.config.get("window_position");
+        self.resize(size_cfg["width"], size_cfg["height"]);
         if not pos_cfg or pos_cfg.get("x") is None or pos_cfg.get("y") is None:
-            try: screen_geometry = QApplication.primaryScreen().geometry(); self.move((screen_geometry.width() - self.width()) // 2, (screen_geometry.height() - self.height()) // 2)
-            except Exception as e: self.log_manager.error("Failed to center window.", context="UI_ERROR", exception_info=e); self.move(100, 100)
+            try:
+                screen_geometry = QApplication.primaryScreen().geometry();
+                self.move((screen_geometry.width() - self.width()) // 2, (screen_geometry.height() - self.height()) // 2)
+            except Exception as e:
+                self.log_manager.error("Failed to center window.", context="UI_ERROR", exception_info=e);
+            self.move(100, 100)
         else: self.move(pos_cfg["x"], pos_cfg["y"])
         if state_cfg == "maximized": self.showMaximized()
-        self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget); self.splitter = QSplitter(Qt.Orientation.Vertical); self.stack = QStackedWidget(); self.summary_view = SummaryView(); self.processed_files_info = []; self.list_view = ListView(self.processed_files_info); self.stack.addWidget(self.summary_view); self.stack.addWidget(self.list_view); self.splitter.addWidget(self.stack); self.log_header = QLabel("ログ："); self.log_header.setStyleSheet("margin: 5px 0px 0px 6px; padding: 0px; font-weight: bold;"); self.log_widget.setReadOnly(True); self.log_widget.setStyleSheet("margin: 0px 10px 10px 10px; font-family: Consolas, Meiryo, monospace; font-size: 9pt;"); self.log_container = QWidget(); log_layout_inner = QVBoxLayout(self.log_container); log_layout_inner.setContentsMargins(0, 0, 0, 0); log_layout_inner.addWidget(self.log_header); log_layout_inner.addWidget(self.log_widget); self.splitter.addWidget(self.log_container); self.splitter.setStyleSheet("QSplitter::handle { background-color: #CCCCCC; height: 2px; }")
-        splitter_sizes = self.config.get("splitter_sizes");
-        if splitter_sizes and len(splitter_sizes) == 2 and sum(splitter_sizes) > 0 : self.splitter.setSizes(splitter_sizes)
-        else: initial_splitter_sizes = [int(self.height() * 0.65), int(self.height() * 0.35)]; self.splitter.setSizes(initial_splitter_sizes)
+        self.central_widget = QWidget(); self.setCentralWidget(self.central_widget);
+        self.main_layout = QVBoxLayout(self.central_widget);
+        self.splitter = QSplitter(Qt.Orientation.Vertical);
+        
+        # 上部：スタックウィジェット（サマリービューとリストビュー）
+        self.stack = QStackedWidget();
+        self.summary_view = SummaryView();
+        self.processed_files_info = [];
+        self.list_view = ListView(self.processed_files_info);
+        self.stack.addWidget(self.summary_view);
+        self.stack.addWidget(self.list_view);
+        self.splitter.addWidget(self.stack);
+
+        # 下部：ログ表示エリア
+        self.log_container = QWidget() # まずコンテナを作成
+        log_layout_inner = QVBoxLayout(self.log_container) # コンテナにレイアウトを設定
+        log_layout_inner.setContentsMargins(0, 0, 0, 0) # コンテナ内部のマージンは一旦0
+
+        self.log_header = QLabel("ログ：")
+        self.log_header.setStyleSheet("margin-left: 6px; padding-bottom: 2px; font-weight: bold;")
+        log_layout_inner.addWidget(self.log_header)
+
+        self.log_widget = QTextEdit()
+        self.log_widget.setReadOnly(True)
+        # スクロールバー問題の切り分けのため、log_widgetのスタイルシートを一時的に元に戻すか、最小限にする
+        self.log_widget.setStyleSheet("font-family: Consolas, Meiryo, monospace; font-size: 9pt;") # マージンとボーダーを削除
+        # self.log_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded) # 明示的に設定 (デフォルトだが)
+        log_layout_inner.addWidget(self.log_widget)
+        
+        self.splitter.addWidget(self.log_container) # 次にログコンテナを追加
+
+        self.splitter.setStyleSheet("QSplitter::handle { background-color: #CCCCCC; height: 2px; }")
+        
+        # スプリッターの初期サイズを明示的に設定
+        # ここで、stack と log_container の初期の高さの割合を調整してみてください。
+        # 例えば、全体の高さの65%をstackに、35%をlog_containerに割り当てるなど。
+        # この値はウィンドウの初期高さに基づいて調整する必要があります。
+        # スプリッターのサイズが保存されていればそれを使う
+        splitter_sizes = self.config.get("splitter_sizes")
+        if splitter_sizes and len(splitter_sizes) == 2 and sum(splitter_sizes) > 0:
+            self.splitter.setSizes(splitter_sizes)
+        else:
+            # ウィンドウの高さに基づいて初期サイズを設定 (例)
+            # self.height() はこの時点ではまだ不正確な場合があるので注意
+            # 固定値や、QApplication.primaryScreen().geometry() から計算する方が良い場合もある
+            default_height = 700 # 仮のデフォルトウィンドウ高さ
+            initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]
+            self.splitter.setSizes(initial_splitter_sizes)
+
         self.main_layout.addWidget(self.splitter); self.input_folder_path = self.config.get("last_target_dir", ""); self.setup_toolbar_and_folder_labels(); self.is_ocr_running = False; self.current_view = self.config.get("current_view", 0); self.stack.setCurrentIndex(self.current_view); log_visible = self.config.get("log_visible", True); self.log_container.setVisible(log_visible); self.update_ocr_controls(); self.check_input_folder_validity(); self.log_manager.info("Application initialized successfully.", context="SYSTEM_LIFECYCLE")
 
     def append_log_message_to_widget(self, level, message):
@@ -543,10 +605,13 @@ class MainWindow(QMainWindow):
         if hasattr(self.list_view, 'get_column_widths') and hasattr(self.list_view, 'get_sort_order'): current_config_to_save["column_widths"] = self.list_view.get_column_widths(); current_config_to_save["sort_order"] = self.list_view.get_sort_order()
         ConfigManager.save(current_config_to_save); self.log_manager.info("Settings saved. Exiting application.", context="SYSTEM_LIFECYCLE"); super().closeEvent(event)
 
-    def clear_log_display(self): # (変更なし)
-        # ... (前回提示のコード) ...
-        self.log_widget.clear(); self.log_manager.info("Log display cleared by user.", context="UI_ACTION")
-
+    def clear_log_display(self):
+        self.log_widget.clear()
+        # --- ここから変更 ---
+        self.log_manager.info("画面ログをクリアしました（ファイル記録のみ）。", 
+                            context="UI_ACTION_CLEAR_LOG", 
+                            emit_to_ui=False) # UIへのemitをFalseに設定
+        # --- ここまで変更 ---
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
