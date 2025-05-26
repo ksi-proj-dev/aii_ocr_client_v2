@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta # 'datetime' は datetime.datetime クラスを指す
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QFrame
-# from PyQt6.QtCore import QTimer # 今回はタイマー不使用
+from PyQt6.QtCore import Qt
 
+# (StatusCardクラスの定義は変更なし)
 class StatusCard(QFrame):
     def __init__(self, title: str, color: str):
         super().__init__()
@@ -46,9 +47,15 @@ class InfoCard(QFrame):
         """)
         layout = QVBoxLayout()
         self.label_widget = QLabel(label_text)
-        self.label_widget.setStyleSheet("font-weight: bold; font-size: 10pt; color: #444;")
+        self.label_widget.setStyleSheet("font-weight: bold; font-size: 10pt; color: #444; qproperty-alignment: 'AlignCenter';") # ラベルも中央揃えにするか検討 (今回は値のみ)
+        
         self.value_label = QLabel("-")
-        self.value_label.setStyleSheet("font-size: 11pt; color: #666; qproperty-alignment: 'AlignRight';")
+        # --- ここから変更 ---
+        self.value_label.setStyleSheet("font-size: 11pt; color: #666; qproperty-alignment: 'AlignCenter';") # AlignRight から AlignCenter に変更
+        # 縦方向の中央揃えも確実にしたい場合は、以下のようにsetAlignmentも使う
+        # self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # --- ここまで変更 ---
+        
         layout.addWidget(self.label_widget)
         layout.addWidget(self.value_label)
         self.setLayout(layout)
@@ -67,6 +74,7 @@ class SummaryView(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        # ... (変更なし)
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(15)
@@ -98,6 +106,7 @@ class SummaryView(QWidget):
         self.reset_summary()
 
     def reset_summary(self):
+        # ... (変更なし)
         self.total_files = 0
         self.processed_count = 0
         self.ocr_completed_count = 0
@@ -110,22 +119,28 @@ class SummaryView(QWidget):
         self.processed_count = 0
         self.ocr_completed_count = 0
         self.ocr_error_count = 0
-        self.start_time = datetime.now()
+        # --- ここから変更 ---
+        self.start_time = datetime.now() # datetime.now() に修正
+        # --- ここまで変更 ---
         self.update_display()
 
     def increment_processed_count(self):
+        # ... (変更なし)
         self.processed_count = min(self.processed_count + 1, self.total_files)
         self.update_display()
 
     def increment_completed_count(self):
+        # ... (変更なし)
         self.ocr_completed_count += 1
         self.update_display()
 
     def increment_error_count(self):
+        # ... (変更なし)
         self.ocr_error_count += 1
         self.update_display()
 
     def update_display(self):
+        # ... (変更なし)
         pending_count = self.total_files - self.processed_count
         self.cards["pending"].update_data(pending_count, self.total_files)
         self.cards["completed"].update_data(self.ocr_completed_count, self.total_files)
@@ -133,7 +148,9 @@ class SummaryView(QWidget):
         self.info_cards["total"].update_value(f"{self.total_files} 件")
         if self.start_time:
             self.info_cards["start_time"].update_value(self.start_time.strftime("%H:%M:%S"))
-            elapsed_delta = datetime.now() - self.start_time
+            # --- ここから変更 ---
+            elapsed_delta = datetime.now() - self.start_time # datetime.now() に修正
+            # --- ここまで変更 ---
             self.info_cards["elapsed_time"].update_value(str(elapsed_delta).split('.')[0])
             if self.processed_count > 0:
                 avg_time_sec = elapsed_delta.total_seconds() / self.processed_count
