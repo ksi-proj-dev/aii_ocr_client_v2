@@ -78,7 +78,6 @@ class SummaryView(QWidget):
         self.start_time = datetime.now()
         self.update_display()
 
-    # --- ここから変更: 新しいメソッドの追加と既存メソッドの修正 ---
     def update_for_processed_file(self, is_success: bool):
         """ファイル1件の処理結果に応じてサマリーを更新する"""
         self.processed_count = min(self.processed_count + 1, self.total_files)
@@ -87,19 +86,6 @@ class SummaryView(QWidget):
         else:
             self.ocr_error_count += 1
         self.update_display()
-
-    def increment_processed_count(self): # このメソッドは直接使われなくなる可能性がある
-        self.processed_count = min(self.processed_count + 1, self.total_files)
-        # self.update_display() # update_for_processed_file でまとめて行う
-
-    def increment_completed_count(self): # このメソッドは直接使われなくなる可能性がある
-        self.ocr_completed_count += 1
-        # self.update_display() # update_for_processed_file でまとめて行う
-
-    def increment_error_count(self): # このメソッドは直接使われなくなる可能性がある
-        self.ocr_error_count += 1
-        # self.update_display() # update_for_processed_file でまとめて行う
-    # --- ここまで変更 ---
 
     def update_display(self):
         pending_count = self.total_files - self.processed_count

@@ -146,6 +146,9 @@ class OptionDialog(QDialog):
             return False
         return True
 
+# class OptionDialog(QDialog):
+# ... (他のメソッドは変更なし) ...
+
     def on_save_settings(self):
         # サブフォルダ名の取得とバリデーション
         results_folder = self.results_folder_name_edit.text().strip()
@@ -156,15 +159,10 @@ class OptionDialog(QDialog):
         if not self.is_valid_folder_name(success_folder, "成功ファイル移動先サブフォルダ名"): return
         if not self.is_valid_folder_name(failure_folder, "失敗ファイル移動先サブフォルダ名"): return
         
-        folder_names_to_check = {
-            ("OCR結果サブフォルダ名", results_folder),
-            ("成功ファイル移動先サブフォルダ名", success_folder),
-            ("失敗ファイル移動先サブフォルダ名", failure_folder)
-        }
-        # 3つのフォルダ名が互いに異なることを確認
-        names_list = [name for _, name in folder_names_to_check]
-        if len(set(names_list)) != len(names_list):
-            # 重複ペアを見つけて表示する方が親切かもしれないが、ここでは汎用メッセージ
+        # --- ここから変更: 変数名を修正 ---
+        folder_names_list = [results_folder, success_folder, failure_folder] # folder_names_to_check は不要、直接リスト作成
+        if len(set(folder_names_list)) != len(folder_names_list):
+        # --- ここまで変更 ---
             QMessageBox.warning(self, "入力エラー", "「OCR結果」「成功移動先」「失敗移動先」の各サブフォルダ名は、互いに異なる名称にしてください。")
             return
 
@@ -172,10 +170,10 @@ class OptionDialog(QDialog):
             QMessageBox.warning(self, "入力エラー", "ベースURIは必須項目です。")
             return
 
-        # 設定の保存
+        # 設定の保存 (変更なし)
         self.config["api_key"] = self.api_key_edit.text()
         self.config["base_uri"] = self.base_uri_edit.text()
-
+        # ... (以下、設定保存処理は前回提示の通り) ...
         current_api_type_options = self.config.setdefault("options", {}).setdefault(self.cube_options_key, {})
         current_api_type_options["max_files_to_process"] = self.max_files_spinbox.value()
         current_api_type_options["recursion_depth"] = self.recursion_depth_spinbox.value()
@@ -186,27 +184,19 @@ class OptionDialog(QDialog):
         current_api_type_options["fulltext_output_mode"] = self.fulltext_output_mode_combo.currentIndex()
         current_api_type_options["fulltext_linebreak_char"] = 1 if self.fulltext_linebreak_char_chk.isChecked() else 0
         current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0]
-
         file_actions = self.config.setdefault("file_actions", {})
         file_actions["results_folder_name"] = results_folder
         file_actions["move_on_success_enabled"] = self.move_on_success_chk.isChecked()
         file_actions["success_folder_name"] = success_folder
         file_actions["move_on_failure_enabled"] = self.move_on_failure_chk.isChecked()
         file_actions["failure_folder_name"] = failure_folder
-
         if self.collision_overwrite_radio.isChecked(): file_actions["collision_action"] = "overwrite"
         elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
         else: file_actions["collision_action"] = "rename"
-
-        # --- ここから変更: 出力形式の保存 ---
-        if self.output_format_json_only_radio.isChecked():
-            file_actions["output_format"] = "json_only"
-        elif self.output_format_pdf_only_radio.isChecked():
-            file_actions["output_format"] = "pdf_only"
-        else: # both
-            file_actions["output_format"] = "both"
-        # --- ここまで変更: 出力形式の保存 ---
+        if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
+        elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
+        else: file_actions["output_format"] = "both"
 
         ConfigManager.save(self.config)
-        # QMessageBox.information(self, "保存完了", "設定を保存しました。")
+        # QMessageBox.information(self, "保存完了", "設定を保存しました。") # メッセージは削除済み
         self.accept()

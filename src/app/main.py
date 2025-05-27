@@ -502,6 +502,9 @@ class MainWindow(QMainWindow):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if self.list_view: self.list_view.update_files(self.processed_files_info)
 
+# class MainWindow(QMainWindow):
+# ... (他のメソッドは変更なし) ...
+
     def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, ocr_error_info, json_save_info):
         self.log_manager.debug(
             f"File OCR processed (MainWin): {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(ocr_result_json)}, JSON Save Info: {json_save_info}",
@@ -519,42 +522,25 @@ class MainWindow(QMainWindow):
         elif ocr_result_json:
             target_file_info["status"] = "OCR成功"
             ocr_actually_succeeded = True
-            try:
+            try: 
                 if isinstance(ocr_result_json, list) and len(ocr_result_json) > 0:
                     first_page_result = ocr_result_json[0].get("result", {})
                     fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", "")
                     target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
-                else:
-                    target_file_info["ocr_result_summary"] = "結果形式不明"
-            except Exception:
-                target_file_info["ocr_result_summary"] = "結果解析エラー"
+                else: target_file_info["ocr_result_summary"] = "結果形式不明"
+            except Exception: target_file_info["ocr_result_summary"] = "結果解析エラー"
         else:
             target_file_info["status"] = "OCR状態不明"
             target_file_info["ocr_result_summary"] = "APIレスポンスなし"
 
-        # JSON保存ステータスの更新
-        if isinstance(json_save_info, str) and os.path.exists(json_save_info):
-            target_file_info["json_status"] = "JSON作成成功"
-        elif isinstance(json_save_info, str) and json_save_info == "作成しない(設定)":
-            target_file_info["json_status"] = "作成しない(設定)"
-        elif isinstance(json_save_info, dict) and "error" in json_save_info:
-            target_file_info["json_status"] = "JSON作成失敗"
-        elif ocr_error_info: # OCR自体が失敗した場合
-            target_file_info["json_status"] = "対象外(OCR失敗)"
-        else: # その他の場合
-            target_file_info["json_status"] = "JSON状態不明"
+        if isinstance(json_save_info, str) and os.path.exists(json_save_info): target_file_info["json_status"] = "JSON作成成功"
+        elif isinstance(json_save_info, str) and json_save_info == "作成しない(設定)": target_file_info["json_status"] = "作成しない(設定)"
+        elif isinstance(json_save_info, dict) and "error" in json_save_info: target_file_info["json_status"] = "JSON作成失敗"
+        elif ocr_error_info: target_file_info["json_status"] = "対象外(OCR失敗)"
+        else: target_file_info["json_status"] = "JSON状態不明"
         
-        # SummaryViewの更新
         if hasattr(self.summary_view, 'update_for_processed_file'):
             self.summary_view.update_for_processed_file(is_success=ocr_actually_succeeded)
-        else: 
-            # フォールバック (古いメソッド呼び出し)
-            if hasattr(self.summary_view, 'increment_processed_count'):
-                self.summary_view.increment_processed_count()
-            if ocr_actually_succeeded and hasattr(self.summary_view, 'increment_completed_count'):
-                self.summary_view.increment_completed_count()
-            elif not ocr_actually_succeeded and hasattr(self.summary_view, 'increment_error_count'):
-                self.summary_view.increment_error_count()
         
         self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
