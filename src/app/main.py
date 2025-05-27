@@ -23,7 +23,6 @@ from config_manager import ConfigManager
 from log_manager import LogManager, LogLevel
 from api_client import CubeApiClient
 
-# OcrConfirmationDialog クラス (変更なし)
 class OcrConfirmationDialog(QDialog):
     def __init__(self, settings_summary, parent=None):
         super().__init__(parent)
@@ -51,12 +50,17 @@ class OcrConfirmationDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-# OcrWorker クラス (変更なし)
 class OcrWorker(QThread):
-    file_processed = pyqtSignal(int, str, object, object)
+    # --- ここから変更: file_processed シグナルの引数に json_save_info を追加 ---
+    # (idx, original_file_path, ocr_result_json, ocr_error_info, json_save_info)
+    # json_save_info は、保存成功時は保存パス(str)、失敗時はエラー情報(dict)、スキップ時は特定文字列(str)など
+    file_processed = pyqtSignal(int, str, object, object, object) 
+    # --- ここまで変更 ---
     searchable_pdf_processed = pyqtSignal(int, str, object, object)
     all_files_processed = pyqtSignal()
-    def __init__(self, api_client, files_to_process, input_root_folder, log_manager, config):
+
+    def __init__(self, api_client, files_to_process,
+                input_root_folder, log_manager, config): # create_searchable_pdf引数を削除済み
         super().__init__()
         self.api_client = api_client
         self.files_to_process = files_to_process
@@ -64,13 +68,26 @@ class OcrWorker(QThread):
         self.input_root_folder = input_root_folder
         self.log_manager = log_manager
         self.config = config
-        self.log_manager.debug("OcrWorker initialized.", context="WORKER_LIFECYCLE", num_files=len(files_to_process))
+        self.log_manager.debug(
+            "OcrWorker initialized.", context="WORKER_LIFECYCLE",
+            num_files=len(files_to_process)
+        )
+
     def _get_unique_filepath(self, target_dir, filename):
-        base, ext = os.path.splitext(filename); counter = 1; new_filepath = os.path.join(target_dir, filename)
-        while os.path.exists(new_filepath): new_filename = f"{base} ({counter}){ext}"; new_filepath = os.path.join(target_dir, new_filename); counter += 1
+        # (このメソッドは変更なし)
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        new_filepath = os.path.join(target_dir, filename)
+        while os.path.exists(new_filepath):
+            new_filename = f"{base} ({counter}){ext}"
+            new_filepath = os.path.join(target_dir, new_filename)
+            counter += 1
         return new_filepath
+
     def _move_file_with_collision_handling(self, source_path, original_file_parent_dir, dest_subfolder_name, collision_action):
-        log_ctx_move = "WORKER_MOVE"; original_basename = os.path.basename(source_path)
+        # (このメソッドは変更なし)
+        log_ctx_move = "WORKER_MOVE"
+        original_basename = os.path.basename(source_path)
         self.log_manager.debug(f"Move process started for: {original_basename}", context=log_ctx_move,source=source_path, dest_parent=original_file_parent_dir, dest_subfolder=dest_subfolder_name)
         if not dest_subfolder_name: self.log_manager.warning(f"Move skipped (no dest_subfolder_name): {original_basename}", context=log_ctx_move, source=source_path); return None, "移動先サブフォルダ名が指定されていません。"
         target_dir = os.path.join(original_file_parent_dir, dest_subfolder_name)
@@ -87,63 +104,141 @@ class OcrWorker(QThread):
             try: shutil.move(source_path, target_filepath); self.log_manager.info(f"File moved: '{source_path}' -> '{target_filepath}'", context=log_ctx_move + "_SUCCESS"); moved_path_result = target_filepath
             except Exception as e: msg = f"File move failed: '{source_path}' -> '{target_filepath}'"; self.log_manager.error(msg, context=log_ctx_move + "_FAIL", exception_info=e); error_message_result = msg
         return moved_path_result, error_message_result
-    def run(self):
-        thread_id = threading.get_ident(); self.log_manager.debug(f"OcrWorker thread started.", context="WORKER_LIFECYCLE", thread_id=thread_id, num_files=len(self.files_to_process))
-        file_actions_config = self.config.get("file_actions", {}); results_folder_name = file_actions_config.get("results_folder_name", "OCR結果"); success_folder_name = file_actions_config.get("success_folder_name", "OCR成功"); failure_folder_name = file_actions_config.get("failure_folder_name", "OCR失敗"); move_on_success_enabled = file_actions_config.get("move_on_success_enabled", False); move_on_failure_enabled = file_actions_config.get("move_on_failure_enabled", False); collision_action = file_actions_config.get("collision_action", "rename"); output_format = file_actions_config.get("output_format", "both")
+
+    def run(self): # --- runメソッド全体 ---
+        thread_id = threading.get_ident()
+        self.log_manager.debug(f"OcrWorker thread started.", context="WORKER_LIFECYCLE", thread_id=thread_id, num_files=len(self.files_to_process))
+
+        file_actions_config = self.config.get("file_actions", {})
+        results_folder_name = file_actions_config.get("results_folder_name", "OCR結果")
+        success_folder_name = file_actions_config.get("success_folder_name", "OCR成功")
+        failure_folder_name = file_actions_config.get("failure_folder_name", "OCR失敗")
+        move_on_success_enabled = file_actions_config.get("move_on_success_enabled", False)
+        move_on_failure_enabled = file_actions_config.get("move_on_failure_enabled", False)
+        collision_action = file_actions_config.get("collision_action", "rename")
+        output_format = file_actions_config.get("output_format", "both")
+        
         self.log_manager.info(f"Worker starting with Output format: {output_format}", context="WORKER_CONFIG")
+
         for idx, original_file_path in enumerate(self.files_to_process):
-            if not self.is_running: self.log_manager.info("OcrWorker run loop aborted by stop signal.", context="WORKER_LIFECYCLE"); break
-            original_file_parent_dir = os.path.dirname(original_file_path); original_file_basename = os.path.basename(original_file_path); base_name_for_output = os.path.splitext(original_file_basename)[0]
+            if not self.is_running:
+                self.log_manager.info("OcrWorker run loop aborted by stop signal.", context="WORKER_LIFECYCLE")
+                break
+            
+            original_file_parent_dir = os.path.dirname(original_file_path)
+            original_file_basename = os.path.basename(original_file_path)
+            base_name_for_output = os.path.splitext(original_file_basename)[0]
             self.log_manager.info(f"Processing file {idx + 1}/{len(self.files_to_process)}: {original_file_basename}", context="WORKER_FILE_PROGRESS")
+
             ocr_result_json, ocr_error_info = self.api_client.read_document(original_file_path)
-            self.file_processed.emit(idx, original_file_path, ocr_result_json, ocr_error_info)
             ocr_succeeded = (ocr_result_json and not ocr_error_info)
+
             json_target_parent_dir = os.path.join(original_file_parent_dir, results_folder_name)
             should_create_json = (output_format == "json_only" or output_format == "both")
+            json_save_info_for_signal = None # JSON保存結果を格納する変数
+
             if ocr_succeeded and should_create_json:
                 if not os.path.exists(json_target_parent_dir):
-                    try: os.makedirs(json_target_parent_dir, exist_ok=True)
-                    except OSError as e: self.log_manager.error(f"Failed to create dir for JSON result: {json_target_parent_dir}", context="WORKER_FILE_IO_ERROR", exception_info=e)
-                json_output_filename = f"{base_name_for_output}.json"; json_output_path = os.path.join(json_target_parent_dir, json_output_filename)
-                try:
-                    with open(json_output_path, 'w', encoding='utf-8') as f: json.dump(ocr_result_json, f, ensure_ascii=False, indent=2)
-                    self.log_manager.info(f"JSON result saved: '{json_output_path}'", context="WORKER_FILE_IO")
-                except Exception as e: self.log_manager.error(f"Failed to save JSON result for {original_file_basename}", context="WORKER_FILE_IO_ERROR", exception_info=e, path=json_output_path)
-            elif ocr_succeeded and not should_create_json: self.log_manager.info(f"JSON file creation skipped for {original_file_basename} (output_format: '{output_format}').", context="WORKER_FILE_IO")
-            elif ocr_error_info: self.log_manager.error(f"OCR failed for {original_file_basename}, skipping JSON save.", context="WORKER_OCR_FAIL", error_details=ocr_error_info.get("message", str(ocr_error_info)))
-            should_create_pdf = (output_format == "pdf_only" or output_format == "both"); pdf_content_for_signal, pdf_error_for_signal = None, None
+                    try:
+                        os.makedirs(json_target_parent_dir, exist_ok=True)
+                    except OSError as e:
+                        self.log_manager.error(f"Failed to create dir for JSON result: {json_target_parent_dir}", context="WORKER_FILE_IO_ERROR", exception_info=e)
+                        json_save_info_for_signal = {"error": "JSON保存先フォルダ作成失敗", "details": str(e)}
+                
+                if not json_save_info_for_signal: # フォルダ作成成功または既に存在
+                    json_output_filename = f"{base_name_for_output}.json"
+                    json_output_path = os.path.join(json_target_parent_dir, json_output_filename)
+                    try:
+                        with open(json_output_path, 'w', encoding='utf-8') as f:
+                            json.dump(ocr_result_json, f, ensure_ascii=False, indent=2)
+                        self.log_manager.info(f"JSON result saved: '{json_output_path}'", context="WORKER_FILE_IO")
+                        json_save_info_for_signal = json_output_path # 成功時はパスを通知
+                    except Exception as e:
+                        self.log_manager.error(f"Failed to save JSON result for {original_file_basename}", context="WORKER_FILE_IO_ERROR", exception_info=e, path=json_output_path)
+                        json_save_info_for_signal = {"error": "JSONファイル保存失敗", "details": str(e)}
+            elif ocr_succeeded and not should_create_json:
+                self.log_manager.info(f"JSON file creation skipped for {original_file_basename} (output_format: '{output_format}').", context="WORKER_FILE_IO")
+                json_save_info_for_signal = "作成しない(設定)" # スキップした情報を通知
+            elif ocr_error_info:
+                self.log_manager.error(f"OCR failed for {original_file_basename}, skipping JSON save.", context="WORKER_OCR_FAIL", error_details=ocr_error_info.get("message", str(ocr_error_info)))
+                json_save_info_for_signal = {"error": "OCR失敗のためJSON作成スキップ", "details": ocr_error_info.get("message")}
+            else: # OCRは成功したが、JSONもPDFも作成しない場合など (通常はocr_succeededの条件でカバーされる)
+                json_save_info_for_signal = "対象外または不明"
+
+            # file_processed シグナルに json_save_info を追加してemit
+            self.file_processed.emit(idx, original_file_path, ocr_result_json, ocr_error_info, json_save_info_for_signal)
+
+            should_create_pdf = (output_format == "pdf_only" or output_format == "both")
+            pdf_content_for_signal, pdf_error_for_signal = None, None
+            
             if should_create_pdf and self.is_running:
                 self.log_manager.info(f"Searchable PDF creation initiated for {original_file_basename} (output_format: {output_format}).", context="WORKER_PDF_CREATE_INIT")
-                pdf_content, pdf_error_info = self.api_client.make_searchable_pdf(original_file_path); pdf_content_for_signal, pdf_error_for_signal = pdf_content, pdf_error_info
-                pdf_target_parent_dir = json_target_parent_dir
+                pdf_content, pdf_error_info = self.api_client.make_searchable_pdf(original_file_path)
+                pdf_content_for_signal, pdf_error_for_signal = pdf_content, pdf_error_info
+                
+                pdf_target_parent_dir = json_target_parent_dir # JSONと同じ場所 (results_folder_name を使用)
                 if pdf_content and not pdf_error_info:
                     if not os.path.exists(pdf_target_parent_dir):
-                        try: os.makedirs(pdf_target_parent_dir, exist_ok=True)
-                        except OSError as e: self.log_manager.error(f"Failed to create dir for PDF result: {pdf_target_parent_dir}", context="WORKER_FILE_IO_ERROR", exception_info=e)
-                    pdf_output_filename = f"{base_name_for_output}.pdf"; pdf_output_path = os.path.join(pdf_target_parent_dir, pdf_output_filename)
-                    try:
-                        with open(pdf_output_path, 'wb') as f: f.write(pdf_content)
-                        self.log_manager.info(f"Searchable PDF saved: '{pdf_output_path}'", context="WORKER_FILE_IO")
-                    except Exception as e: self.log_manager.error(f"Failed to save searchable PDF for {original_file_basename}", context="WORKER_FILE_IO_ERROR", exception_info=e, path=pdf_output_path)
-                elif pdf_error_info: self.log_manager.error(f"Searchable PDF creation failed for {original_file_basename}.", context="WORKER_PDF_FAIL", error_details=pdf_error_info.get("message", str(pdf_error_info)))
-            elif not should_create_pdf: self.log_manager.info(f"Searchable PDF creation skipped for {original_file_basename} (output_format: '{output_format}').", context="WORKER_PDF_CREATE_SKIP")
-            if should_create_pdf: self.searchable_pdf_processed.emit(idx, original_file_path, pdf_content_for_signal, pdf_error_for_signal)
-            else: self.searchable_pdf_processed.emit(idx, original_file_path, None, {"message": "作成対象外(設定)"}) # スキップ時も通知
+                        try:
+                            os.makedirs(pdf_target_parent_dir, exist_ok=True)
+                        except OSError as e:
+                            self.log_manager.error(f"Failed to create dir for PDF result: {pdf_target_parent_dir}", context="WORKER_FILE_IO_ERROR", exception_info=e)
+                    
+                    if os.path.exists(pdf_target_parent_dir): # ディレクトリ作成が成功した場合のみ
+                        pdf_output_filename = f"{base_name_for_output}.pdf"
+                        pdf_output_path = os.path.join(pdf_target_parent_dir, pdf_output_filename)
+                        try:
+                            with open(pdf_output_path, 'wb') as f:
+                                f.write(pdf_content)
+                            self.log_manager.info(f"Searchable PDF saved: '{pdf_output_path}'", context="WORKER_FILE_IO")
+                        except Exception as e:
+                            self.log_manager.error(f"Failed to save searchable PDF for {original_file_basename}", context="WORKER_FILE_IO_ERROR", exception_info=e, path=pdf_output_path)
+                            pdf_error_for_signal = pdf_error_for_signal or {"error": "PDFファイル保存失敗", "details": str(e)} # エラー情報を更新
+                elif pdf_error_info:
+                    self.log_manager.error(f"Searchable PDF creation failed for {original_file_basename}.", context="WORKER_PDF_FAIL", error_details=pdf_error_info.get("message", str(pdf_error_info)))
+            elif not should_create_pdf:
+                self.log_manager.info(f"Searchable PDF creation skipped for {original_file_basename} (output_format: '{output_format}').", context="WORKER_PDF_CREATE_SKIP")
+
+            # PDF処理結果のシグナル発行
+            if should_create_pdf:
+                self.searchable_pdf_processed.emit(idx, original_file_path, pdf_content_for_signal, pdf_error_for_signal)
+            else:
+                self.searchable_pdf_processed.emit(idx, original_file_path, None, {"message": "作成対象外(設定)"})
+
             current_source_file_to_move = original_file_path
             if os.path.exists(current_source_file_to_move):
                 destination_subfolder_for_move = None
-                if ocr_succeeded and move_on_success_enabled: destination_subfolder_for_move = success_folder_name
-                elif not ocr_succeeded and move_on_failure_enabled: destination_subfolder_for_move = failure_folder_name
-                if destination_subfolder_for_move and self.is_running: self._move_file_with_collision_handling(current_source_file_to_move, original_file_parent_dir, destination_subfolder_for_move, collision_action)
-            else: self.log_manager.warning(f"Source file for move not found: '{current_source_file_to_move}'", context="WORKER_MOVE_SRC_MISSING")
+                if ocr_succeeded and move_on_success_enabled:
+                    destination_subfolder_for_move = success_folder_name
+                elif not ocr_succeeded and move_on_failure_enabled:
+                    destination_subfolder_for_move = failure_folder_name
+                
+                if destination_subfolder_for_move and self.is_running:
+                    self._move_file_with_collision_handling(
+                        current_source_file_to_move, original_file_parent_dir,
+                        destination_subfolder_for_move, collision_action)
+            else:
+                self.log_manager.warning(f"Source file for move not found: '{current_source_file_to_move}'", context="WORKER_MOVE_SRC_MISSING")
+            
             time.sleep(0.01)
+
         self.all_files_processed.emit()
-        if self.is_running: self.log_manager.info("All files processed by OcrWorker.", context="WORKER_LIFECYCLE")
-        else: self.log_manager.info("OcrWorker processing was stopped.", context="WORKER_LIFECYCLE")
+        if self.is_running:
+            self.log_manager.info("All files processed by OcrWorker.", context="WORKER_LIFECYCLE")
+        else:
+            self.log_manager.info("OcrWorker processing was stopped.", context="WORKER_LIFECYCLE")
         self.log_manager.debug(f"OcrWorker thread finished.", context="WORKER_LIFECYCLE", thread_id=thread_id)
+    # --- runメソッド全体ここまで ---
+
     def stop(self):
-        if self.is_running: self.is_running = False; self.log_manager.info("OcrWorker stop requested.", context="WORKER_LIFECYCLE")
-        else: self.log_manager.debug("OcrWorker stop requested, but already not running.", context="WORKER_LIFECYCLE")
+        # (このメソッドは変更なし)
+        if self.is_running:
+            self.is_running = False
+            self.log_manager.info("OcrWorker stop requested.", context="WORKER_LIFECYCLE")
+        else:
+            self.log_manager.debug("OcrWorker stop requested, but already not running.", context="WORKER_LIFECYCLE")
+
+# ... (MainWindowクラスとif __name__ == "__main__":ブロックは変更なし) ...
 
 LISTVIEW_UPDATE_INTERVAL_MS = 300
 
@@ -186,47 +281,50 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(self.splitter)
         
         self.input_folder_path = self.config.get("last_target_dir", "")
-        # --- ここから変更: 起動時の入力フォルダパス検証と自動スキャン ---
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             self.log_manager.info(f"前回終了時の入力フォルダを読み込みました: {self.input_folder_path}", context="SYSTEM_INIT")
-            # 起動時に自動スキャンを実行
             self.perform_initial_scan() 
-        elif self.input_folder_path: # パスはあるが存在しない/ディレクトリでない
+        elif self.input_folder_path:
             self.log_manager.warning(f"前回指定された入力フォルダ '{self.input_folder_path}' は無効です。クリアします。", context="SYSTEM_INIT")
-            self.input_folder_path = "" # パスをクリア
-            # self.input_folder_label の更新は setup_toolbar_and_folder_labels で行われる
-        else: # パスが空
+            self.input_folder_path = ""
+        else:
             self.log_manager.info("前回終了時の入力フォルダ指定はありませんでした。", context="SYSTEM_INIT")
-        # --- ここまで変更 ---
 
-        self.setup_toolbar_and_folder_labels() # ラベル表示はパス検証後
+        self.setup_toolbar_and_folder_labels()
         self.is_ocr_running = False; self.current_view = self.config.get("current_view", 0); self.stack.setCurrentIndex(self.current_view)
         log_visible = self.config.get("log_visible", True); self.log_container.setVisible(log_visible)
-        self.update_ocr_controls(); self.check_input_folder_validity() # 最後にUI状態を更新
+        self.update_ocr_controls(); self.check_input_folder_validity()
         self.log_manager.info("Application initialized successfully.", context="SYSTEM_LIFECYCLE")
 
     def perform_initial_scan(self):
-        """起動時に前回フォルダが有効な場合にファイルスキャンを行う"""
         self.log_manager.info(f"起動時スキャン開始: {self.input_folder_path}", context="SYSTEM_INIT_SCAN")
         if self.update_timer.isActive(): self.update_timer.stop()
         self.processed_files_info = []
         
         collected_files = self._collect_files_from_input_folder()
         if collected_files:
+            # --- ここから変更: json_status の初期設定 ---
+            current_config = ConfigManager.load() # 最新の設定を取得
+            output_format_cfg = current_config.get("file_actions", {}).get("output_format", "both")
+            initial_json_status = "作成しない(設定)"
+            if output_format_cfg == "json_only" or output_format_cfg == "both":
+                initial_json_status = "-" # または "処理待ち"
+            # --- ここまで変更 ---
+            initial_pdf_status = "作成しない(設定)"
+            if output_format_cfg == "pdf_only" or output_format_cfg == "both":
+                initial_pdf_status = "-"
+
             for i, f_path in enumerate(collected_files):
                 try: f_size = os.path.getsize(f_path)
                 except OSError: f_size = 0
-                output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
-                initial_pdf_status = "作成しない(設定)"
-                if output_format_cfg == "pdf_only" or output_format_cfg == "both":
-                    initial_pdf_status = "-"
-                
                 self.processed_files_info.append({
                     "no": i + 1, "path": f_path, "name": os.path.basename(f_path), "size": f_size,
-                    # --- ここから変更 ---
-                    "status": "待機中", # "待機中(再スキャン)" から変更 (または元々 "待機中" か確認)
+                    "status": "待機中", 
+                    "ocr_result_summary": "", 
+                    # --- ここから変更: json_status を追加 ---
+                    "json_status": initial_json_status,
                     # --- ここまで変更 ---
-                    "ocr_result_summary": "", "searchable_pdf_status": initial_pdf_status
+                    "searchable_pdf_status": initial_pdf_status
                 })
             self.list_view.update_files(self.processed_files_info)
             if hasattr(self.summary_view, 'reset_summary'): self.summary_view.reset_summary()
@@ -376,23 +474,31 @@ class MainWindow(QMainWindow):
         
         self.is_ocr_running = True
         self.update_ocr_controls()
-        self.processed_files_info = [] # processed_files_info を初期化
+        self.processed_files_info = []
+        
+        # --- ここから変更: json_status の初期設定 ---
+        output_format_cfg = current_config_for_run.get("file_actions", {}).get("output_format", "both")
+        initial_json_status_on_start = "作成しない(設定)"
+        if output_format_cfg == "json_only" or output_format_cfg == "both":
+            initial_json_status_on_start = "処理待ち" # OCR開始時は「処理待ち」
+        initial_pdf_status_on_start = "作成しない(設定)"
+        if output_format_cfg == "pdf_only" or output_format_cfg == "both":
+            initial_pdf_status_on_start = "処理待ち"
+        # --- ここまで変更 ---
+
         for i, f_path in enumerate(files_to_process):
             try: f_size = os.path.getsize(f_path)
             except OSError: f_size = 0
-            output_format_cfg = current_config_for_run.get("file_actions", {}).get("output_format", "both")
-            initial_pdf_status = "作成しない(設定)"
-            if output_format_cfg == "pdf_only" or output_format_cfg == "both":
-                initial_pdf_status = "処理待ち" # または "-"
-            
-            # --- ここの status は元々 "待機中" で正しいはず ---
             self.processed_files_info.append({
                 "no": i + 1, "path": f_path, "name": os.path.basename(f_path), 
-                "size": f_size, "status": "待機中", # ここは「待機中」でOK
+                "size": f_size, "status": "待機中", 
                 "ocr_result_summary": "", 
-                "searchable_pdf_status": initial_pdf_status
+                # --- ここから変更: json_status を追加 ---
+                "json_status": initial_json_status_on_start,
+                # --- ここまで変更 ---
+                "searchable_pdf_status": initial_pdf_status_on_start
             })
-            # --- ここまで確認 ---
+
         self.list_view.update_files(self.processed_files_info)
         if hasattr(self.summary_view, 'start_processing'): self.summary_view.start_processing(len(files_to_process))
         self.log_manager.info(f"Instantiating and starting OcrWorker for {len(files_to_process)} files.", context="OCR_FLOW")
@@ -442,33 +548,83 @@ class MainWindow(QMainWindow):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if self.list_view: self.list_view.update_files(self.processed_files_info)
 
-    def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, error_info): # (変更なし)
-        # ... (前回提示のコード) ...
-        self.log_manager.debug(f"File OCR processed: {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(ocr_result_json)}", context="CALLBACK"); target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
-        if not target_file_info: self.log_manager.warning(f"No item found in processed_files_info for {file_path}", context="CALLBACK_ERROR"); return
-        if error_info: target_file_info["status"] = "OCR失敗"; target_file_info["ocr_result_summary"] = error_info.get('message', '不明なエラー');
+    def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, ocr_error_info, json_save_info):
+        self.log_manager.debug(
+            f"File OCR processed (MainWin): {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(ocr_result_json)}, JSON Save Info: {json_save_info}",
+            context="CALLBACK_OCR"
+        )
+        target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
+        if not target_file_info:
+            self.log_manager.warning(f"No item found in processed_files_info for {file_path}", context="CALLBACK_ERROR")
+            return
+
+        # OCR処理自体のステータス更新 (変更なし)
+        if ocr_error_info:
+            target_file_info["status"] = "OCR失敗"
+            target_file_info["ocr_result_summary"] = ocr_error_info.get('message', '不明なエラー')
         elif ocr_result_json:
-            target_file_info["status"] = "OCR成功";
+            target_file_info["status"] = "OCR成功"
             try: 
-                if isinstance(ocr_result_json, list) and len(ocr_result_json) > 0: first_page_result = ocr_result_json[0].get("result", {}); fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", ""); target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
+                if isinstance(ocr_result_json, list) and len(ocr_result_json) > 0:
+                    first_page_result = ocr_result_json[0].get("result", {})
+                    fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", "")
+                    target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
                 else: target_file_info["ocr_result_summary"] = "結果形式不明"
             except Exception: target_file_info["ocr_result_summary"] = "結果解析エラー"
-        else: target_file_info["status"] = "OCR状態不明"; target_file_info["ocr_result_summary"] = "APIレスポンスなし";
-        if hasattr(self.summary_view, 'update_counts_from_status_change'): self.summary_view.update_counts_from_status_change(target_file_info["status"]) 
-        elif hasattr(self.summary_view, 'increment_processed_count'): self.summary_view.increment_processed_count() 
+        else:
+            target_file_info["status"] = "OCR状態不明"
+            target_file_info["ocr_result_summary"] = "APIレスポンスなし"
+
+        # JSON保存ステータスの更新
+        if isinstance(json_save_info, str) and os.path.exists(json_save_info): # 成功時はパス文字列
+            target_file_info["json_status"] = "JSON作成成功"
+        elif isinstance(json_save_info, str) and json_save_info == "作成しない(設定)":
+            target_file_info["json_status"] = "作成しない(設定)"
+        elif isinstance(json_save_info, dict) and "error" in json_save_info: # 失敗時はエラー情報辞書
+            target_file_info["json_status"] = "JSON作成失敗"
+            # self.log_manager.error(f"JSON save failed for {file_path}: {json_save_info.get('details')}", context="CALLBACK_JSON_FAIL")
+        elif ocr_error_info: # OCR自体が失敗した場合
+            target_file_info["json_status"] = "対象外(OCR失敗)"
+        else: # その他の場合 (例: json_save_info が None、または予期せぬ形式)
+            target_file_info["json_status"] = "JSON状態不明"
+        
+        # SummaryViewの更新 (変更なしの部分)
+        if hasattr(self.summary_view, 'update_counts_from_status_change'):
+            self.summary_view.update_counts_from_status_change(target_file_info["status"]) 
+        elif hasattr(self.summary_view, 'increment_processed_count'):
+            self.summary_view.increment_processed_count() 
+            if target_file_info["status"] == "OCR成功" and hasattr(self.summary_view, 'increment_completed_count'):
+                self.summary_view.increment_completed_count()
+            elif target_file_info["status"] != "OCR成功" and hasattr(self.summary_view, 'increment_error_count'):
+                self.summary_view.increment_error_count()
+        
+        self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+    # --- ここまで変更 ---
+
+    def on_file_searchable_pdf_processed(self, file_idx, file_path, pdf_content, pdf_error_info):
+        # (大きな変更はないが、json_status との整合性を確認)
+        self.log_manager.debug(f"File Searchable PDF processed: {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(pdf_content)}", context="CALLBACK_PDF")
+        target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
+        if not target_file_info:
+            self.log_manager.warning(f"No item found in processed_files_info for PDF {file_path}", context="CALLBACK_ERROR")
+            return
+        
+        current_config = ConfigManager.load() 
+        output_format = current_config.get("file_actions", {}).get("output_format", "both")
+
+        if output_format == "json_only":
+            target_file_info["searchable_pdf_status"] = "作成しない(設定)"
+        elif isinstance(pdf_error_info, dict) and pdf_error_info.get("message") == "作成対象外(設定)": # Workerからスキップ情報が来た場合
+            target_file_info["searchable_pdf_status"] = "作成しない(設定)"
+        elif pdf_error_info: # PDF作成API呼び出しでエラー
+            target_file_info["searchable_pdf_status"] = "PDF作成失敗"
+        elif pdf_content: # PDF作成成功
+            target_file_info["searchable_pdf_status"] = "PDF作成成功"
+        else: # PDF作成APIは呼ばれたが content も error もない場合 (または呼ばれなかった場合)
+            target_file_info["searchable_pdf_status"] = "PDF状態不明" # または初期値のまま
+            
         self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
-    def on_file_searchable_pdf_processed(self, file_idx, file_path, pdf_content, pdf_error_info): # (変更なし)
-        # ... (前回提示のコード) ...
-        self.log_manager.debug(f"File Searchable PDF processed: {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(pdf_content)}", context="CALLBACK")
-        target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
-        if not target_file_info: self.log_manager.warning(f"No item found in processed_files_info for PDF {file_path}", context="CALLBACK_ERROR"); return
-        current_config = ConfigManager.load(); output_format = current_config.get("file_actions", {}).get("output_format", "both")
-        if output_format == "json_only": target_file_info["searchable_pdf_status"] = "作成しない(設定)"
-        elif pdf_error_info: target_file_info["searchable_pdf_status"] = "PDF作成失敗"
-        elif pdf_content: target_file_info["searchable_pdf_status"] = "PDF作成成功"
-        else: target_file_info["searchable_pdf_status"] = "PDF状態不明"
-        self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_all_files_processed(self): # (変更なし)
         # ... (前回提示のコード) ...
@@ -505,28 +661,35 @@ class MainWindow(QMainWindow):
     def perform_rescan(self):
         self.log_manager.info("Performing UI clear and input folder rescan.", context="UI_ACTION_RESCAN")
         self.processed_files_info = []
-        self.list_view.update_files(self.processed_files_info)
+        self.list_view.update_files(self.processed_files_info) # クリアは即時
         if hasattr(self.summary_view, 'reset_summary'): self.summary_view.reset_summary()
         
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             self.log_manager.info(f"Rescanning input folder: {self.input_folder_path}", context="UI_ACTION_RESCAN")
             collected_files = self._collect_files_from_input_folder()
             if collected_files:
+                # --- ここから変更: json_status の初期設定 ---
+                current_config = ConfigManager.load() # 最新の設定
+                output_format_cfg = current_config.get("file_actions", {}).get("output_format", "both")
+                initial_json_status_on_rescan = "作成しない(設定)"
+                if output_format_cfg == "json_only" or output_format_cfg == "both":
+                    initial_json_status_on_rescan = "-" # または "処理待ち"
+                initial_pdf_status_on_rescan = "作成しない(設定)"
+                if output_format_cfg == "pdf_only" or output_format_cfg == "both":
+                    initial_pdf_status_on_rescan = "-" 
+                # --- ここまで変更 ---
                 for i, f_path in enumerate(collected_files):
                     try: f_size = os.path.getsize(f_path)
                     except OSError: f_size = 0
-                    output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
-                    initial_pdf_status = "作成しない(設定)"
-                    if output_format_cfg == "pdf_only" or output_format_cfg == "both":
-                        initial_pdf_status = "-" 
-                    
-                    # --- ここから変更 ---
                     self.processed_files_info.append({
                         "no": i + 1, "path": f_path, "name": os.path.basename(f_path), "size": f_size,
-                        "status": "待機中", # "待機中(再スキャン)" から "待機中" に変更
-                        "ocr_result_summary": "", "searchable_pdf_status": initial_pdf_status
+                        "status": "待機中", 
+                        "ocr_result_summary": "", 
+                        # --- ここから変更: json_status を追加 ---
+                        "json_status": initial_json_status_on_rescan,
+                        # --- ここまで変更 ---
+                        "searchable_pdf_status": initial_pdf_status_on_rescan
                     })
-                    # --- ここまで変更 ---
                 self.list_view.update_files(self.processed_files_info)
                 if hasattr(self.summary_view, 'start_processing'):
                     self.summary_view.reset_summary()

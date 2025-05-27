@@ -92,15 +92,15 @@ class ConfigManager:
         file_actions.setdefault("failure_folder_name", "OCR失敗")
         file_actions.setdefault("collision_action", "rename")
         file_actions.setdefault("results_folder_name", "OCR結果")
-        # --- ここから変更 ---
         file_actions.setdefault("output_format", "both") # "json_only", "pdf_only", "both"
-        # --- ここまで変更 ---
 
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
         config.setdefault("current_view", 0)
         config.setdefault("log_visible", True)
-        config.setdefault("column_widths", [50, 300, 120, 350, 120, 100]) # ListViewの列幅デフォルト更新
+        # --- ここから変更: column_widths のデフォルト値を7列用に ---
+        config.setdefault("column_widths", [50, 250, 100, 300, 120, 120, 100]) # No, Name, Status, Summary, JSON, PDF, Size
+        # --- ここまで変更 ---
         config.setdefault("sort_order", {"column": 0, "order": "asc"})
         config.setdefault("splitter_sizes", [])
         config.setdefault("last_target_dir", "")

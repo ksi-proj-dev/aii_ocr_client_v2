@@ -23,15 +23,18 @@ class ListView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        # --- ここから変更: 列数を7に ---
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "No", "ファイル名", "ステータス", "OCR結果概要", "サーチャブルPDF", "サイズ(KB)"
+            "No", "ファイル名", "ステータス", "OCR結果概要", 
+            "JSON結果", "サーチャブルPDF", "サイズ(KB)" # 「JSON結果」列を追加
         ])
+        # --- ここまで変更 ---
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
             QHeaderView::section {
-                background-color: #f0f0f0; padding: 0px; border: 1px solid #d0d0d0;
+                background-color: #f0f0f0; padding: 4px; border: 1px solid #d0d0d0;
             }
             QTableWidget {
                 gridline-color: #e0e0e0; alternate-background-color: #f9f9f9; background-color: white;
@@ -40,10 +43,7 @@ class ListView(QWidget):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setSortingEnabled(True)
-
-        # --- ここから変更 ---
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers) # 編集を無効化
-        # --- ここまで変更 ---
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
         layout.addWidget(self.table)
         self.setLayout(layout)
@@ -64,21 +64,27 @@ class ListView(QWidget):
                 no_value = file_info.get("no", idx + 1)
                 no_item = NumericTableWidgetItem(str(no_value), no_value)
                 no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(idx, 0, no_item)
+                self.table.setItem(idx, 0, no_item) # No
 
-                self.table.setItem(idx, 1, QTableWidgetItem(file_info.get("name", "")))
+                self.table.setItem(idx, 1, QTableWidgetItem(file_info.get("name", ""))) # ファイル名
                 
                 status_item = QTableWidgetItem(file_info.get("status", ""))
-                self.table.setItem(idx, 2, status_item)
+                self.table.setItem(idx, 2, status_item) # ステータス
                 
-                self.table.setItem(idx, 3, QTableWidgetItem(file_info.get("ocr_result_summary", "")))
-                self.table.setItem(idx, 4, QTableWidgetItem(file_info.get("searchable_pdf_status", "-")))
+                self.table.setItem(idx, 3, QTableWidgetItem(file_info.get("ocr_result_summary", ""))) # OCR結果概要
+                
+                # --- ここから変更: 「JSON結果」列のアイテム設定 ---
+                self.table.setItem(idx, 4, QTableWidgetItem(file_info.get("json_status", "-"))) # JSON結果
+                # --- ここまで変更 ---
+                
+                self.table.setItem(idx, 5, QTableWidgetItem(file_info.get("searchable_pdf_status", "-"))) # サーチャブルPDF
                 
                 size_bytes = file_info.get("size", 0)
                 size_kb_display_text = f"{size_bytes / 1024:,.1f} KB"
                 size_item = NumericTableWidgetItem(size_kb_display_text, size_bytes)
                 size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(idx, 5, size_item)
+                self.table.setItem(idx, 6, size_item) # サイズ(KB) - 列インデックス変更
+
             self.restore_column_widths()
         finally:
             self.table.setSortingEnabled(current_sorting_enabled_state)
@@ -88,7 +94,9 @@ class ListView(QWidget):
         self.populate_table(files_data)
 
     def restore_column_widths(self):
-        default_widths = [50, 300, 120, 350, 120, 100]
+        # --- ここから変更: デフォルト列幅の要素数を7に、新しい列の幅も設定 ---
+        default_widths = [50, 250, 100, 300, 120, 120, 100] # No, Name, Status, Summary, JSON, PDF, Size
+        # --- ここまで変更 ---
         widths = self.config.get("column_widths", default_widths)
         if len(widths) != self.table.columnCount():
             widths = default_widths
@@ -115,7 +123,9 @@ class ListView(QWidget):
     def get_column_widths(self):
         if hasattr(self, 'table') and self.table and self.table.columnCount() > 0:
             return [self.table.columnWidth(i) for i in range(self.table.columnCount())]
-        return self.config.get("column_widths", [50, 300, 120, 350, 120, 100])
+        # --- ここから変更: デフォルト列幅の要素数を7に ---
+        return self.config.get("column_widths", [50, 250, 100, 300, 120, 120, 100])
+        # --- ここまで変更 ---
 
     def get_sort_order(self):
         if hasattr(self, 'table') and self.table and self.table.horizontalHeader().isSortIndicatorShown():
