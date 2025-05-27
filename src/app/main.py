@@ -5,6 +5,8 @@ import datetime
 import time
 import shutil
 import threading
+import platform # OS判定のためインポート
+import subprocess # フォルダを開くためインポート
 import faulthandler
 faulthandler.enable()
 
@@ -24,6 +26,7 @@ from log_manager import LogManager, LogLevel
 from api_client import CubeApiClient
 
 # OcrConfirmationDialog クラス (変更なし)
+# ... (OcrConfirmationDialogのコードは前回提示のまま) ...
 class OcrConfirmationDialog(QDialog):
     def __init__(self, settings_summary, parent=None):
         super().__init__(parent)
@@ -53,26 +56,19 @@ class OcrConfirmationDialog(QDialog):
 
 
 # OcrWorker クラス (変更なし)
+# ... (OcrWorkerのコードは前回提示のまま) ...
 class OcrWorker(QThread):
     file_processed = pyqtSignal(int, str, object, object, object) 
     searchable_pdf_processed = pyqtSignal(int, str, object, object)
     all_files_processed = pyqtSignal()
     def __init__(self, api_client, files_to_process, input_root_folder, log_manager, config):
         super().__init__()
-        self.api_client = api_client;
-        self.files_to_process = files_to_process;
-        self.is_running = True
-        self.input_root_folder = input_root_folder;
-        self.log_manager = log_manager;
-        self.config = config
+        self.api_client = api_client; self.files_to_process = files_to_process; self.is_running = True
+        self.input_root_folder = input_root_folder; self.log_manager = log_manager; self.config = config
         self.log_manager.debug("OcrWorker initialized.", context="WORKER_LIFECYCLE", num_files=len(files_to_process))
     def _get_unique_filepath(self, target_dir, filename):
-        base, ext = os.path.splitext(filename);
-        counter = 1;
-        new_filepath = os.path.join(target_dir, filename)
-        while os.path.exists(new_filepath): new_filename = f"{base} ({counter}){ext}"
-        new_filepath = os.path.join(target_dir, new_filename);
-        counter += 1
+        base, ext = os.path.splitext(filename); counter = 1; new_filepath = os.path.join(target_dir, filename)
+        while os.path.exists(new_filepath): new_filename = f"{base} ({counter}){ext}"; new_filepath = os.path.join(target_dir, new_filename); counter += 1
         return new_filepath
     def _move_file_with_collision_handling(self, source_path, original_file_parent_dir, dest_subfolder_name, collision_action):
         log_ctx_move = "WORKER_MOVE"; original_basename = os.path.basename(source_path)
@@ -159,7 +155,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.log_manager = LogManager()
         self.log_manager.debug("MainWindow initializing...", context="MAINWIN_LIFECYCLE")
-        self.setWindowTitle("AI inside Cube Client Ver.0.0.11") # バージョンアップ
+        self.setWindowTitle("AI inside Cube Client Ver.0.0.12") # バージョンアップ
         self.config = ConfigManager.load()
 
         self.log_widget = QTextEdit()
@@ -176,34 +172,15 @@ class MainWindow(QMainWindow):
         else: self.move(pos_cfg["x"], pos_cfg["y"])
         if state_cfg == "maximized": self.showMaximized()
 
-        self.central_widget = QWidget();
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(2, 2, 2, 2) # 左, 上, 右, 下 のマージン
-        self.splitter = QSplitter(Qt.Orientation.Vertical)
-        self.stack = QStackedWidget(); self.summary_view = SummaryView(); self.processed_files_info = []; self.list_view = ListView(self.processed_files_info)
-        self.stack.addWidget(self.summary_view); self.stack.addWidget(self.list_view)
-        self.splitter.addWidget(self.stack)
-        
-        self.log_container = QWidget()
-        log_layout_inner = QVBoxLayout(self.log_container)
-        log_layout_inner.setContentsMargins(8,8,8,8) # 左, 上, 右, 下 のマージン
-        log_layout_inner.setSpacing(0)
-        self.log_header = QLabel("ログ：")
-        self.log_header.setStyleSheet("margin-left: 6px; padding-bottom: 0px; font-weight: bold;") # padding-bottom を 0px に
-        log_layout_inner.addWidget(self.log_header)
-        
+        self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(2, 2, 2, 2)
+        self.splitter = QSplitter(Qt.Orientation.Vertical); self.stack = QStackedWidget(); self.summary_view = SummaryView(); self.processed_files_info = []; self.list_view = ListView(self.processed_files_info); self.stack.addWidget(self.summary_view); self.stack.addWidget(self.list_view); self.splitter.addWidget(self.stack)
+        self.log_container = QWidget(); log_layout_inner = QVBoxLayout(self.log_container); log_layout_inner.setContentsMargins(8,8,8,8); log_layout_inner.setSpacing(0)
+        self.log_header = QLabel("ログ："); self.log_header.setStyleSheet("margin-left: 6px; padding-bottom: 0px; font-weight: bold;"); log_layout_inner.addWidget(self.log_header)
         self.log_widget.setReadOnly(True)
         self.log_widget.setStyleSheet("""
-            QTextEdit {
-                font-family: Consolas, Meiryo, monospace; 
-                font-size: 9pt; 
-                border: 1px solid #D0D0D0;
-                margin: 0px;
-            }
-            QTextEdit QScrollBar:vertical { /* スクロールバースタイルは前回修正済み */
-                border: 1px solid #C0C0C0; background: #F0F0F0; width: 15px; margin: 0px;
-            }
+            QTextEdit { font-family: Consolas, Meiryo, monospace; font-size: 9pt; border: 1px solid #D0D0D0; margin: 0px; }
+            QTextEdit QScrollBar:vertical { border: 1px solid #C0C0C0; background: #F0F0F0; width: 15px; margin: 0px; }
             QTextEdit QScrollBar::handle:vertical { background: #A0A0A0; min-height: 20px; border-radius: 7px; }
             QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical { border: none; background: none; height: 0px; width: 0px; }
             QTextEdit QScrollBar::up-arrow:vertical, QTextEdit QScrollBar::down-arrow:vertical { height: 0px; width: 0px; background: none; }
@@ -212,10 +189,8 @@ class MainWindow(QMainWindow):
         self.log_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.log_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         log_layout_inner.addWidget(self.log_widget)
-        self.log_container.setStyleSheet("margin: 0px 6px 6px 6px;") # log_containerのマージン
-        
-        self.splitter.addWidget(self.log_container)
-        self.splitter.setStyleSheet("QSplitter::handle { background-color: #CCCCCC; height: 2px; }")
+        self.log_container.setStyleSheet("margin: 0px 6px 6px 6px;")
+        self.splitter.addWidget(self.log_container); self.splitter.setStyleSheet("QSplitter::handle { background-color: #CCCCCC; height: 2px; }")
         splitter_sizes = self.config.get("splitter_sizes");
         if splitter_sizes and len(splitter_sizes) == 2 and sum(splitter_sizes) > 0 : self.splitter.setSizes(splitter_sizes)
         else: default_height = self.height(); initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]; self.splitter.setSizes(initial_splitter_sizes)
@@ -230,7 +205,7 @@ class MainWindow(QMainWindow):
             self.input_folder_path = ""
         else: self.log_manager.info("前回終了時の入力フォルダ指定はありませんでした。", context="SYSTEM_INIT")
 
-        self.setup_toolbar_and_folder_labels()
+        self.setup_toolbar_and_folder_labels() # ラベルの初期テキスト設定を含む
         self.is_ocr_running = False; self.current_view = self.config.get("current_view", 0); self.stack.setCurrentIndex(self.current_view)
         log_visible = self.config.get("log_visible", True); self.log_container.setVisible(log_visible)
         self.update_ocr_controls(); self.check_input_folder_validity()
@@ -242,9 +217,7 @@ class MainWindow(QMainWindow):
         self.processed_files_info = []
         collected_files = self._collect_files_from_input_folder()
         if collected_files:
-            current_config = ConfigManager.load(); output_format_cfg = current_config.get("file_actions", {}).get("output_format", "both");
-            initial_json_status = "作成しない(設定)";
-            initial_pdf_status = "作成しない(設定)"
+            current_config = ConfigManager.load(); output_format_cfg = current_config.get("file_actions", {}).get("output_format", "both"); initial_json_status = "作成しない(設定)"; initial_pdf_status = "作成しない(設定)"
             if output_format_cfg == "json_only" or output_format_cfg == "both": initial_json_status = "-"
             if output_format_cfg == "pdf_only" or output_format_cfg == "both": initial_pdf_status = "-"
             for i, f_path in enumerate(collected_files):
@@ -267,80 +240,130 @@ class MainWindow(QMainWindow):
             else: self.log_widget.append(message)
             self.log_widget.ensureCursorVisible()
 
-    def setup_toolbar_and_folder_labels(self): # (変更なし)
-        toolbar = QToolBar("Main Toolbar"); 
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar);
-        self.input_folder_action = QAction("📂入力", self);
-        self.input_folder_action.triggered.connect(self.select_input_folder);
-        toolbar.addAction(self.input_folder_action);
-        self.toggle_view_action = QAction("📑ビュー", self);
-        self.toggle_view_action.triggered.connect(self.toggle_view);
-        toolbar.addAction(self.toggle_view_action);
-        self.option_action = QAction("⚙️設定", self);
-        self.option_action.triggered.connect(self.show_option_dialog);
-        toolbar.addAction(self.option_action); toolbar.addSeparator();
-        self.start_ocr_action = QAction("▶️開始", self);
-        self.start_ocr_action.triggered.connect(self.confirm_start_ocr);
-        toolbar.addAction(self.start_ocr_action);
-        self.stop_ocr_action = QAction("⏹️中止", self);
-        self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr);
-        toolbar.addAction(self.stop_ocr_action);
-        self.rescan_action = QAction("🔄再スキャン", self);
-        self.rescan_action.triggered.connect(self.confirm_rescan_ui);
-        self.rescan_action.setEnabled(False);
-        toolbar.addAction(self.rescan_action); toolbar.addSeparator();
-        self.log_toggle_action = QAction("📄ログ表示", self);
-        self.log_toggle_action.triggered.connect(self.toggle_log_display);
-        toolbar.addAction(self.log_toggle_action);
-        self.clear_log_action = QAction("🗑️ログクリア", self);
-        self.clear_log_action.triggered.connect(self.clear_log_display);
-        toolbar.addAction(self.clear_log_action);
-        folder_label_toolbar = QToolBar("Folder Paths Toolbar");
-        folder_label_toolbar.setMovable(False);
-        folder_label_widget = QWidget();
-        folder_label_layout = QFormLayout(folder_label_widget);
-        folder_label_layout.setContentsMargins(5, 5, 5, 5);
-        folder_label_layout.setSpacing(3);
-        self.input_folder_label = QLabel(f"{self.input_folder_path or '未選択'}");
-        folder_label_layout.addRow("入力フォルダ:", self.input_folder_label);
-        folder_label_toolbar.addWidget(folder_label_widget);
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, folder_label_toolbar);
+    def setup_toolbar_and_folder_labels(self):
+        toolbar = QToolBar("Main Toolbar"); self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+        self.input_folder_action = QAction("📂入力", self); self.input_folder_action.triggered.connect(self.select_input_folder); toolbar.addAction(self.input_folder_action)
+        self.toggle_view_action = QAction("📑ビュー", self); self.toggle_view_action.triggered.connect(self.toggle_view); toolbar.addAction(self.toggle_view_action)
+        self.option_action = QAction("⚙️設定", self); self.option_action.triggered.connect(self.show_option_dialog); toolbar.addAction(self.option_action)
+        toolbar.addSeparator()
+        self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
+        self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
+        self.rescan_action = QAction("🔄再スキャン", self); self.rescan_action.triggered.connect(self.confirm_rescan_ui); self.rescan_action.setEnabled(False); toolbar.addAction(self.rescan_action)
+        toolbar.addSeparator()
+        self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
+        self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
+        
+        folder_label_toolbar = QToolBar("Folder Paths Toolbar"); folder_label_toolbar.setMovable(False)
+        folder_label_widget = QWidget(); folder_label_layout = QFormLayout(folder_label_widget)
+        folder_label_layout.setContentsMargins(5, 5, 5, 5); folder_label_layout.setSpacing(3)
+        
+        # --- ここから変更: QLabel を QPushButton に変更 ---
+        self.input_folder_button = QPushButton(f"{self.input_folder_path or '未選択'}")
+        self.input_folder_button.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                text-align: left;
+                padding: 0px; /* パディングを調整 */
+                margin: 0px;  /* マージンを調整 */
+            }
+            QPushButton:hover {
+                text-decoration: underline; /* ホバー時に下線 */
+                color: blue; /* ホバー時に色変更 */
+            }
+        """)
+        self.input_folder_button.setFlat(True) # よりラベルっぽくする
+        self.input_folder_button.setCursor(Qt.CursorShape.PointingHandCursor) # カーソルを手指に
+        self.input_folder_button.clicked.connect(self.open_input_folder_in_explorer)
+        folder_label_layout.addRow("入力フォルダ:", self.input_folder_button)
+        # --- ここまで変更 ---
+        
+        folder_label_toolbar.addWidget(folder_label_widget)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, folder_label_toolbar)
         self.insertToolBarBreak(folder_label_toolbar)
+
+    # --- ここから変更: open_input_folder_in_explorer メソッドを新規作成 ---
+    def open_input_folder_in_explorer(self):
+        self.log_manager.debug(f"Attempting to open folder: {self.input_folder_path}", context="UI_ACTION_OPEN_FOLDER")
+        if self.input_folder_path and os.path.isdir(self.input_folder_path):
+            try:
+                if platform.system() == "Windows":
+                    # os.startfile() はstr型でないとエラーになることがあるため、正規化
+                    norm_path = os.path.normpath(self.input_folder_path)
+                    os.startfile(norm_path)
+                elif platform.system() == "Darwin": # macOS
+                    subprocess.run(['open', self.input_folder_path], check=True)
+                else: # Linuxなど
+                    subprocess.run(['xdg-open', self.input_folder_path], check=True)
+                self.log_manager.info(f"Successfully opened folder: {self.input_folder_path}", context="UI_ACTION_OPEN_FOLDER")
+            except Exception as e:
+                self.log_manager.error(f"Failed to open folder '{self.input_folder_path}'. Error: {e}", context="UI_ACTION_OPEN_FOLDER_ERROR", exception_info=e)
+                QMessageBox.warning(self, "フォルダを開けません", f"フォルダ '{self.input_folder_path}' を開けませんでした。\nエラー: {e}")
+        else:
+            self.log_manager.warning(f"Cannot open folder: Path is invalid or not set. Path: '{self.input_folder_path}'", context="UI_ACTION_OPEN_FOLDER_INVALID")
+            QMessageBox.information(self, "フォルダ情報なし", "入力フォルダが選択されていないか、無効なパスです。")
+    # --- ここまで変更 ---
+
     def toggle_view(self): # (変更なし)
-        self.current_view = 1 - self.current_view;
-        self.stack.setCurrentIndex(self.current_view);
-        self.log_manager.info(f"View toggled to: {'ListView' if self.current_view == 1 else 'SummaryView'}", context="UI_ACTION")
+        self.current_view = 1 - self.current_view; self.stack.setCurrentIndex(self.current_view); self.log_manager.info(f"View toggled to: {'ListView' if self.current_view == 1 else 'SummaryView'}", context="UI_ACTION")
     def toggle_log_display(self): # (変更なし)
-        visible = self.log_container.isVisible();
-        self.log_container.setVisible(not visible);
-        self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
-    def show_option_dialog(self): # (変更なし)
-        self.log_manager.debug("Opening options dialog.", context="UI_ACTION");
+        visible = self.log_container.isVisible(); self.log_container.setVisible(not visible); self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
+
+    def show_option_dialog(self):
+        self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
         dialog = OptionDialog(self)
         if dialog.exec():
-            self.config = ConfigManager.load();
-            self.log_manager.info("Options saved and reloaded.", context="CONFIG_EVENT");
-            self.api_client = CubeApiClient(self.config, self.log_manager);
-            new_output_format = self.config.get("file_actions", {}).get("output_format", "both");
-            self.log_manager.info(f"Output format changed to: {new_output_format}. Updating unprocessed items status.", context="CONFIG_EVENT");
+            self.config = ConfigManager.load()
+            self.log_manager.info("Options saved and reloaded.", context="CONFIG_EVENT")
+            self.api_client = CubeApiClient(self.config, self.log_manager)
+
+            new_output_format = self.config.get("file_actions", {}).get("output_format", "both")
+            self.log_manager.info(f"Output format changed to: {new_output_format}. Updating unprocessed items status.", context="CONFIG_EVENT")
             updated_count = 0
             for item_info in self.processed_files_info:
-                if item_info.get("status") == "待機中" or item_info.get("status") == "待機中(再スキャン)" or item_info.get("status") == "-":
-                    old_json_status = item_info.get("json_status");
+                if item_info.get("status") == "待機中" or \
+                    item_info.get("status") == "待機中(再スキャン)" or \
+                    item_info.get("status") == "-": # 初期状態なども考慮
+
+                    old_json_status = item_info.get("json_status")
                     old_pdf_status = item_info.get("searchable_pdf_status")
-                    if new_output_format == "json_only" or new_output_format == "both": item_info["json_status"] = "-"
-                    else: item_info["json_status"] = "作成しない(設定)"
-                    if new_output_format == "pdf_only" or new_output_format == "both": item_info["searchable_pdf_status"] = "-"
-                    else: item_info["searchable_pdf_status"] = "作成しない(設定)"
-                    if old_json_status != item_info["json_status"] or old_pdf_status != item_info["searchable_pdf_status"]: updated_count += 1
-            if updated_count > 0: self.log_manager.info(f"{updated_count} unprocessed items' output status expectations were updated.", context="CONFIG_EVENT"); self.list_view.update_files(self.processed_files_info)
-        else: self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
-    def select_input_folder(self): # (変更なし)
-        self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
+
+                    if new_output_format == "json_only" or new_output_format == "both":
+                        item_info["json_status"] = "-" 
+                    else:
+                        item_info["json_status"] = "作成しない(設定)"
+
+                    if new_output_format == "pdf_only" or new_output_format == "both":
+                        item_info["searchable_pdf_status"] = "-"
+                    else:
+                        item_info["searchable_pdf_status"] = "作成しない(設定)"
+                    
+                    if old_json_status != item_info["json_status"] or \
+                        old_pdf_status != item_info["searchable_pdf_status"]:
+                        updated_count += 1
+            
+            if updated_count > 0:
+                self.log_manager.info(f"{updated_count} unprocessed items' output status expectations were updated.", context="CONFIG_EVENT")
+                self.list_view.update_files(self.processed_files_info)
+        else:
+            self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
+
+    def select_input_folder(self):
+        self.log_manager.debug("Selecting input folder.", context="UI_ACTION")
+        last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
         if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")
         folder = QFileDialog.getExistingDirectory(self, "入力フォルダを選択", last_dir)
-        if folder: self.log_manager.info(f"Input folder selected by user: {folder}", context="UI_EVENT"); self.input_folder_path = folder; self.input_folder_label.setText(folder); self.log_manager.info(f"Performing rescan for newly selected folder: {folder}", context="UI_EVENT"); self.perform_rescan()
-        else: self.log_manager.info("Input folder selection cancelled.", context="UI_EVENT")
+        if folder:
+            self.log_manager.info(f"Input folder selected by user: {folder}", context="UI_EVENT")
+            self.input_folder_path = folder
+            # --- ここから変更: ラベルではなくボタンのテキストを更新 ---
+            self.input_folder_button.setText(folder) 
+            # --- ここまで変更 ---
+            self.log_manager.info(f"Performing rescan for newly selected folder: {folder}", context="UI_EVENT")
+            self.perform_rescan()
+        else:
+            self.log_manager.info("Input folder selection cancelled.", context="UI_EVENT")
+
     def check_input_folder_validity(self): # (変更なし)
         is_valid = bool(self.input_folder_path and os.path.isdir(self.input_folder_path))
         if not self.is_ocr_running: self.start_ocr_action.setEnabled(is_valid)
@@ -391,21 +414,21 @@ class MainWindow(QMainWindow):
         
         # --- ここから変更: OCR再実行時の確認条件とメッセージ ---
         ocr_already_processed_in_list = False
-        if self.processed_files_info:
+        if self.processed_files_info: 
             for item in self.processed_files_info:
-                # ステータスが「待機中」以外のものは何らかの処理が試みられたとみなす
-                # (より厳密には "OCR成功" or "OCR失敗" を見る)
-                if item.get("status") not in ["待機中", "待機中(再スキャン)", "-"]:
+                item_status = item.get("status", "")
+                # 「待機中」や初期状態「-」以外のステータスがあれば、何らかの処理が試みられたとみなす
+                if item_status not in ["待機中", "待機中(再スキャン)", "-"]: # 初期スキャン時の「-」も未処理とみなす
                     ocr_already_processed_in_list = True
                     break
         
-        if ocr_already_processed_in_list: # 処理済みのアイテムがリストに一つでもあれば確認
+        if ocr_already_processed_in_list:
             message = "もう一度OCRを実行します。\n\n" \
-                        "現在の進捗状況はクリアされます。\n\n" \
-                        "よろしいですか？"
+                      "現在の進捗状況はクリアされます。\n\n" \
+                      "よろしいですか？"
             reply = QMessageBox.question(self, "OCR再実行の確認", message,
-                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                        QMessageBox.StandardButton.No)
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                         QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
                 self.log_manager.info("OCR re-execution cancelled by user.", context="OCR_FLOW")
                 return
@@ -446,18 +469,23 @@ class MainWindow(QMainWindow):
         self.ocr_worker.all_files_processed.connect(self.on_all_files_processed)
         self.ocr_worker.start()
 
-    def confirm_stop_ocr(self): # (変更なし)
+    def confirm_stop_ocr(self):
         self.log_manager.debug("Confirming OCR stop...", context="OCR_FLOW")
         if self.ocr_worker and self.ocr_worker.isRunning():
-            reply = QMessageBox.question(self, "OCR中止確認", "OCR処理を中止しますか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No);
+            reply = QMessageBox.question(self, "OCR中止確認", "OCR処理を中止しますか？",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No) # Default to No
             if reply == QMessageBox.StandardButton.Yes:
-                self.log_manager.info("User confirmed OCR stop. Requesting worker to stop.", context="OCR_FLOW"); self.ocr_worker.stop()
+                self.log_manager.info("User confirmed OCR stop. Requesting worker to stop.", context="OCR_FLOW")
+                self.ocr_worker.stop()
             else:
                 self.log_manager.info("User cancelled OCR stop.", context="OCR_FLOW")
         else:
-            self.log_manager.debug("Stop OCR requested, but OCR is not running.", context="OCR_FLOW");
-        if self.is_ocr_running : self.is_ocr_running = False; self.update_ocr_controls(); self.log_manager.warning("OCR stop: Worker not active but UI state was 'running'. Resetting UI state.", context="OCR_FLOW_STATE_MISMATCH")
-
+            self.log_manager.debug("Stop OCR requested, but OCR is not running.", context="OCR_FLOW")
+            if self.is_ocr_running : # UI state might be inconsistent
+                self.is_ocr_running = False
+                self.update_ocr_controls()
+                self.log_manager.warning("OCR stop: Worker not active but UI state was 'running'. Resetting UI state.", context="OCR_FLOW_STATE_MISMATCH")
 
     def update_ocr_controls(self): # (変更なし)
         running = self.is_ocr_running; can_start = bool(self.input_folder_path and os.path.isdir(self.input_folder_path)) and not running
@@ -474,28 +502,60 @@ class MainWindow(QMainWindow):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if self.list_view: self.list_view.update_files(self.processed_files_info)
 
-    def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, ocr_error_info, json_save_info): # (変更なし)
-        self.log_manager.debug(f"File OCR processed (MainWin): {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(ocr_result_json)}, JSON Save Info: {json_save_info}", context="CALLBACK_OCR"); target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
-        if not target_file_info: self.log_manager.warning(f"No item found in processed_files_info for {file_path}", context="CALLBACK_ERROR"); return
+    def on_file_ocr_processed(self, file_idx, file_path, ocr_result_json, ocr_error_info, json_save_info):
+        self.log_manager.debug(
+            f"File OCR processed (MainWin): {os.path.basename(file_path)}, Idx={file_idx}, Success={bool(ocr_result_json)}, JSON Save Info: {json_save_info}",
+            context="CALLBACK_OCR"
+        )
+        target_file_info = next((item for item in self.processed_files_info if item["path"] == file_path), None)
+        if not target_file_info:
+            self.log_manager.warning(f"No item found in processed_files_info for {file_path}", context="CALLBACK_ERROR")
+            return
+
         ocr_actually_succeeded = False
-        if ocr_error_info: target_file_info["status"] = "OCR失敗"; target_file_info["ocr_result_summary"] = ocr_error_info.get('message', '不明なエラー');
+        if ocr_error_info:
+            target_file_info["status"] = "OCR失敗"
+            target_file_info["ocr_result_summary"] = ocr_error_info.get('message', '不明なエラー')
         elif ocr_result_json:
-            target_file_info["status"] = "OCR成功"; ocr_actually_succeeded = True; 
-            try: 
-                if isinstance(ocr_result_json, list) and len(ocr_result_json) > 0: first_page_result = ocr_result_json[0].get("result", {}); fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", ""); target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
-                else: target_file_info["ocr_result_summary"] = "結果形式不明"
-            except Exception: target_file_info["ocr_result_summary"] = "結果解析エラー"
-        else: target_file_info["status"] = "OCR状態不明"; target_file_info["ocr_result_summary"] = "APIレスポンスなし";
-        if isinstance(json_save_info, str) and os.path.exists(json_save_info): target_file_info["json_status"] = "JSON作成成功"
-        elif isinstance(json_save_info, str) and json_save_info == "作成しない(設定)": target_file_info["json_status"] = "作成しない(設定)"
-        elif isinstance(json_save_info, dict) and "error" in json_save_info: target_file_info["json_status"] = "JSON作成失敗"
-        elif ocr_error_info: target_file_info["json_status"] = "対象外(OCR失敗)"
-        else: target_file_info["json_status"] = "JSON状態不明"
-        if hasattr(self.summary_view, 'update_for_processed_file'): self.summary_view.update_for_processed_file(is_success=ocr_actually_succeeded)
+            target_file_info["status"] = "OCR成功"
+            ocr_actually_succeeded = True
+            try:
+                if isinstance(ocr_result_json, list) and len(ocr_result_json) > 0:
+                    first_page_result = ocr_result_json[0].get("result", {})
+                    fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", "")
+                    target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
+                else:
+                    target_file_info["ocr_result_summary"] = "結果形式不明"
+            except Exception:
+                target_file_info["ocr_result_summary"] = "結果解析エラー"
+        else:
+            target_file_info["status"] = "OCR状態不明"
+            target_file_info["ocr_result_summary"] = "APIレスポンスなし"
+
+        # JSON保存ステータスの更新
+        if isinstance(json_save_info, str) and os.path.exists(json_save_info):
+            target_file_info["json_status"] = "JSON作成成功"
+        elif isinstance(json_save_info, str) and json_save_info == "作成しない(設定)":
+            target_file_info["json_status"] = "作成しない(設定)"
+        elif isinstance(json_save_info, dict) and "error" in json_save_info:
+            target_file_info["json_status"] = "JSON作成失敗"
+        elif ocr_error_info: # OCR自体が失敗した場合
+            target_file_info["json_status"] = "対象外(OCR失敗)"
+        else: # その他の場合
+            target_file_info["json_status"] = "JSON状態不明"
+        
+        # SummaryViewの更新
+        if hasattr(self.summary_view, 'update_for_processed_file'):
+            self.summary_view.update_for_processed_file(is_success=ocr_actually_succeeded)
         else: 
-            if hasattr(self.summary_view, 'increment_processed_count'): self.summary_view.increment_processed_count()
-            if ocr_actually_succeeded and hasattr(self.summary_view, 'increment_completed_count'): self.summary_view.increment_completed_count()
-            elif not ocr_actually_succeeded and hasattr(self.summary_view, 'increment_error_count'): self.summary_view.increment_error_count()
+            # フォールバック (古いメソッド呼び出し)
+            if hasattr(self.summary_view, 'increment_processed_count'):
+                self.summary_view.increment_processed_count()
+            if ocr_actually_succeeded and hasattr(self.summary_view, 'increment_completed_count'):
+                self.summary_view.increment_completed_count()
+            elif not ocr_actually_succeeded and hasattr(self.summary_view, 'increment_error_count'):
+                self.summary_view.increment_error_count()
+        
         self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_file_searchable_pdf_processed(self, file_idx, file_path, pdf_content, pdf_error_info): # (変更なし)
