@@ -31,7 +31,7 @@ class ListView(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
             QHeaderView::section {
-                background-color: #f0f0f0; padding: 4px; border: 1px solid #d0d0d0;
+                background-color: #f0f0f0; padding: 0px; border: 1px solid #d0d0d0;
             }
             QTableWidget {
                 gridline-color: #e0e0e0; alternate-background-color: #f9f9f9; background-color: white;
