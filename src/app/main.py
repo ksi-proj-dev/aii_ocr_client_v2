@@ -377,10 +377,56 @@ class MainWindow(QMainWindow):
         self.current_view = 1 - self.current_view; self.stack.setCurrentIndex(self.current_view); self.log_manager.info(f"View toggled to: {'ListView' if self.current_view == 1 else 'SummaryView'}", context="UI_ACTION")
     def toggle_log_display(self): # (変更なし)
         visible = self.log_container.isVisible(); self.log_container.setVisible(not visible); self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
-    def show_option_dialog(self): # (変更なし)
-        self.log_manager.debug("Opening options dialog.", context="UI_ACTION"); dialog = OptionDialog(self)
-        if dialog.exec(): self.config = ConfigManager.load(); self.log_manager.info("Options saved and reloaded.", context="CONFIG_EVENT"); self.api_client = CubeApiClient(self.config, self.log_manager)
-        else: self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
+
+    def show_option_dialog(self):
+        self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
+        dialog = OptionDialog(self)
+        if dialog.exec(): # ユーザーが「保存」をクリックした場合
+            self.config = ConfigManager.load() # 最新の設定をロード
+            self.log_manager.info("Options saved and reloaded.", context="CONFIG_EVENT")
+            self.api_client = CubeApiClient(self.config, self.log_manager) # API Clientも更新
+
+            # --- ここから変更: 未処理アイテムの出力期待ステータスを更新 ---
+            new_output_format = self.config.get("file_actions", {}).get("output_format", "both")
+            self.log_manager.info(f"Output format changed to: {new_output_format}. Updating unprocessed items status.", context="CONFIG_EVENT")
+
+            updated_count = 0
+            for item_info in self.processed_files_info:
+                # OCR処理がまだ実行されていないアイテムを対象とする
+                if item_info.get("status") == "待機中" or \
+                    item_info.get("status") == "待機中(再スキャン)" or \
+                    item_info.get("status") == "-": # 初期状態なども考慮
+
+                    old_json_status = item_info.get("json_status")
+                    old_pdf_status = item_info.get("searchable_pdf_status")
+
+                    # 新しいJSONステータスを設定
+                    if new_output_format == "json_only" or new_output_format == "both":
+                        item_info["json_status"] = "-" # または "処理待ち" (OCR実行時に更新されるため、ここでは期待値を示す)
+                    else:
+                        item_info["json_status"] = "作成しない(設定)"
+
+                    # 新しいPDFステータスを設定
+                    if new_output_format == "pdf_only" or new_output_format == "both":
+                        item_info["searchable_pdf_status"] = "-" # または "処理待ち"
+                    else:
+                        item_info["searchable_pdf_status"] = "作成しない(設定)"
+                    
+                    if old_json_status != item_info["json_status"] or \
+                        old_pdf_status != item_info["searchable_pdf_status"]:
+                        updated_count += 1
+            
+            if updated_count > 0:
+                self.log_manager.info(f"{updated_count} unprocessed items' output status expectations were updated.", context="CONFIG_EVENT")
+                # リストビューの更新をタイマー経由で行うか、即時行うか検討。
+                # オプションダイアログを閉じた直後なので、即時更新でも問題ないと思われる。
+                # ただし、一貫性のためにタイマー経由にする場合は self.update_timer.start(...) を呼ぶ。
+                # ここでは即時更新とします。
+                self.list_view.update_files(self.processed_files_info)
+            # --- ここまで変更 ---
+        else:
+            self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
+        # self.log_manager.debug("show_option_dialog finished.", context="MAINWIN_OPTION_DIALOG_POST") # これは以前のログ整理でコメントアウトしたかも
 
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION")
@@ -647,10 +693,16 @@ class MainWindow(QMainWindow):
         
         if self.update_timer.isActive(): self.update_timer.stop()
         
-        reply = QMessageBox.question(self, "再スキャン確認", # タイトル変更
-                                    "表示リストをクリアし、入力フォルダを再スキャンしますか？", # メッセージ変更
+
+        # --- ここから変更: 確認メッセージの変更 ---
+        message = "入力フォルダが再スキャンされます。\n\n" \
+                    "現在のファイル一覧はクリアされます。\n\n" \
+                    "よろしいですか？"
+        reply = QMessageBox.question(self, "再スキャン確認", 
+                                    message,
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
                                     QMessageBox.StandardButton.No)
+        # --- ここまで変更 ---
         if reply == QMessageBox.StandardButton.Yes:
             self.log_manager.info("User confirmed UI rescan.", context="UI_ACTION") # ログメッセージ変更
             self.perform_rescan() # メソッド名変更

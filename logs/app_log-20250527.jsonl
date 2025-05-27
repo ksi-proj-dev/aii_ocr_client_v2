@@ -832,3 +832,419 @@ Idx=7, Success=False"}
 {"timestamp": "2025-05-27T10:52:16.736528", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
 {"timestamp": "2025-05-27T10:52:16.741432", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
 {"timestamp": "2025-05-27T10:52:16.749068", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescan complete: 23 files listed.", "count": 23}
+{"timestamp": "2025-05-27T10:53:47.997783", "level": "DEBUG", "context": "SYSTEM_LIFECYCLE", "message": "Application closeEvent triggered."}
+{"timestamp": "2025-05-27T10:53:48.004767", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Settings saved. Exiting application."}
+{"timestamp": "2025-05-27T10:53:49.078229", "level": "DEBUG", "context": "MAINWIN_LIFECYCLE", "message": "MainWindow initializing..."}
+{"timestamp": "2025-05-27T10:53:49.125843", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T10:53:49.236662", "level": "INFO", "context": "SYSTEM_INIT", "message": "前回終了時の入力フォルダを読み込みました: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T10:53:49.238928", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン開始: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T10:53:49.245306", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T10:53:49.251267", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T10:53:49.259171", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン完了: 23件のファイルをリスト表示しました。", "count": 23}
+{"timestamp": "2025-05-27T10:53:49.291611", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Application initialized successfully."}
+{"timestamp": "2025-05-27T10:55:33.170803", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T10:55:34.652982", "level": "INFO", "context": "UI_ACTION", "message": "User confirmed UI rescan."}
+{"timestamp": "2025-05-27T10:55:34.655284", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Performing UI clear and input folder rescan."}
+{"timestamp": "2025-05-27T10:55:34.660613", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescanning input folder: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T10:55:34.666288", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T10:55:34.670964", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T10:55:34.677827", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescan complete: 23 files listed.", "count": 23}
+{"timestamp": "2025-05-27T11:00:07.992258", "level": "DEBUG", "context": "SYSTEM_LIFECYCLE", "message": "Application closeEvent triggered."}
+{"timestamp": "2025-05-27T11:00:07.998606", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Settings saved. Exiting application."}
+{"timestamp": "2025-05-27T11:00:10.351890", "level": "DEBUG", "context": "MAINWIN_LIFECYCLE", "message": "MainWindow initializing..."}
+{"timestamp": "2025-05-27T11:00:10.385876", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:00:10.465567", "level": "INFO", "context": "SYSTEM_INIT", "message": "前回終了時の入力フォルダを読み込みました: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:00:10.467974", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン開始: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:00:10.474563", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:00:10.480254", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:00:10.486134", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン完了: 23件のファイルをリスト表示しました。", "count": 23}
+{"timestamp": "2025-05-27T11:00:10.511372", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Application initialized successfully."}
+{"timestamp": "2025-05-27T11:00:20.502125", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:00:25.799908", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:00:25.802109", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:00:25.804418", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: json_only. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:00:25.808303", "level": "INFO", "context": "CONFIG_EVENT", "message": "23 unprocessed items' output status expectations were updated."}
+{"timestamp": "2025-05-27T11:00:34.029952", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:00:38.976847", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:00:38.979143", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:00:38.983606", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: pdf_only. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:00:38.987852", "level": "INFO", "context": "CONFIG_EVENT", "message": "23 unprocessed items' output status expectations were updated."}
+{"timestamp": "2025-05-27T11:00:45.197876", "level": "DEBUG", "context": "OCR_FLOW", "message": "Confirming OCR start..."}
+{"timestamp": "2025-05-27T11:00:45.201702", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:00:45.207418", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:00:46.733455", "level": "INFO", "context": "OCR_FLOW", "message": "User confirmed. Starting OCR process..."}
+{"timestamp": "2025-05-27T11:00:46.742706", "level": "INFO", "context": "OCR_FLOW", "message": "Instantiating and starting OcrWorker for 23 files."}
+{"timestamp": "2025-05-27T11:00:46.745750", "level": "DEBUG", "context": "WORKER_LIFECYCLE", "message": "OcrWorker initialized.", "num_files": 23}
+{"timestamp": "2025-05-27T11:00:46.750619", "level": "DEBUG", "context": "WORKER_LIFECYCLE", "message": "OcrWorker thread started.", "thread_id": 11788, "num_files": 23}
+{"timestamp": "2025-05-27T11:00:46.753178", "level": "INFO", "context": "WORKER_CONFIG", "message": "Worker starting with Output format: pdf_only"}
+{"timestamp": "2025-05-27T11:00:46.757450", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 1/23: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:46.761287", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:00:47.397311", "level": "ERROR", "context": "API_DUMMY_READ", "message": "ダミーエラー: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf のOCR処理に失敗しました。", "filename": "AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "error_code": "DUMMY_OCR_ERROR"}
+{"timestamp": "2025-05-27T11:00:47.399453", "level": "ERROR", "context": "WORKER_OCR_FAIL", "message": "OCR failed for AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf, skipping JSON save.", "error_details": "ダミーエラー: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf のOCR処理に失敗しました。"}
+{"timestamp": "2025-05-27T11:00:47.401848", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf, Idx=0, Success=False, JSON Save Info: {'error': 'OCR失敗のためJSON作成スキップ', 'details': 'ダミーエラー: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf のOCR処理に失敗しました。'}"}
+{"timestamp": "2025-05-27T11:00:47.403639", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:47.709998", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:00:49.871707", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:49.876489", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-27T11:00:49.878663", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf, Idx=0, Success=True"}
+{"timestamp": "2025-05-27T11:00:49.889376", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 2/23: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:49.891406", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:00:50.186623", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:00:50.677855", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:50.680478", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON file creation skipped for AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf (output_format: 'pdf_only')."}
+{"timestamp": "2025-05-27T11:00:50.685451", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf (output_format: pdf_only)."}
+ない(設定)"}
+{"timestamp": "2025-05-27T11:00:50.690270", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:50.990646", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:00:52.678277", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:00:52.682691", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-27T11:00:52.686010", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf, Idx=1, Success=True"}
+{"timestamp": "2025-05-27T11:00:52.695486", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 3/23: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:00:52.697487", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-1.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:00:52.990600", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:00:53.126424", "level": "DEBUG", "context": "OCR_FLOW", "message": "Confirming OCR stop..."}
+{"timestamp": "2025-05-27T11:00:53.818714", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:00:53.821582", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON file creation skipped for test-01-1.pdf (output_format: 'pdf_only')."}
+{"timestamp": "2025-05-27T11:00:53.824169", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-1.pdf, Idx=2, Success=True, JSON Save Info: 作成しない(設定)"}
+{"timestamp": "2025-05-27T11:00:53.825643", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:00:54.127781", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:00:54.368706", "level": "INFO", "context": "OCR_FLOW", "message": "User confirmed OCR stop. Requesting worker to stop."}
+{"timestamp": "2025-05-27T11:00:54.370608", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "OcrWorker stop requested."}
+{"timestamp": "2025-05-27T11:00:55.093319", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:00:55.098144", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-1.pdf'"}
+{"timestamp": "2025-05-27T11:00:55.101001", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-1.pdf, Idx=2, Success=True"}
+{"timestamp": "2025-05-27T11:00:55.110582", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "OcrWorker run loop aborted by stop signal."}
+{"timestamp": "2025-05-27T11:00:55.112885", "level": "INFO", "context": "OCR_FLOW_COMPLETE", "message": "All files processing finished by worker."}
+{"timestamp": "2025-05-27T11:00:55.114356", "level": "DEBUG", "context": "WORKER_LIFECYCLE", "message": "OcrWorker thread finished.", "thread_id": 11788}
+{"timestamp": "2025-05-27T11:00:55.114957", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:01:01.341615", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:01:05.407774", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:01:05.410705", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:01:05.413394", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: both. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:01:05.417154", "level": "INFO", "context": "CONFIG_EVENT", "message": "20 unprocessed items' output status expectations were updated."}
+{"timestamp": "2025-05-27T11:01:10.629841", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T11:01:13.448680", "level": "INFO", "context": "UI_ACTION", "message": "User confirmed UI rescan."}
+{"timestamp": "2025-05-27T11:01:13.450691", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Performing UI clear and input folder rescan."}
+{"timestamp": "2025-05-27T11:01:13.455963", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescanning input folder: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:01:13.460669", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:01:13.464876", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:01:13.471642", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescan complete: 23 files listed.", "count": 23}
+{"timestamp": "2025-05-27T11:07:24.239975", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:07:27.301760", "level": "INFO", "context": "UI_ACTION", "message": "Options dialog cancelled."}
+{"timestamp": "2025-05-27T11:07:30.367610", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:07:32.495670", "level": "INFO", "context": "UI_ACTION", "message": "Options dialog cancelled."}
+{"timestamp": "2025-05-27T11:07:49.487596", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:07:50.595030", "level": "INFO", "context": "UI_ACTION", "message": "Options dialog cancelled."}
+{"timestamp": "2025-05-27T11:08:07.511964", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:09:27.710269", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:09:27.713346", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:09:27.717623", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: both. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:11:32.521944", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T11:11:35.186380", "level": "INFO", "context": "UI_ACTION", "message": "User cancelled UI rescan."}
+{"timestamp": "2025-05-27T11:14:34.454794", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T11:14:39.310622", "level": "INFO", "context": "UI_ACTION", "message": "User cancelled UI rescan."}
+{"timestamp": "2025-05-27T11:16:28.871054", "level": "DEBUG", "context": "SYSTEM_LIFECYCLE", "message": "Application closeEvent triggered."}
+{"timestamp": "2025-05-27T11:16:28.879867", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Settings saved. Exiting application."}
+{"timestamp": "2025-05-27T11:16:34.012304", "level": "DEBUG", "context": "MAINWIN_LIFECYCLE", "message": "MainWindow initializing..."}
+{"timestamp": "2025-05-27T11:16:34.041036", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:16:34.133982", "level": "INFO", "context": "SYSTEM_INIT", "message": "前回終了時の入力フォルダを読み込みました: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:16:34.136094", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン開始: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:16:34.141084", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:16:34.147208", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:16:34.153711", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン完了: 23件のファイルをリスト表示しました。", "count": 23}
+{"timestamp": "2025-05-27T11:16:34.180462", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Application initialized successfully."}
+{"timestamp": "2025-05-27T11:16:53.326322", "level": "INFO", "context": "UI_ACTION", "message": "View toggled to: SummaryView"}
+{"timestamp": "2025-05-27T11:17:00.068997", "level": "INFO", "context": "UI_ACTION", "message": "View toggled to: ListView"}
+{"timestamp": "2025-05-27T11:17:13.602222", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:17:17.061400", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:17:17.063903", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:17:17.068713", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: both. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:17:23.801773", "level": "DEBUG", "context": "OCR_FLOW", "message": "Confirming OCR start..."}
+{"timestamp": "2025-05-27T11:17:23.805283", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:17:23.809487", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:17:25.377800", "level": "INFO", "context": "OCR_FLOW", "message": "User confirmed. Starting OCR process..."}
+{"timestamp": "2025-05-27T11:17:25.387222", "level": "INFO", "context": "OCR_FLOW", "message": "Instantiating and starting OcrWorker for 23 files."}
+{"timestamp": "2025-05-27T11:17:25.390398", "level": "DEBUG", "context": "WORKER_LIFECYCLE", "message": "OcrWorker initialized.", "num_files": 23}
+{"timestamp": "2025-05-27T11:17:25.395248", "level": "DEBUG", "context": "WORKER_LIFECYCLE", "message": "OcrWorker thread started.", "thread_id": 12356, "num_files": 23}
+{"timestamp": "2025-05-27T11:17:25.397706", "level": "INFO", "context": "WORKER_CONFIG", "message": "Worker starting with Output format: both"}
+{"timestamp": "2025-05-27T11:17:25.402123", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 1/23: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:25.406106", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:26.308275", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:26.314965", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube アプリケーション取扱説明書（全文OCR）.json'"}
+{"timestamp": "2025-05-27T11:17:26.317345", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf, Idx=0, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube アプリケーション取扱説明書（全文OCR）.json"}
+{"timestamp": "2025-05-27T11:17:26.320363", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:26.625635", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:28.058247", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:28.062657", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-27T11:17:28.064867", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: AI inside Cube アプリケーション取扱説明書（全文OCR）.pdf, Idx=0, Success=True"}
+{"timestamp": "2025-05-27T11:17:28.075437", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 2/23: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:28.077470", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:28.370075", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:29.311637", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:29.316724", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.json'"}
+{"timestamp": "2025-05-27T11:17:29.318898", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf, Idx=1, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.json"}
+{"timestamp": "2025-05-27T11:17:29.320526", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:29.633162", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:31.010852", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf"}
+{"timestamp": "2025-05-27T11:17:31.014835", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf'"}
+{"timestamp": "2025-05-27T11:17:31.017239", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: AI inside Cube コンソールツールAPI説明書（全文OCR）.pdf, Idx=1, Success=True"}
+{"timestamp": "2025-05-27T11:17:31.027553", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 3/23: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:17:31.029475", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-1.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:31.332867", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:31.872943", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:17:31.877528", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-1.json'"}
+{"timestamp": "2025-05-27T11:17:31.879365", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-1.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:17:31.879743", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-1.pdf, Idx=2, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-1.json"}
+{"timestamp": "2025-05-27T11:17:31.881317", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:17:32.185657", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:33.719915", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-1.pdf"}
+{"timestamp": "2025-05-27T11:17:33.726109", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-1.pdf'"}
+{"timestamp": "2025-05-27T11:17:33.731917", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-1.pdf, Idx=2, Success=True"}
+{"timestamp": "2025-05-27T11:17:33.742580", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 4/23: test-01-10.pdf"}
+{"timestamp": "2025-05-27T11:17:33.745118", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-10.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:34.055333", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:34.695149", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-10.pdf"}
+{"timestamp": "2025-05-27T11:17:34.702136", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-10.json'"}
+{"timestamp": "2025-05-27T11:17:34.705176", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-10.pdf (output_format: both)."}
+ers/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-10.json"}
+{"timestamp": "2025-05-27T11:17:34.712145", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-10.pdf"}
+{"timestamp": "2025-05-27T11:17:35.023459", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:37.041077", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-10.pdf"}
+{"timestamp": "2025-05-27T11:17:37.046782", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-10.pdf'"}
+{"timestamp": "2025-05-27T11:17:37.050504", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-10.pdf, Idx=3, Success=True"}
+{"timestamp": "2025-05-27T11:17:37.060257", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 5/23: test-01-11.pdf"}
+{"timestamp": "2025-05-27T11:17:37.062287", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-11.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:37.357499", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:37.656994", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-11.pdf"}
+{"timestamp": "2025-05-27T11:17:37.661770", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-11.json'"}
+{"timestamp": "2025-05-27T11:17:37.664285", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-11.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:17:37.664890", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-11.pdf, Idx=4, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-11.json"}
+{"timestamp": "2025-05-27T11:17:37.666413", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-11.pdf"}
+{"timestamp": "2025-05-27T11:17:37.969456", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:39.872852", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-11.pdf"}
+{"timestamp": "2025-05-27T11:17:39.877786", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-11.pdf'"}
+{"timestamp": "2025-05-27T11:17:39.880232", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-11.pdf, Idx=4, Success=True"}
+{"timestamp": "2025-05-27T11:17:39.890509", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 6/23: test-01-12.pdf"}
+{"timestamp": "2025-05-27T11:17:39.892388", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-12.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:40.187549", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:40.837332", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-12.pdf"}
+{"timestamp": "2025-05-27T11:17:40.843985", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-12.json'"}
+{"timestamp": "2025-05-27T11:17:40.846778", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-12.pdf, Idx=5, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-12.json"}
+{"timestamp": "2025-05-27T11:17:40.848556", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-12.pdf"}
+{"timestamp": "2025-05-27T11:17:41.150145", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:41.970237", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-12.pdf"}
+{"timestamp": "2025-05-27T11:17:41.974226", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-12.pdf'"}
+{"timestamp": "2025-05-27T11:17:41.976877", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-12.pdf, Idx=5, Success=True"}
+{"timestamp": "2025-05-27T11:17:41.987430", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 7/23: test-01-13.pdf"}
+{"timestamp": "2025-05-27T11:17:41.989700", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-13.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:42.284615", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:42.507895", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-13.pdf"}
+{"timestamp": "2025-05-27T11:17:42.513070", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-13.json'"}
+{"timestamp": "2025-05-27T11:17:42.515633", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-13.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:17:42.516191", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-13.pdf, Idx=6, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-13.json"}
+{"timestamp": "2025-05-27T11:17:42.518152", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-13.pdf"}
+{"timestamp": "2025-05-27T11:17:42.828584", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:43.921429", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-13.pdf"}
+{"timestamp": "2025-05-27T11:17:43.927620", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-13.pdf'"}
+{"timestamp": "2025-05-27T11:17:43.930499", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-13.pdf, Idx=6, Success=True"}
+{"timestamp": "2025-05-27T11:17:43.941081", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 8/23: test-01-14.pdf"}
+{"timestamp": "2025-05-27T11:17:43.943407", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-14.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:44.238398", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:44.900866", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-14.pdf"}
+{"timestamp": "2025-05-27T11:17:44.906985", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-14.json'"}
+{"timestamp": "2025-05-27T11:17:44.909255", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-14.pdf, Idx=7, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-14.json"}
+{"timestamp": "2025-05-27T11:17:44.910793", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-14.pdf"}
+{"timestamp": "2025-05-27T11:17:45.226162", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:47.323673", "level": "ERROR", "context": "API_DUMMY_PDF", "message": "ダミーエラー: test-01-14.pdf のサーチャブルPDF作成に失敗。", "filename": "test-01-14.pdf", "error_code": "DUMMY_PDF_ERROR"}
+{"timestamp": "2025-05-27T11:17:47.327080", "level": "ERROR", "context": "WORKER_PDF_FAIL", "message": "Searchable PDF creation failed for test-01-14.pdf.", "error_details": "ダミーエラー: test-01-14.pdf のサーチャブルPDF作成に失敗。"}
+{"timestamp": "2025-05-27T11:17:47.333709", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-14.pdf, Idx=7, Success=False"}
+{"timestamp": "2025-05-27T11:17:47.344342", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 9/23: test-01-15.pdf"}
+{"timestamp": "2025-05-27T11:17:47.346370", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-15.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:47.657335", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:48.611654", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-15.pdf"}
+{"timestamp": "2025-05-27T11:17:48.618057", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-15.json'"}
+{"timestamp": "2025-05-27T11:17:48.621100", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-15.pdf, Idx=8, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-15.json"}
+{"timestamp": "2025-05-27T11:17:48.623387", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-15.pdf"}
+{"timestamp": "2025-05-27T11:17:48.924450", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:50.846410", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-15.pdf"}
+{"timestamp": "2025-05-27T11:17:50.851582", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-15.pdf'"}
+{"timestamp": "2025-05-27T11:17:50.853827", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-15.pdf, Idx=8, Success=True"}
+{"timestamp": "2025-05-27T11:17:50.864047", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 10/23: test-01-2.pdf"}
+{"timestamp": "2025-05-27T11:17:50.866196", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-2.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:51.161164", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:51.705157", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-2.pdf"}
+{"timestamp": "2025-05-27T11:17:51.709349", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-2.json'"}
+{"timestamp": "2025-05-27T11:17:51.711598", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-2.pdf, Idx=9, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-2.json"}
+{"timestamp": "2025-05-27T11:17:51.713285", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-2.pdf"}
+{"timestamp": "2025-05-27T11:17:52.019716", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:54.083766", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-2.pdf"}
+{"timestamp": "2025-05-27T11:17:54.088932", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-2.pdf'"}
+{"timestamp": "2025-05-27T11:17:54.093409", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-2.pdf, Idx=9, Success=True"}
+{"timestamp": "2025-05-27T11:17:54.103014", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 11/23: test-01-3.pdf"}
+{"timestamp": "2025-05-27T11:17:54.105144", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-3.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:54.399257", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:55.179054", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-3.pdf"}
+{"timestamp": "2025-05-27T11:17:55.183676", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-3.json'"}
+{"timestamp": "2025-05-27T11:17:55.186157", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-3.pdf, Idx=10, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-3.json"}
+{"timestamp": "2025-05-27T11:17:55.187783", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-3.pdf"}
+{"timestamp": "2025-05-27T11:17:55.497719", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:56.561980", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-3.pdf"}
+{"timestamp": "2025-05-27T11:17:56.565897", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-3.pdf'"}
+{"timestamp": "2025-05-27T11:17:56.567980", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-3.pdf, Idx=10, Success=True"}
+{"timestamp": "2025-05-27T11:17:56.578496", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 12/23: test-01-4.pdf"}
+{"timestamp": "2025-05-27T11:17:56.580449", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-4.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:56.874872", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:57.719302", "level": "ERROR", "context": "API_DUMMY_READ", "message": "ダミーエラー: test-01-4.pdf のOCR処理に失敗しました。", "filename": "test-01-4.pdf", "error_code": "DUMMY_OCR_ERROR"}
+{"timestamp": "2025-05-27T11:17:57.722009", "level": "ERROR", "context": "WORKER_OCR_FAIL", "message": "OCR failed for test-01-4.pdf, skipping JSON save.", "error_details": "ダミーエラー: test-01-4.pdf のOCR処理に失敗しました。"}
+{"timestamp": "2025-05-27T11:17:57.724364", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-4.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:17:57.724878", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-4.pdf, Idx=11, Success=False, JSON Save Info: {'error': 'OCR失敗のためJSON作成スキップ', 'details': 'ダミーエラー: test-01-4.pdf のOCR処理に失敗しました。'}"}
+{"timestamp": "2025-05-27T11:17:57.726769", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-4.pdf"}
+{"timestamp": "2025-05-27T11:17:58.052562", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:58.961627", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-4.pdf"}
+{"timestamp": "2025-05-27T11:17:58.965814", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-4.pdf'"}
+{"timestamp": "2025-05-27T11:17:58.968100", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-4.pdf, Idx=11, Success=True"}
+{"timestamp": "2025-05-27T11:17:58.978440", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 13/23: test-01-5.pdf"}
+{"timestamp": "2025-05-27T11:17:58.980589", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-5.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:17:59.285039", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:17:59.543151", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-5.pdf"}
+{"timestamp": "2025-05-27T11:17:59.548683", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-5.json'"}
+{"timestamp": "2025-05-27T11:17:59.551796", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-5.pdf, Idx=12, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-5.json"}
+{"timestamp": "2025-05-27T11:17:59.551592", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-5.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:17:59.555107", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-5.pdf"}
+{"timestamp": "2025-05-27T11:17:59.862280", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:01.789746", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-5.pdf"}
+{"timestamp": "2025-05-27T11:18:01.794808", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-5.pdf'"}
+{"timestamp": "2025-05-27T11:18:01.797734", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-5.pdf, Idx=12, Success=True"}
+{"timestamp": "2025-05-27T11:18:01.808365", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 14/23: test-01-6.pdf"}
+{"timestamp": "2025-05-27T11:18:01.810769", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-6.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:02.111709", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:02.991187", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-6.pdf"}
+{"timestamp": "2025-05-27T11:18:02.995964", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-6.json'"}
+{"timestamp": "2025-05-27T11:18:02.999369", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-6.pdf, Idx=13, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-6.json"}
+{"timestamp": "2025-05-27T11:18:03.000968", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-6.pdf"}
+{"timestamp": "2025-05-27T11:18:03.305707", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:04.555306", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-6.pdf"}
+{"timestamp": "2025-05-27T11:18:04.559295", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-6.pdf'"}
+{"timestamp": "2025-05-27T11:18:04.561836", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-6.pdf, Idx=13, Success=True"}
+{"timestamp": "2025-05-27T11:18:04.572946", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 15/23: test-01-7.pdf"}
+{"timestamp": "2025-05-27T11:18:04.575074", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-7.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:04.869669", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:05.238451", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-7.pdf"}
+{"timestamp": "2025-05-27T11:18:05.243065", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-7.json'"}
+{"timestamp": "2025-05-27T11:18:05.245254", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-7.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:18:05.245687", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-7.pdf, Idx=14, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-7.json"}
+{"timestamp": "2025-05-27T11:18:05.247457", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-7.pdf"}
+{"timestamp": "2025-05-27T11:18:05.544104", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:06.986558", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-7.pdf"}
+{"timestamp": "2025-05-27T11:18:06.991845", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-7.pdf'"}
+{"timestamp": "2025-05-27T11:18:06.994038", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-7.pdf, Idx=14, Success=True"}
+{"timestamp": "2025-05-27T11:18:07.004689", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 16/23: test-01-8.pdf"}
+{"timestamp": "2025-05-27T11:18:07.006696", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-8.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:07.294261", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:08.503511", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-8.pdf"}
+{"timestamp": "2025-05-27T11:18:08.508956", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-8.json'"}
+{"timestamp": "2025-05-27T11:18:08.511518", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-8.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:18:08.512074", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-8.pdf, Idx=15, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-8.json"}
+{"timestamp": "2025-05-27T11:18:08.514369", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-8.pdf"}
+{"timestamp": "2025-05-27T11:18:08.834405", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:09.627217", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-8.pdf"}
+{"timestamp": "2025-05-27T11:18:09.631240", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-8.pdf'"}
+{"timestamp": "2025-05-27T11:18:09.633868", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-8.pdf, Idx=15, Success=True"}
+{"timestamp": "2025-05-27T11:18:09.644446", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 17/23: test-01-9.pdf"}
+{"timestamp": "2025-05-27T11:18:09.646928", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: test-01-9.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:09.951885", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:11.084127", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: test-01-9.pdf"}
+{"timestamp": "2025-05-27T11:18:11.089277", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-9.json'"}
+{"timestamp": "2025-05-27T11:18:11.091158", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for test-01-9.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:18:11.092025", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): test-01-9.pdf, Idx=16, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-9.json"}
+{"timestamp": "2025-05-27T11:18:11.093488", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: test-01-9.pdf"}
+{"timestamp": "2025-05-27T11:18:11.406602", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:12.564184", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: test-01-9.pdf"}
+{"timestamp": "2025-05-27T11:18:12.567779", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\test-01-9.pdf'"}
+{"timestamp": "2025-05-27T11:18:12.570252", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: test-01-9.pdf, Idx=16, Success=True"}
+{"timestamp": "2025-05-27T11:18:12.580383", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 18/23: 全文Cube APIリファレンス_20241106.pdf"}
+{"timestamp": "2025-05-27T11:18:12.582173", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: 全文Cube APIリファレンス_20241106.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:12.877603", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:13.538955", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: 全文Cube APIリファレンス_20241106.pdf"}
+{"timestamp": "2025-05-27T11:18:13.543144", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文Cube APIリファレンス_20241106.json'"}
+{"timestamp": "2025-05-27T11:18:13.545522", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): 全文Cube APIリファレンス_20241106.pdf, Idx=17, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文Cube APIリファレンス_20241106.json"}
+{"timestamp": "2025-05-27T11:18:13.547250", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: 全文Cube APIリファレンス_20241106.pdf"}
+{"timestamp": "2025-05-27T11:18:13.854229", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:15.308802", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: 全文Cube APIリファレンス_20241106.pdf"}
+{"timestamp": "2025-05-27T11:18:15.313595", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文Cube APIリファレンス_20241106.pdf'"}
+{"timestamp": "2025-05-27T11:18:15.315878", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: 全文Cube APIリファレンス_20241106.pdf, Idx=17, Success=True"}
+{"timestamp": "2025-05-27T11:18:15.326535", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 19/23: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf"}
+{"timestamp": "2025-05-27T11:18:15.328569", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:15.623790", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:16.357667", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf"}
+{"timestamp": "2025-05-27T11:18:16.363071", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文OCR for Cube 運用開始にあたって_第1.0版.json'"}
+{"timestamp": "2025-05-27T11:18:16.366088", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): 全文OCR for Cube 運用開始にあたって_第1.0版.pdf, Idx=18, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文OCR for Cube 運用開始にあたって_第1.0版.json"}
+{"timestamp": "2025-05-27T11:18:16.367816", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf"}
+{"timestamp": "2025-05-27T11:18:16.673349", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:18.464005", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf"}
+{"timestamp": "2025-05-27T11:18:18.469037", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\全文OCR for Cube 運用開始にあたって_第1.0版.pdf'"}
+{"timestamp": "2025-05-27T11:18:18.471441", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: 全文OCR for Cube 運用開始にあたって_第1.0版.pdf, Idx=18, Success=True"}
+{"timestamp": "2025-05-27T11:18:18.482098", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 20/23: 取扱説明書_240407.pdf"}
+{"timestamp": "2025-05-27T11:18:18.483915", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: 取扱説明書_240407.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:18.779267", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:19.209260", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: 取扱説明書_240407.pdf"}
+{"timestamp": "2025-05-27T11:18:19.213518", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\取扱説明書_240407.json'"}
+{"timestamp": "2025-05-27T11:18:19.216933", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): 取扱説明書_240407.pdf, Idx=19, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\取扱説明書_240407.json"}
+{"timestamp": "2025-05-27T11:18:19.218505", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: 取扱説明書_240407.pdf"}
+{"timestamp": "2025-05-27T11:18:19.521998", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:21.015470", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: 取扱説明書_240407.pdf"}
+{"timestamp": "2025-05-27T11:18:21.021078", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\取扱説明書_240407.pdf'"}
+{"timestamp": "2025-05-27T11:18:21.024081", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: 取扱説明書_240407.pdf, Idx=19, Success=True"}
+{"timestamp": "2025-05-27T11:18:21.034634", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 21/23: 図面A_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:21.036554", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: 図面A_210913.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:21.324298", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:21.575369", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: 図面A_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:21.579368", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面A_210913.json'"}
+{"timestamp": "2025-05-27T11:18:21.581778", "level": "INFO", "context": "WORKER_PDF_CREATE_INIT", "message": "Searchable PDF creation initiated for 図面A_210913.pdf (output_format: both)."}
+{"timestamp": "2025-05-27T11:18:21.582175", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): 図面A_210913.pdf, Idx=20, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面A_210913.json"}
+{"timestamp": "2025-05-27T11:18:21.583610", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: 図面A_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:21.900644", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:23.830886", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: 図面A_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:23.835370", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面A_210913.pdf'"}
+{"timestamp": "2025-05-27T11:18:23.837575", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: 図面A_210913.pdf, Idx=20, Success=True"}
+{"timestamp": "2025-05-27T11:18:23.848056", "level": "INFO", "context": "WORKER_FILE_PROGRESS", "message": "Processing file 22/23: 図面B_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:23.850189", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し開始: 図面B_210913.pdf", "options": {"adjust_rotation": 0, "character_extraction": 0, "concatenate": 1, "enable_checkbox": 0, "fulltext": 0, "fulltext_linebreak": 0, "horizontal_ocr_model": "katsuji"}}
+{"timestamp": "2025-05-27T11:18:23.913061", "level": "DEBUG", "context": "OCR_FLOW", "message": "Confirming OCR stop..."}
+{"timestamp": "2025-05-27T11:18:24.133673", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:24.967533", "level": "INFO", "context": "API_DUMMY_READ", "message": "'/fullocr-read-document' ダミー呼び出し完了: 図面B_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:24.972015", "level": "INFO", "context": "WORKER_FILE_IO", "message": "JSON result saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面B_210913.json'"}
+{"timestamp": "2025-05-27T11:18:24.974312", "level": "DEBUG", "context": "CALLBACK_OCR", "message": "File OCR processed (MainWin): 図面B_210913.pdf, Idx=21, Success=True, JSON Save Info: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面B_210913.json"}
+{"timestamp": "2025-05-27T11:18:24.975932", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し開始: 図面B_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:25.288651", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+{"timestamp": "2025-05-27T11:18:25.419366", "level": "INFO", "context": "OCR_FLOW", "message": "User confirmed OCR stop. Requesting worker to stop."}
+{"timestamp": "2025-05-27T11:18:25.421803", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "OcrWorker stop requested."}
+{"timestamp": "2025-05-27T11:18:26.783247", "level": "INFO", "context": "API_DUMMY_PDF", "message": "'/make-searchable-pdf' ダミー呼び出し完了: 図面B_210913.pdf"}
+{"timestamp": "2025-05-27T11:18:26.787594", "level": "INFO", "context": "WORKER_FILE_IO", "message": "Searchable PDF saved: 'C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2\\OCR結果\\図面B_210913.pdf'"}
+{"timestamp": "2025-05-27T11:18:26.789846", "level": "DEBUG", "context": "CALLBACK_PDF", "message": "File Searchable PDF processed: 図面B_210913.pdf, Idx=21, Success=True"}
+{"timestamp": "2025-05-27T11:18:26.800378", "level": "INFO", "context": "WORKER_LIFECYCLE", "message": "OcrWorker run loop aborted by stop signal."}
+{"timestamp": "2025-05-27T11:18:26.802965", "level": "INFO", "context": "OCR_FLOW_COMPLETE", "message": "All files processing finished by worker."}
+{"timestamp": "2025-05-27T11:18:26.804902", "level": "DEBUG", "context": "UI_UPDATE", "message": "Performing batch ListView update for 23 items."}
+2356}
+{"timestamp": "2025-05-27T11:18:29.600576", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T11:18:32.090529", "level": "INFO", "context": "UI_ACTION", "message": "User cancelled UI rescan."}
+{"timestamp": "2025-05-27T11:21:34.119043", "level": "DEBUG", "context": "SYSTEM_LIFECYCLE", "message": "Application closeEvent triggered."}
+{"timestamp": "2025-05-27T11:21:34.125540", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Settings saved. Exiting application."}
+{"timestamp": "2025-05-27T11:21:35.121227", "level": "DEBUG", "context": "MAINWIN_LIFECYCLE", "message": "MainWindow initializing..."}
+{"timestamp": "2025-05-27T11:21:35.156764", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:21:35.243126", "level": "INFO", "context": "SYSTEM_INIT", "message": "前回終了時の入力フォルダを読み込みました: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:21:35.245868", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン開始: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:21:35.253400", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:21:35.258216", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:21:35.265347", "level": "INFO", "context": "SYSTEM_INIT_SCAN", "message": "起動時スキャン完了: 23件のファイルをリスト表示しました。", "count": 23}
+{"timestamp": "2025-05-27T11:21:35.292916", "level": "INFO", "context": "SYSTEM_LIFECYCLE", "message": "Application initialized successfully."}
+{"timestamp": "2025-05-27T11:21:39.931712", "level": "DEBUG", "context": "UI_ACTION", "message": "Opening options dialog."}
+{"timestamp": "2025-05-27T11:21:41.889341", "level": "INFO", "context": "CONFIG_EVENT", "message": "Options saved and reloaded."}
+{"timestamp": "2025-05-27T11:21:41.892024", "level": "INFO", "context": "API_CLIENT_INIT", "message": "CubeApiClientはダミーモードで動作します。"}
+{"timestamp": "2025-05-27T11:21:41.896395", "level": "INFO", "context": "CONFIG_EVENT", "message": "Output format changed to: both. Updating unprocessed items status."}
+{"timestamp": "2025-05-27T11:21:45.868079", "level": "DEBUG", "context": "UI_ACTION", "message": "Confirming UI rescan."}
+{"timestamp": "2025-05-27T11:21:49.293985", "level": "INFO", "context": "UI_ACTION", "message": "User confirmed UI rescan."}
+{"timestamp": "2025-05-27T11:21:49.296740", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Performing UI clear and input folder rescan."}
+{"timestamp": "2025-05-27T11:21:49.302441", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescanning input folder: C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2"}
+{"timestamp": "2025-05-27T11:21:49.306786", "level": "INFO", "context": "FILE_SCAN", "message": "File collection started: In='C:/Users/MP21-06/Desktop/ksi/Cube OCR/OCRデータ2', Max=100, DepthLimit=5, Exclude=['OCR成功', 'OCR失敗', 'OCR結果']"}
+{"timestamp": "2025-05-27T11:21:49.311654", "level": "INFO", "context": "FILE_SCAN", "message": "File collection finished: Found 23 files.", "count": 23}
+{"timestamp": "2025-05-27T11:21:49.318236", "level": "INFO", "context": "UI_ACTION_RESCAN", "message": "Rescan complete: 23 files listed.", "count": 23}

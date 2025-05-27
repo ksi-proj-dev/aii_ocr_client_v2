@@ -208,5 +208,5 @@ class OptionDialog(QDialog):
         # --- ここまで変更: 出力形式の保存 ---
 
         ConfigManager.save(self.config)
-        QMessageBox.information(self, "保存完了", "設定を保存しました。")
+        # QMessageBox.information(self, "保存完了", "設定を保存しました。")
         self.accept()
