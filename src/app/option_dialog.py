@@ -2,10 +2,10 @@ import json
 import re
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox, QHBoxLayout,
-    QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton, # QRadioButton をインポート済み
+    QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton,
     QVBoxLayout, QLabel
 )
-from config_manager import ConfigManager # ConfigManager.load() は静的メソッドなのでインスタンス化不要
+from config_manager import ConfigManager
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -13,15 +13,15 @@ class OptionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定 (AI inside Cube)")
-        self.config = ConfigManager.load() # loadは静的メソッド
+        self.config = ConfigManager.load() 
         self.cube_options_key = self.config.get("api_type", "cube_fullocr")
         self.init_ui()
-        self.resize(550, 750) # 高さを少し調整
+        self.resize(550, 750)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
 
-        # --- 1. 基本設定グループ --- (変更なし)
+        # --- 1. 基本設定グループ ---
         basic_group = QGroupBox("基本設定")
         basic_form_layout = QFormLayout()
         self.api_key_edit = QLineEdit(self.config.get("api_key", ""))
@@ -37,7 +37,7 @@ class OptionDialog(QDialog):
         basic_group.setLayout(basic_form_layout)
         main_layout.addWidget(basic_group)
 
-        # --- 2. ファイル検索設定グループ --- (変更なし)
+        # --- 2. ファイル検索設定グループ ---
         file_search_group = QGroupBox("ファイル検索設定")
         file_search_form_layout = QFormLayout()
         self.max_files_spinbox = QSpinBox(); self.max_files_spinbox.setRange(1, 9999); self.max_files_spinbox.setValue(self.config.get("options", {}).get(self.cube_options_key, {}).get("max_files_to_process", 100))
@@ -47,7 +47,7 @@ class OptionDialog(QDialog):
         file_search_group.setLayout(file_search_form_layout)
         main_layout.addWidget(file_search_group)
 
-        # --- 3. OCRオプション（Cube API）グループ --- (変更なし)
+        # --- 3. OCRオプション（Cube API）グループ ---
         cube_ocr_group = QGroupBox("全文OCRオプション (Cube API)")
         cube_ocr_form_layout = QFormLayout()
         current_ocr_options = self.config.get("options", {}).get(self.cube_options_key, {})
@@ -62,12 +62,10 @@ class OptionDialog(QDialog):
         main_layout.addWidget(cube_ocr_group)
 
         # --- 4. ファイル処理後サブフォルダ・出力設定グループ ---
-        # グループ名を変更し、出力形式設定を追加
-        file_process_group = QGroupBox("ファイル処理後の出力と移動") # グループ名変更
+        file_process_group = QGroupBox("ファイル処理後の出力と移動")
         file_process_form_layout = QFormLayout()
         file_actions_config = self.config.get("file_actions", {})
 
-        # --- ここから変更: 出力形式設定 ---
         output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
         self.output_format_pdf_only_radio = QRadioButton("サーチャブルPDFのみ")
@@ -78,7 +76,7 @@ class OptionDialog(QDialog):
             self.output_format_json_only_radio.setChecked(True)
         elif current_output_format == "pdf_only":
             self.output_format_pdf_only_radio.setChecked(True)
-        else: # both または未設定時
+        else: 
             self.output_format_both_radio.setChecked(True)
 
         output_format_layout_v = QVBoxLayout()
@@ -86,35 +84,31 @@ class OptionDialog(QDialog):
         output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
         output_format_layout_v.addWidget(self.output_format_both_radio)
         file_process_form_layout.addRow(output_format_label, output_format_layout_v)
-        # --- ここまで変更: 出力形式設定 ---
 
-        # OCR結果サブフォルダ名
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
         file_process_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
         
-        # 成功ファイル移動
         self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")
         self.move_on_success_chk.setChecked(file_actions_config.get("move_on_success_enabled", False))
         file_process_form_layout.addRow(self.move_on_success_chk)
         self.success_folder_name_edit = QLineEdit(file_actions_config.get("success_folder_name", "OCR成功"))
         file_process_form_layout.addRow("成功ファイル移動先サブフォルダ名:", self.success_folder_name_edit)
 
-        # 失敗ファイル移動
         self.move_on_failure_chk = QCheckBox("OCR失敗時にファイルを移動する")
         self.move_on_failure_chk.setChecked(file_actions_config.get("move_on_failure_enabled", False))
         file_process_form_layout.addRow(self.move_on_failure_chk)
         self.failure_folder_name_edit = QLineEdit(file_actions_config.get("failure_folder_name", "OCR失敗"))
         file_process_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
 
-        # ファイル名衝突時の処理 (変更なし)
         collision_label = QLabel("ファイル名衝突時の処理 (移動先):")
         self.collision_overwrite_radio = QRadioButton("上書きする")
-        self.collision_rename_radio = QRadioButton("リネームする (例: file (1).txt)")
+        self.collision_rename_radio = QRadioButton("リネームする (例: file.pdf --> file(1).pdf)") # ★★★ 修正 ★★★
         self.collision_skip_radio = QRadioButton("スキップ（移動しない）")
         collision_action = file_actions_config.get("collision_action", "rename")
         if collision_action == "overwrite": self.collision_overwrite_radio.setChecked(True)
         elif collision_action == "skip": self.collision_skip_radio.setChecked(True)
         else: self.collision_rename_radio.setChecked(True)
+        
         collision_layout_v = QVBoxLayout()
         collision_layout_v.addWidget(self.collision_overwrite_radio)
         collision_layout_v.addWidget(self.collision_rename_radio)
@@ -124,7 +118,7 @@ class OptionDialog(QDialog):
         file_process_group.setLayout(file_process_form_layout)
         main_layout.addWidget(file_process_group)
 
-        # --- ボタン --- (変更なし)
+        # --- ボタン ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存"); self.cancel_btn = QPushButton("キャンセル")
         self.save_btn.clicked.connect(self.on_save_settings)
@@ -146,11 +140,7 @@ class OptionDialog(QDialog):
             return False
         return True
 
-# class OptionDialog(QDialog):
-# ... (他のメソッドは変更なし) ...
-
     def on_save_settings(self):
-        # サブフォルダ名の取得とバリデーション
         results_folder = self.results_folder_name_edit.text().strip()
         success_folder = self.success_folder_name_edit.text().strip()
         failure_folder = self.failure_folder_name_edit.text().strip()
@@ -159,10 +149,8 @@ class OptionDialog(QDialog):
         if not self.is_valid_folder_name(success_folder, "成功ファイル移動先サブフォルダ名"): return
         if not self.is_valid_folder_name(failure_folder, "失敗ファイル移動先サブフォルダ名"): return
         
-        # --- ここから変更: 変数名を修正 ---
-        folder_names_list = [results_folder, success_folder, failure_folder] # folder_names_to_check は不要、直接リスト作成
+        folder_names_list = [results_folder, success_folder, failure_folder]
         if len(set(folder_names_list)) != len(folder_names_list):
-        # --- ここまで変更 ---
             QMessageBox.warning(self, "入力エラー", "「OCR結果」「成功移動先」「失敗移動先」の各サブフォルダ名は、互いに異なる名称にしてください。")
             return
 
@@ -170,10 +158,8 @@ class OptionDialog(QDialog):
             QMessageBox.warning(self, "入力エラー", "ベースURIは必須項目です。")
             return
 
-        # 設定の保存 (変更なし)
         self.config["api_key"] = self.api_key_edit.text()
         self.config["base_uri"] = self.base_uri_edit.text()
-        # ... (以下、設定保存処理は前回提示の通り) ...
         current_api_type_options = self.config.setdefault("options", {}).setdefault(self.cube_options_key, {})
         current_api_type_options["max_files_to_process"] = self.max_files_spinbox.value()
         current_api_type_options["recursion_depth"] = self.recursion_depth_spinbox.value()
@@ -183,7 +169,7 @@ class OptionDialog(QDialog):
         current_api_type_options["enable_checkbox"] = 1 if self.enable_checkbox_chk.isChecked() else 0
         current_api_type_options["fulltext_output_mode"] = self.fulltext_output_mode_combo.currentIndex()
         current_api_type_options["fulltext_linebreak_char"] = 1 if self.fulltext_linebreak_char_chk.isChecked() else 0
-        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0]
+        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0] # モデル名のみ取得
         file_actions = self.config.setdefault("file_actions", {})
         file_actions["results_folder_name"] = results_folder
         file_actions["move_on_success_enabled"] = self.move_on_success_chk.isChecked()
@@ -198,5 +184,4 @@ class OptionDialog(QDialog):
         else: file_actions["output_format"] = "both"
 
         ConfigManager.save(self.config)
-        # QMessageBox.information(self, "保存完了", "設定を保存しました。") # メッセージは削除済み
         self.accept()
