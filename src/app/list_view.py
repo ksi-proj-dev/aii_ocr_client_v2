@@ -46,17 +46,26 @@ class ListView(QWidget):
             self.table.setRowCount(0); self.table.setRowCount(len(self.file_list_data))
             red_color = QColor("red")
             for idx, file_info in enumerate(self.file_list_data):
-                no_value = file_info.get("no", idx + 1); no_item = NumericTableWidgetItem(str(no_value), no_value); no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter); self.table.setItem(idx, 0, no_item)
+                no_value = file_info.get("no", idx + 1);
+                no_item = NumericTableWidgetItem(str(no_value), no_value);
+                no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter);
+                self.table.setItem(idx, 0, no_item)
                 self.table.setItem(idx, 1, QTableWidgetItem(file_info.get("name", "")))
-                status_text = file_info.get("status", ""); status_item = QTableWidgetItem(status_text)
+                status_text = file_info.get("status", "");
+                status_item = QTableWidgetItem(status_text)
                 if "失敗" in status_text or "エラー" in status_text: status_item.setForeground(red_color)
                 self.table.setItem(idx, 2, status_item)
                 self.table.setItem(idx, 3, QTableWidgetItem(file_info.get("ocr_result_summary", "")))
-                json_status_text = file_info.get("json_status", "-"); json_status_item = QTableWidgetItem(json_status_text)
+                json_status_text = file_info.get("json_status", "-");
+                json_status_item = QTableWidgetItem(json_status_text)
                 if "失敗" in json_status_text or "エラー" in json_status_text: json_status_item.setForeground(red_color)
                 self.table.setItem(idx, 4, json_status_item)
                 pdf_status_text = file_info.get("searchable_pdf_status", "-"); pdf_status_item = QTableWidgetItem(pdf_status_text)
-                if "失敗" in pdf_status_text or "エラー" in pdf_status_text: pdf_status_item.setForeground(red_color)
+
+                # if "失敗" in pdf_status_text or "エラー" in pdf_status_text:
+                # エラーとみなす条件から「PDF部品作成/結合待ち」を除外
+                if ("失敗" in pdf_status_text or "エラー" in pdf_status_text) and pdf_status_text != "PDF部品作成/結合待ち": 
+                    pdf_status_item.setForeground(red_color)
                 self.table.setItem(idx, 5, pdf_status_item)
                 size_bytes = file_info.get("size", 0); size_mb = size_bytes / (1024 * 1024); size_mb_display_text = f"{size_mb:,.3f} MB"
                 size_item = NumericTableWidgetItem(size_mb_display_text, size_bytes); size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); self.table.setItem(idx, 6, size_item)

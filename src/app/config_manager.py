@@ -6,7 +6,7 @@ from appdirs import user_config_dir
 # --- CONFIG_PATH の決定 ---
 CONFIG_FILE_NAME = "config.json"
 APP_NAME = "AIInside CubeClient"
-APP_AUTHOR = "KSI"  # --- ここを変更 ---
+APP_AUTHOR = "KSI"
 
 try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
@@ -73,10 +73,12 @@ class ConfigManager:
     def _apply_default_values(config):
         config.setdefault("api_key", "")
         config.setdefault("base_uri", "http://localhost/api/v1/domains/aiinside/endpoints/")
-        config["api_type"] = INTERNAL_CONFIG["api_type"]
-        config["endpoints"] = INTERNAL_CONFIG["endpoints"]
-        current_api_type = config["api_type"]
+        config["api_type"] = INTERNAL_CONFIG["api_type"] # 常に内部設定で上書き
+        config["endpoints"] = INTERNAL_CONFIG["endpoints"] # 常に内部設定で上書き
+        
+        current_api_type = config.get("api_type", "cube_fullocr") # api_typeを先に取得
         options_for_current_api = config.setdefault("options", {}).setdefault(current_api_type, {})
+        
         options_for_current_api.setdefault("max_files_to_process", 100)
         options_for_current_api.setdefault("recursion_depth", 5)
         options_for_current_api.setdefault("adjust_rotation", 0)
@@ -86,6 +88,11 @@ class ConfigManager:
         options_for_current_api.setdefault("fulltext_output_mode", 0)
         options_for_current_api.setdefault("fulltext_linebreak_char", 0)
         options_for_current_api.setdefault("ocr_model", "katsuji")
+        options_for_current_api.setdefault("upload_max_size_mb", 50)
+        options_for_current_api.setdefault("split_large_files_enabled", False)
+        options_for_current_api.setdefault("split_chunk_size_mb", 10)
+        options_for_current_api.setdefault("merge_split_pdf_parts", True) # ★ Stage 4.1 追加
+
         file_actions = config.setdefault("file_actions", {})
         file_actions.setdefault("move_on_success_enabled", False)
         file_actions.setdefault("success_folder_name", "OCR成功")
@@ -94,6 +101,7 @@ class ConfigManager:
         file_actions.setdefault("collision_action", "rename")
         file_actions.setdefault("results_folder_name", "OCR結果")
         file_actions.setdefault("output_format", "both")
+        
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
         config.setdefault("current_view", 0)
@@ -102,6 +110,7 @@ class ConfigManager:
         config.setdefault("sort_order", {"column": 0, "order": "asc"})
         config.setdefault("splitter_sizes", [])
         config.setdefault("last_target_dir", "")
+        
         keys_to_remove = [
             "target_dir", "result_dir", "last_result_dir",
             "last_success_move_dir", "last_failure_move_dir",
@@ -119,9 +128,11 @@ class ConfigManager:
         if not CONFIG_PATH:
             print("エラー: CONFIG_PATH が無効なため、設定を保存できません。")
             return
+        
         config_to_save = config.copy()
         config_to_save["api_type"] = INTERNAL_CONFIG["api_type"]
         config_to_save["endpoints"] = INTERNAL_CONFIG["endpoints"]
+        
         keys_to_remove_before_save = [
             "last_result_dir", "last_success_move_dir", "last_failure_move_dir",
             "target_dir", "result_dir", "upload_interval_ms", "upload_retry_limit",
@@ -129,6 +140,7 @@ class ConfigManager:
         ]
         for key in keys_to_remove_before_save:
             if key in config_to_save: del config_to_save[key]
+            
         try:
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(config_to_save, f, indent=2, ensure_ascii=False)
