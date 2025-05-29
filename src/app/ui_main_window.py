@@ -1,4 +1,4 @@
-# ui_main_window.py
+# ui_main_window.py (完全版)
 
 import sys
 import os
@@ -8,27 +8,27 @@ import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QToolBar, QVBoxLayout, QWidget,
     QLabel, QMessageBox, QFileDialog, QTextEdit, QSplitter,
-    QFormLayout, QPushButton
+    QFormLayout, QPushButton, QHBoxLayout, QFrame
 )
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QFontMetrics # QFontMetrics をインポート
 from PyQt6.QtCore import Qt, QTimer
 
 # アプリケーション内モジュールのインポート
 from list_view import ListView
 from option_dialog import OptionDialog
-from summary_view import SummaryView
+from summary_view import SummaryView 
 from config_manager import ConfigManager
 from log_manager import LogManager, LogLevel
 from api_client import CubeApiClient
 
-from app_constants import ( # 定数をインポート
+from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
     OCR_STATUS_FAILED, OCR_STATUS_SKIPPED_SIZE_LIMIT, OCR_STATUS_SPLITTING,
     OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING,
     LISTVIEW_UPDATE_INTERVAL_MS
 )
-from ui_dialogs import OcrConfirmationDialog # ダイアログをインポート
-from ocr_worker import OcrWorker # ワーカーをインポート
+from ui_dialogs import OcrConfirmationDialog
+from ocr_worker import OcrWorker
 
 
 class MainWindow(QMainWindow):
@@ -36,10 +36,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.log_manager = LogManager()
         self.log_manager.debug("MainWindow initializing...", context="MAINWIN_LIFECYCLE")
-        self.setWindowTitle("AI inside Cube Client Ver.0.0.12") # バージョンは適宜更新
+        self.setWindowTitle("AI inside Cube Client Ver.0.0.12")
         self.config = ConfigManager.load()
         self.is_ocr_running = False
-        self.processed_files_info = [] 
+        self.processed_files_info = []
         self.log_widget = QTextEdit()
         self.log_manager.log_message_signal.connect(self.append_log_message_to_widget)
         self.api_client = CubeApiClient(self.config, self.log_manager)
@@ -54,8 +54,15 @@ class MainWindow(QMainWindow):
         if state_cfg == "maximized": self.showMaximized()
 
         self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(2, 2, 2, 2)
-        self.splitter = QSplitter(Qt.Orientation.Vertical); self.stack = QStackedWidget(); self.summary_view = SummaryView(); self.list_view = ListView(self.processed_files_info); self.stack.addWidget(self.summary_view); self.stack.addWidget(self.list_view); self.splitter.addWidget(self.stack)
+        self.main_layout.setContentsMargins(2, 2, 2, 2) 
+        self.main_layout.setSpacing(0) 
+
+        self.splitter = QSplitter(Qt.Orientation.Vertical); self.stack = QStackedWidget(); self.summary_view = SummaryView(); 
+        self.summary_view.log_manager = self.log_manager 
+
+        self.list_view = ListView(self.processed_files_info)
+        self.list_view.item_check_state_changed.connect(self.on_list_item_check_state_changed) 
+        self.stack.addWidget(self.summary_view); self.stack.addWidget(self.list_view); self.splitter.addWidget(self.stack)
         self.log_container = QWidget(); log_layout_inner = QVBoxLayout(self.log_container); log_layout_inner.setContentsMargins(8,8,8,8); log_layout_inner.setSpacing(0)
         self.log_header = QLabel("ログ："); self.log_header.setStyleSheet("margin-left: 6px; padding-bottom: 0px; font-weight: bold;"); log_layout_inner.addWidget(self.log_header)
         self.log_widget.setReadOnly(True)
@@ -77,6 +84,45 @@ class MainWindow(QMainWindow):
         else: default_height = self.height(); initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]; self.splitter.setSizes(initial_splitter_sizes)
         self.main_layout.addWidget(self.splitter)
         
+        # ステータス行のセットアップ
+        self.status_bar_frame = QFrame() 
+        self.status_bar_frame.setFrameShape(QFrame.Shape.NoFrame) # フレーム形状をなしに
+        self.status_bar_frame.setStyleSheet("""
+            QFrame#StatusBarFrame { 
+                background-color: #ECECEC; /* やや明るいグレー */
+                border-top: 1px solid #B0B0B0; /* 上境界線のみで区別 */
+                min-height: 26px; 
+                max-height: 26px; /* 高さを固定 */
+            }
+            QLabel#StatusBarLabel { 
+                padding: 3px 0px; 
+                font-size: 8pt; /* フォントサイズを少し小さめに */
+                border: none; /* ラベル自体の枠線はなし */
+            }
+        """)
+        self.status_bar_frame.setObjectName("StatusBarFrame") 
+        status_bar_layout = QHBoxLayout(self.status_bar_frame)
+        status_bar_layout.setContentsMargins(15, 2, 15, 2) 
+        
+        self.status_total_list_label = QLabel("リスト総数: 0") 
+        self.status_total_list_label.setObjectName("StatusBarLabel")
+        self.status_selected_files_label = QLabel("選択中: 0")
+        self.status_selected_files_label.setObjectName("StatusBarLabel")
+        self.status_success_files_label = QLabel("成功: 0")
+        self.status_success_files_label.setObjectName("StatusBarLabel")
+        self.status_error_files_label = QLabel("エラー: 0")
+        self.status_error_files_label.setObjectName("StatusBarLabel")
+        
+        status_bar_layout.addWidget(self.status_total_list_label)
+        status_bar_layout.addSpacing(25) 
+        status_bar_layout.addWidget(self.status_selected_files_label)
+        status_bar_layout.addStretch(1) 
+        status_bar_layout.addWidget(self.status_success_files_label)
+        status_bar_layout.addSpacing(25)
+        status_bar_layout.addWidget(self.status_error_files_label)
+        
+        self.main_layout.addWidget(self.status_bar_frame)
+        
         self.input_folder_path = self.config.get("last_target_dir", "")
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             self.log_manager.info(f"前回終了時の入力フォルダを読み込みました: {self.input_folder_path}", context="SYSTEM_INIT")
@@ -94,17 +140,124 @@ class MainWindow(QMainWindow):
             self.list_view.update_files(self.processed_files_info) 
             if hasattr(self.summary_view, 'reset_summary'):
                 self.summary_view.reset_summary()
+            self.update_all_status_displays() 
 
         self.current_view = self.config.get("current_view", 0); self.stack.setCurrentIndex(self.current_view)
         log_visible = self.config.get("log_visible", True); self.log_container.setVisible(log_visible)
         self.update_ocr_controls(); 
         self.log_manager.info("Application initialized successfully.", context="SYSTEM_LIFECYCLE")
 
+    def update_status_bar(self):
+        total_list_items = len(self.processed_files_info)
+        selected_for_processing_count = 0
+        
+        ocr_success_count = self.summary_view.ocr_completed_count
+        ocr_error_count = self.summary_view.ocr_error_count
+
+        for item_info in self.processed_files_info:
+            if item_info.get("is_checked", False) and \
+               item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                selected_for_processing_count += 1
+        
+        self.status_total_list_label.setText(f"リスト総数: {total_list_items}")
+        self.status_selected_files_label.setText(f"選択中: {selected_for_processing_count}")
+        self.status_success_files_label.setText(f"成功: {ocr_success_count}")
+        self.status_error_files_label.setText(f"エラー: {ocr_error_count}")
+
+    def update_all_status_displays(self):
+        size_skipped_count = 0
+        checked_and_processable_for_summary = 0 
+        
+        for item_info in self.processed_files_info:
+            if item_info.get("ocr_engine_status") == OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                size_skipped_count += 1
+            elif item_info.get("is_checked", False): 
+                checked_and_processable_for_summary += 1
+        
+        self.summary_view.update_summary_counts(
+            total_scanned=len(self.processed_files_info),
+            total_ocr_target=checked_and_processable_for_summary,
+            skipped_size=size_skipped_count
+        )
+        self.update_status_bar()
+
+    def on_list_item_check_state_changed(self, row_index, is_checked):
+        if 0 <= row_index < len(self.processed_files_info):
+            self.processed_files_info[row_index]["is_checked"] = is_checked
+            self.log_manager.debug(f"File '{os.path.basename(self.processed_files_info[row_index]['path'])}' check state in data model changed to: {is_checked}", context="UI_EVENT")
+            
+            self.update_all_status_displays() 
+            self.update_ocr_controls()
+
+    def _collect_files_from_input_folder(self):
+        if not self.input_folder_path or not os.path.isdir(self.input_folder_path):
+            self.log_manager.warning("File collection skipped: Input folder invalid.", context="FILE_SCAN")
+            return [], None, [] 
+
+        current_config = ConfigManager.load()
+        file_actions_config = current_config.get("file_actions", {})
+        excluded_folder_names = [name for name in [
+            file_actions_config.get("success_folder_name"),
+            file_actions_config.get("failure_folder_name"),
+            file_actions_config.get("results_folder_name")
+        ] if name and name.strip()]
+        
+        options_cfg = current_config.get("options", {}).get(current_config.get("api_type"), {})
+        max_files = options_cfg.get("max_files_to_process", 100)
+        recursion_depth_limit = options_cfg.get("recursion_depth", 5)
+
+        self.log_manager.info(f"File collection started: In='{self.input_folder_path}', Max={max_files}, DepthLimit={recursion_depth_limit}, Exclude={excluded_folder_names}", context="FILE_SCAN")
+        
+        collected_files = []
+        supported_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
+        
+        max_files_reached_info = None
+        depth_limited_folders = set()
+
+        for root, dirs, files in os.walk(self.input_folder_path, topdown=True, followlinks=False):
+            norm_root = os.path.normpath(root)
+            norm_input_root = os.path.normpath(self.input_folder_path)
+            relative_path_from_input = os.path.relpath(norm_root, norm_input_root)
+            current_depth = 0 if relative_path_from_input == "." else len(relative_path_from_input.split(os.sep))
+
+            if current_depth >= recursion_depth_limit:
+                for d_name in dirs: 
+                    depth_limited_folders.add(os.path.join(norm_root, d_name))
+                self.log_manager.debug(f"Recursion depth limit ({recursion_depth_limit}) reached at '{norm_root}'. Skipping subdirectories: {dirs}", context="FILE_SCAN_DEPTH")
+                dirs[:] = [] 
+                continue
+            
+            dirs_to_remove_from_walk = [d for d in dirs if d in excluded_folder_names]
+            for d_to_remove in dirs_to_remove_from_walk:
+                if d_to_remove in dirs: dirs.remove(d_to_remove)
+            
+            for filename in sorted(files):
+                if len(collected_files) >= max_files:
+                    if max_files_reached_info is None: 
+                         max_files_reached_info = {
+                             "limit": max_files,
+                             "last_scanned_folder": norm_root 
+                         }
+                    break 
+                file_path = os.path.join(root, filename)
+                if os.path.islink(file_path): continue
+                if os.path.splitext(filename)[1].lower() in supported_extensions:
+                    collected_files.append(file_path)
+            
+            if max_files_reached_info is not None: 
+                break
+
+        unique_sorted_files = sorted(list(set(collected_files)))
+        self.log_manager.info(f"File collection finished: Found {len(unique_sorted_files)} files.", context="FILE_SCAN", count=len(unique_sorted_files))
+        return unique_sorted_files, max_files_reached_info, list(depth_limited_folders)
+
     def perform_initial_scan(self):
         self.log_manager.info(f"スキャン開始: {self.input_folder_path}", context="FILE_SCAN")
         if self.update_timer.isActive(): self.update_timer.stop()
         self.processed_files_info = []
-        collected_files_paths = self._collect_files_from_input_folder()
+        
+        collected_files_paths, max_files_info, depth_limited_folders = self._collect_files_from_input_folder()
+        
         current_config = ConfigManager.load()
         ocr_options = current_config.get("options", {}).get(current_config.get("api_type"), {})
         upload_max_size_mb = ocr_options.get("upload_max_size_mb", 50)
@@ -116,39 +269,58 @@ class MainWindow(QMainWindow):
         initial_pdf_status_default = "作成しない(設定)"
         if output_format_cfg == "pdf_only" or output_format_cfg == "both": 
             initial_pdf_status_default = "-"
-        actually_processable_count = 0
+        
         if collected_files_paths:
             for i, f_path in enumerate(collected_files_paths):
                 try:
                     f_size = os.path.getsize(f_path)
+                    is_skipped_by_size = f_size > upload_max_bytes
+                    
                     file_info_item = {
                         "no": i + 1, "path": f_path, "name": os.path.basename(f_path), "size": f_size,
-                        "status": "待機中", "ocr_engine_status": OCR_STATUS_NOT_PROCESSED,
-                        "ocr_result_summary": "", 
-                        "json_status": initial_json_status_default, 
-                        "searchable_pdf_status": initial_pdf_status_default
+                        "status": "スキップ(サイズ上限)" if is_skipped_by_size else "待機中",
+                        "ocr_engine_status": OCR_STATUS_SKIPPED_SIZE_LIMIT if is_skipped_by_size else OCR_STATUS_NOT_PROCESSED,
+                        "ocr_result_summary": f"ファイルサイズが上限 ({upload_max_size_mb}MB) を超過" if is_skipped_by_size else "", 
+                        "json_status": "スキップ" if is_skipped_by_size else initial_json_status_default, 
+                        "searchable_pdf_status": "スキップ" if is_skipped_by_size else initial_pdf_status_default,
+                        "is_checked": not is_skipped_by_size 
                     }
-                    if f_size > upload_max_bytes:
-                        file_info_item["status"] = "スキップ(サイズ上限)"
-                        file_info_item["ocr_engine_status"] = OCR_STATUS_SKIPPED_SIZE_LIMIT
-                        file_info_item["ocr_result_summary"] = f"ファイルサイズが上限 ({upload_max_size_mb}MB) を超過"
-                        file_info_item["json_status"] = "スキップ"
-                        file_info_item["searchable_pdf_status"] = "スキップ"
+                    if is_skipped_by_size:
                         self.log_manager.warning(f"ファイル '{file_info_item['name']}' ({f_size/(1024*1024):.2f}MB) はアップロード上限 ({upload_max_size_mb}MB) 超過のためスキップ。", context="FILE_SCAN")
-                    else:
-                        actually_processable_count += 1
                     self.processed_files_info.append(file_info_item)
                 except OSError as e:
                     self.log_manager.error(f"ファイル '{f_path}' の情報取得に失敗しました。スキップします。エラー: {e}", context="FILE_SCAN_ERROR")
+            
             self.list_view.update_files(self.processed_files_info)
-            self.log_manager.info(f"スキャン完了: {len(self.processed_files_info)}件のファイル情報を読み込み ({actually_processable_count}件処理対象)。", context="FILE_SCAN", total_found=len(self.processed_files_info), processable=actually_processable_count)
+            processable_by_size_count = sum(1 for item in self.processed_files_info if item["ocr_engine_status"] != OCR_STATUS_SKIPPED_SIZE_LIMIT)
+            self.log_manager.info(f"スキャン完了: {len(self.processed_files_info)}件のファイル情報を読み込み ({processable_by_size_count}件サイズ上限内)。", context="FILE_SCAN", total_found=len(self.processed_files_info), processable_by_size=processable_by_size_count)
         else: 
             self.list_view.update_files(self.processed_files_info);
             self.log_manager.info("スキャン: 対象ファイルは見つかりませんでした。", context="FILE_SCAN")
-        if hasattr(self.summary_view, 'reset_summary'): self.summary_view.reset_summary()
-        if hasattr(self.summary_view, 'start_processing'):
-            self.summary_view.total_files = actually_processable_count 
-            self.summary_view.update_display()
+        
+        warning_messages = []
+        if max_files_info:
+            msg = f"最大処理ファイル数 ({max_files_info['limit']}件) に達したため、フォルダ「{max_files_info['last_scanned_folder']}」以降の一部のファイルは読み込まれていません。"
+            warning_messages.append(msg)
+            self.log_manager.warning(msg, context="FILE_SCAN_LIMIT")
+        
+        if depth_limited_folders:
+            folders_to_show = depth_limited_folders[:3] 
+            folders_str = ", ".join([os.path.basename(f) for f in folders_to_show])
+            if len(depth_limited_folders) > 3:
+                folders_str += f" など、計{len(depth_limited_folders)}フォルダ"
+            
+            msg = f"再帰検索の深さ制限により、サブフォルダ「{folders_str}」以降は検索されていません。"
+            warning_messages.append(msg)
+            self.log_manager.warning(msg, context="FILE_SCAN_LIMIT", limited_folders_count=len(depth_limited_folders), example_folders=folders_to_show)
+
+        if warning_messages:
+            QMessageBox.warning(self, "スキャン結果の注意", "\n\n".join(warning_messages))
+        
+        if hasattr(self.summary_view, 'reset_summary'): 
+            self.summary_view.reset_summary() 
+        
+        self.update_all_status_displays() 
         self.update_ocr_controls()
 
     def append_log_message_to_widget(self, level, message):
@@ -191,6 +363,24 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, folder_label_toolbar)
         self.insertToolBarBreak(folder_label_toolbar)
 
+    def select_input_folder(self):
+        self.log_manager.debug("Selecting input folder.", context="UI_ACTION")
+        last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
+        if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")
+        
+        folder = QFileDialog.getExistingDirectory(self, "入力フォルダを選択", last_dir)
+        if folder:
+            self.log_manager.info(f"Input folder selected by user: {folder}", context="UI_EVENT")
+            if folder != self.input_folder_path or not self.processed_files_info:
+                self.input_folder_path = folder
+                self.input_folder_button.setText(folder) 
+                self.log_manager.info(f"Performing rescan for newly selected folder: {folder}", context="UI_EVENT")
+                self.perform_rescan()
+            else:
+                self.log_manager.info("Selected folder is the same as current and list is not empty. No rescan forced.", context="UI_EVENT")
+        else:
+            self.log_manager.info("Input folder selection cancelled.", context="UI_EVENT")
+
     def open_input_folder_in_explorer(self):
         self.log_manager.debug(f"Attempting to open folder: {self.input_folder_path}", context="UI_ACTION_OPEN_FOLDER")
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
@@ -212,94 +402,151 @@ class MainWindow(QMainWindow):
 
     def toggle_view(self):
         self.current_view = 1 - self.current_view; self.stack.setCurrentIndex(self.current_view); self.log_manager.info(f"View toggled to: {'ListView' if self.current_view == 1 else 'SummaryView'}", context="UI_ACTION")
+    
     def toggle_log_display(self):
         visible = self.log_container.isVisible(); self.log_container.setVisible(not visible); self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
 
     def show_option_dialog(self):
         self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
+        
+        old_config = self.config.copy()
+        old_api_type_options = old_config.get("options", {}).get(old_config.get("api_type"), {})
+        old_max_files = old_api_type_options.get("max_files_to_process")
+        old_recursion_depth = old_api_type_options.get("recursion_depth")
+
         dialog = OptionDialog(self)
         if dialog.exec():
-            self.config = ConfigManager.load()
+            self.config = ConfigManager.load() 
             self.log_manager.info("Options saved and reloaded.", context="CONFIG_EVENT")
             self.api_client = CubeApiClient(self.config, self.log_manager)
-            new_output_format = self.config.get("file_actions", {}).get("output_format", "both")
-            self.log_manager.info(f"Output format changed to: {new_output_format}. Updating unprocessed items status.", context="CONFIG_EVENT")
-            updated_count = 0
-            for item_info in self.processed_files_info:
-                if item_info.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED:
-                    old_json_status = item_info.get("json_status")
-                    old_pdf_status = item_info.get("searchable_pdf_status")
-                    if new_output_format == "json_only" or new_output_format == "both":
-                        item_info["json_status"] = "-" 
-                    else:
-                        item_info["json_status"] = "作成しない(設定)"
-                    if new_output_format == "pdf_only" or new_output_format == "both":
-                        item_info["searchable_pdf_status"] = "-"
-                    else:
-                        item_info["searchable_pdf_status"] = "作成しない(設定)"
-                    if old_json_status != item_info["json_status"] or old_pdf_status != item_info["searchable_pdf_status"]:
-                        updated_count += 1
-            if updated_count > 0:
-                self.log_manager.info(f"{updated_count} unprocessed items' output status expectations were updated.", context="CONFIG_EVENT")
-                self.list_view.update_files(self.processed_files_info)
+            
+            new_api_type_options = self.config.get("options", {}).get(self.config.get("api_type"), {})
+            new_max_files = new_api_type_options.get("max_files_to_process")
+            new_recursion_depth = new_api_type_options.get("recursion_depth")
+            
+            rescan_needed_due_to_collection_settings = (old_max_files != new_max_files or 
+                                                        old_recursion_depth != new_recursion_depth)
+
+            if rescan_needed_due_to_collection_settings:
+                if self.input_folder_path and os.path.isdir(self.input_folder_path):
+                    QMessageBox.information(self, "設定変更の適用", 
+                                            "ファイル検索範囲に関する設定（最大ファイル数または再帰深度）が変更されたため、ファイルリストを再スキャンします。")
+                    self.perform_rescan() 
+                else:
+                    self.processed_files_info = [] 
+                    self.list_view.update_files(self.processed_files_info)
+                    self.update_all_status_displays()  
+                    self.log_manager.info("File collection parameters changed, but no input folder selected. List cleared.", context="CONFIG_EVENT")
+            else: 
+                self.log_manager.info(f"Settings changed (size limit or output format). Re-evaluating file statuses.", context="CONFIG_EVENT")
+                
+                new_upload_max_size_mb = new_api_type_options.get("upload_max_size_mb", 50)
+                new_upload_max_bytes = new_upload_max_size_mb * 1024 * 1024
+                new_file_actions_cfg = self.config.get("file_actions", {})
+                new_output_format_cfg = new_file_actions_cfg.get("output_format", "both")
+                default_json_status = "-" if new_output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
+                default_pdf_status = "-" if new_output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
+                items_status_updated = False
+                
+                for item_info in self.processed_files_info:
+                    current_file_size = item_info.get("size", 0)
+                    prev_ocr_engine_status = item_info.get("ocr_engine_status")
+                    prev_is_checked = item_info.get("is_checked", True) 
+                    original_status_text = item_info["status"] 
+                    original_json_status = item_info["json_status"]
+                    original_pdf_status = item_info["searchable_pdf_status"]
+
+                    is_now_skipped_by_size = current_file_size > new_upload_max_bytes
+
+                    if is_now_skipped_by_size:
+                        if item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                            item_info["status"] = "スキップ(サイズ上限)"
+                            item_info["ocr_engine_status"] = OCR_STATUS_SKIPPED_SIZE_LIMIT
+                            item_info["ocr_result_summary"] = f"ファイルサイズが上限 ({new_upload_max_size_mb}MB) を超過"
+                            item_info["json_status"] = "スキップ"
+                            item_info["searchable_pdf_status"] = "スキップ"
+                            item_info["is_checked"] = False 
+                    else: 
+                        if item_info.get("ocr_engine_status") == OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                            item_info["status"] = "待機中"
+                            item_info["ocr_engine_status"] = OCR_STATUS_NOT_PROCESSED
+                            item_info["ocr_result_summary"] = ""
+                            item_info["is_checked"] = True 
+                        
+                        if item_info.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED:
+                            item_info["json_status"] = default_json_status
+                            item_info["searchable_pdf_status"] = default_pdf_status
+                    
+                    if (item_info.get("ocr_engine_status") != prev_ocr_engine_status or
+                        item_info.get("status") != original_status_text or
+                        item_info.get("json_status") != original_json_status or
+                        item_info.get("searchable_pdf_status") != original_pdf_status or
+                        item_info.get("is_checked") != prev_is_checked):
+                        items_status_updated = True
+                        if prev_ocr_engine_status == OCR_STATUS_SKIPPED_SIZE_LIMIT and item_info.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED:
+                             self.log_manager.debug(f"File '{item_info['name']}' NO LONGER SKIPPED by size. Status reset.", context="CONFIG_EVENT")
+                        elif prev_ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT and item_info.get("ocr_engine_status") == OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                             self.log_manager.debug(f"File '{item_info['name']}' NOW SKIPPED due to new size limit.", context="CONFIG_EVENT")
+
+                if items_status_updated:
+                    self.list_view.update_files(self.processed_files_info)
+                
+                self.update_all_status_displays()
+            self.update_ocr_controls()
         else:
             self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
 
-    def select_input_folder(self):
-        self.log_manager.debug("Selecting input folder.", context="UI_ACTION")
-        last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
-        if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")
-        folder = QFileDialog.getExistingDirectory(self, "入力フォルダを選択", last_dir)
-        if folder:
-            self.log_manager.info(f"Input folder selected by user: {folder}", context="UI_EVENT")
-            self.input_folder_path = folder
-            self.input_folder_button.setText(folder) 
-            self.log_manager.info(f"Performing rescan for newly selected folder: {folder}", context="UI_EVENT")
-            self.perform_rescan()
-        else:
-            self.log_manager.info("Input folder selection cancelled.", context="UI_EVENT")
-
-    def check_input_folder_validity(self):
-        pass
-
-    def _collect_files_from_input_folder(self):
-        if not self.input_folder_path or not os.path.isdir(self.input_folder_path): self.log_manager.warning("File collection skipped: Input folder invalid.", context="FILE_SCAN"); return []
-        current_config = ConfigManager.load(); file_actions_config = current_config.get("file_actions", {}); excluded_folder_names = [name for name in [file_actions_config.get("success_folder_name"), file_actions_config.get("failure_folder_name"), file_actions_config.get("results_folder_name")] if name and name.strip()]
-        options_cfg = current_config.get("options", {}).get(current_config.get("api_type"), {}); max_files = options_cfg.get("max_files_to_process", 100); recursion_depth_limit = options_cfg.get("recursion_depth", 5)
-        self.log_manager.info(f"File collection started: In='{self.input_folder_path}', Max={max_files}, DepthLimit={recursion_depth_limit}, Exclude={excluded_folder_names}", context="FILE_SCAN")
-        collected_files = []; supported_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
-        for root, dirs, files in os.walk(self.input_folder_path, topdown=True, followlinks=False):
-            norm_root = os.path.normpath(root); norm_input_root = os.path.normpath(self.input_folder_path); relative_path_from_input = os.path.relpath(norm_root, norm_input_root)
-            current_depth = 0 if relative_path_from_input == "." else len(relative_path_from_input.split(os.sep))
-            if current_depth >= recursion_depth_limit: dirs[:] = []; continue
-            dirs_to_remove_from_walk = [d for d in dirs if d in excluded_folder_names];
-            for d_to_remove in dirs_to_remove_from_walk:
-                if d_to_remove in dirs: dirs.remove(d_to_remove)
-            for filename in sorted(files):
-                if len(collected_files) >= max_files: self.log_manager.info(f"Max files ({max_files}) reached.", context="FILE_SCAN"); return sorted(list(set(collected_files)))
-                file_path = os.path.join(root, filename)
-                if os.path.islink(file_path): continue
-                if os.path.splitext(filename)[1].lower() in supported_extensions: collected_files.append(file_path)
-        unique_sorted_files = sorted(list(set(collected_files)))
-        self.log_manager.info(f"File collection finished: Found {len(unique_sorted_files)} files.", context="FILE_SCAN", count=len(unique_sorted_files))
-        return unique_sorted_files
-
     def _create_confirmation_summary(self, files_to_process_count):
-        current_config = ConfigManager.load(); file_actions_cfg = current_config.get("file_actions", {}); api_type_key = current_config.get("api_type", "cube_fullocr"); ocr_opts = current_config.get("options", {}).get(api_type_key, {})
-        summary_lines = ["<strong><u>OCR実行設定の確認</u></strong><br><br>"]; summary_lines.append("<strong>【基本設定】</strong>"); summary_lines.append(f"入力フォルダ: {self.input_folder_path or '未選択'}"); summary_lines.append("<br>"); summary_lines.append("<strong>【ファイル処理後の出力と移動】</strong>")
-        output_format_value = file_actions_cfg.get("output_format", "both"); output_format_display_map = {"json_only": "JSONのみ", "pdf_only": "サーチャブルPDFのみ", "both": "JSON と サーチャブルPDF (両方)"}; output_format_display = output_format_display_map.get(output_format_value, "未設定/不明"); summary_lines.append(f"出力形式: <strong>{output_format_display}</strong>")
-        results_folder_name = file_actions_cfg.get("results_folder_name", "(未設定)"); summary_lines.append(f"OCR結果サブフォルダ名: <strong>{results_folder_name}</strong>"); summary_lines.append(f"  <small>(備考: 元ファイルの各場所に '{results_folder_name}' サブフォルダを作成し結果を保存)</small>")
-        move_on_success = file_actions_cfg.get("move_on_success_enabled", False); success_folder_name_cfg = file_actions_cfg.get("success_folder_name", "(未設定)"); summary_lines.append(f"成功ファイル移動: {'<strong>する</strong>' if move_on_success else 'しない'}");
-        if move_on_success: summary_lines.append(f"  移動先サブフォルダ名: <strong>{success_folder_name_cfg}</strong>"); summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{success_folder_name_cfg}' サブフォルダを作成し移動)</small>")
-        move_on_failure = file_actions_cfg.get("move_on_failure_enabled", False); failure_folder_name_cfg = file_actions_cfg.get("failure_folder_name", "(未設定)"); summary_lines.append(f"失敗ファイル移動: {'<strong>する</strong>' if move_on_failure else 'しない'}");
-        if move_on_failure: summary_lines.append(f"  移動先サブフォルダ名: <strong>{failure_folder_name_cfg}</strong>"); summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{failure_folder_name_cfg}' サブフォルダを作成し移動)</small>")
+        current_config = ConfigManager.load()
+        file_actions_cfg = current_config.get("file_actions", {})
+        api_type_key = current_config.get("api_type", "cube_fullocr")
+        ocr_opts = current_config.get("options", {}).get(api_type_key, {})
+
+        summary_lines = ["<strong><u>OCR実行設定の確認</u></strong><br><br>"]
+        summary_lines.append("<strong>【基本設定】</strong>")
+        summary_lines.append(f"入力フォルダ: {self.input_folder_path or '未選択'}")
+        summary_lines.append("<br>")
+
+        summary_lines.append("<strong>【ファイル処理後の出力と移動】</strong>")
+        output_format_value = file_actions_cfg.get("output_format", "both")
+        output_format_display_map = {
+            "json_only": "JSONのみ",
+            "pdf_only": "サーチャブルPDFのみ",
+            "both": "JSON と サーチャブルPDF (両方)"
+        }
+        output_format_display = output_format_display_map.get(output_format_value, "未設定/不明")
+        summary_lines.append(f"出力形式: <strong>{output_format_display}</strong>")
+
+        results_folder_name = file_actions_cfg.get("results_folder_name", "(未設定)")
+        summary_lines.append(f"OCR結果サブフォルダ名: <strong>{results_folder_name}</strong>")
+        summary_lines.append(f"  <small>(備考: 元ファイルの各場所に '{results_folder_name}' サブフォルダを作成し結果を保存)</small>")
+
+        move_on_success = file_actions_cfg.get("move_on_success_enabled", False)
+        success_folder_name_cfg = file_actions_cfg.get("success_folder_name", "(未設定)")
+        summary_lines.append(f"成功ファイル移動: {'<strong>する</strong>' if move_on_success else 'しない'}")
+        if move_on_success:
+            summary_lines.append(f"  移動先サブフォルダ名: <strong>{success_folder_name_cfg}</strong>")
+            summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{success_folder_name_cfg}' サブフォルダを作成し移動)</small>")
+
+        move_on_failure = file_actions_cfg.get("move_on_failure_enabled", False)
+        failure_folder_name_cfg = file_actions_cfg.get("failure_folder_name", "(未設定)")
+        summary_lines.append(f"失敗ファイル移動: {'<strong>する</strong>' if move_on_failure else 'しない'}")
+        if move_on_failure:
+            summary_lines.append(f"  移動先サブフォルダ名: <strong>{failure_folder_name_cfg}</strong>")
+            summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{failure_folder_name_cfg}' サブフォルダを作成し移動)</small>")
+        
         if move_on_success or move_on_failure:
             collision_map = {"overwrite": "上書き", "rename": "リネームする (例: file.pdf --> file (1).pdf)", "skip": "スキップ"}
             collision_act_key = file_actions_cfg.get("collision_action", "rename")
             collision_act_display = collision_map.get(collision_act_key, "リネームする (例: file.pdf --> file (1).pdf)")
             summary_lines.append(f"ファイル名衝突時 (移動先): {collision_act_display}")
-        summary_lines.append("<br>"); summary_lines.append("<strong>【ファイル検索設定】</strong>"); summary_lines.append(f"最大処理ファイル数: {ocr_opts.get('max_files_to_process', 100)}"); summary_lines.append(f"再帰検索の深さ (入力フォルダ自身を0): {ocr_opts.get('recursion_depth', 5)}")
+        summary_lines.append("<br>")
+
+        summary_lines.append("<strong>【ファイル検索設定】</strong>")
+        summary_lines.append(f"最大処理ファイル数: {ocr_opts.get('max_files_to_process', 100)}")
+        summary_lines.append(f"再帰検索の深さ (入力フォルダ自身を0): {ocr_opts.get('recursion_depth', 5)}")
         summary_lines.append(f"アップロード上限サイズ: {ocr_opts.get('upload_max_size_mb', 50)} MB")
+        
         if ocr_opts.get('split_large_files_enabled', False):
             summary_lines.append(f"ファイル分割: <strong>有効</strong> (分割サイズ目安: {ocr_opts.get('split_chunk_size_mb',10)} MB)")
             if ocr_opts.get('merge_split_pdf_parts', True): 
@@ -308,8 +555,15 @@ class MainWindow(QMainWindow):
                  summary_lines.append(f"  <small>分割PDF部品の結合: <strong>無効</strong> (部品ごとに出力)</small>")
         else:
             summary_lines.append("ファイル分割: 無効")
-        summary_lines.append(f"処理対象ファイル数 (収集結果・サイズフィルタ後): {files_to_process_count} 件"); 
-        summary_lines.append("<br>"); summary_lines.append("<strong>【主要OCRオプション】</strong>"); summary_lines.append(f"回転補正: {'ON' if ocr_opts.get('adjust_rotation', 0) == 1 else 'OFF'}"); summary_lines.append(f"OCRモデル: {ocr_opts.get('ocr_model', 'katsuji')}"); summary_lines.append("<br>上記内容で処理を開始します。")
+        
+        summary_lines.append(f"処理対象ファイル数 (選択結果): {files_to_process_count} 件")
+        summary_lines.append("<br>")
+
+        summary_lines.append("<strong>【主要OCRオプション】</strong>")
+        summary_lines.append(f"回転補正: {'ON' if ocr_opts.get('adjust_rotation', 0) == 1 else 'OFF'}")
+        summary_lines.append(f"OCRモデル: {ocr_opts.get('ocr_model', 'katsuji')}")
+        summary_lines.append("<br>上記内容で処理を開始します。")
+        
         return "<br>".join([line.replace("  <small>", "&nbsp;&nbsp;<small>").replace("    <small>", "&nbsp;&nbsp;&nbsp;&nbsp;<small>") for line in summary_lines])
 
     def confirm_start_ocr(self):
@@ -324,24 +578,24 @@ class MainWindow(QMainWindow):
         
         files_eligible_for_ocr_info = [
             item for item in self.processed_files_info 
-            if item.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+            if item.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT and \
+               item.get("is_checked", False) 
         ]
 
         if not files_eligible_for_ocr_info:
-            self.log_manager.info("OCR start aborted: No eligible files to process.", context="OCR_FLOW")
-            QMessageBox.information(self,"対象ファイルなし", "処理対象となるファイル（サイズ上限内）が見つかりませんでした。")
+            self.log_manager.info("OCR start aborted: No eligible and checked files to process.", context="OCR_FLOW")
+            QMessageBox.information(self,"対象ファイルなし", "処理対象として選択（チェック）されているファイル（サイズ上限内）が見つかりませんでした。")
             self.update_ocr_controls()
             return
 
         ocr_already_attempted_in_eligible_list = any(
-            item.get("ocr_engine_status") not in [OCR_STATUS_NOT_PROCESSED, None, OCR_STATUS_SKIPPED_SIZE_LIMIT]
-            for item in files_eligible_for_ocr_info
+            item.get("ocr_engine_status") not in [OCR_STATUS_NOT_PROCESSED, None] 
+            for item in files_eligible_for_ocr_info 
         )
         
         if ocr_already_attempted_in_eligible_list:
-            message = "OCR処理を再度実行します。\n\n" \
-                        "現在リストされている処理対象ファイルのOCR処理状態がリセットされ、最初から処理されます。\n" \
-                        "(サイズ上限でスキップされたファイルは影響を受けません)\n\n" \
+            message = "選択されたファイルの中に、既に処理が試みられた（未処理ではない）ファイルが含まれています。\n" \
+                        "これらのファイルのOCR処理状態がリセットされ、最初から処理されます。\n\n" \
                         "よろしいですか？"
             reply = QMessageBox.question(self, "OCR再実行の確認", message,
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -356,7 +610,7 @@ class MainWindow(QMainWindow):
             self.log_manager.info("OCR start cancelled by user (final confirmation dialog).", context="OCR_FLOW")
             return
 
-        self.log_manager.info(f"User confirmed. Starting OCR process for {len(files_eligible_for_ocr_info)} eligible files...", context="OCR_FLOW")
+        self.log_manager.info(f"User confirmed. Starting OCR process for {len(files_eligible_for_ocr_info)} eligible and checked files...", context="OCR_FLOW")
         current_config_for_run = ConfigManager.load()
         self.is_ocr_running = True
         
@@ -366,7 +620,8 @@ class MainWindow(QMainWindow):
         initial_pdf_status_ui = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
 
         for original_idx, item_info in enumerate(self.processed_files_info):
-            if item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT :
+            if item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT and \
+               item_info.get("is_checked", False): 
                 item_info["status"] = OCR_STATUS_PROCESSING 
                 item_info["ocr_engine_status"] = OCR_STATUS_PROCESSING 
                 item_info["ocr_result_summary"] = "" 
@@ -376,7 +631,8 @@ class MainWindow(QMainWindow):
         
         self.list_view.update_files(self.processed_files_info)
         if hasattr(self.summary_view, 'start_processing'):
-            self.summary_view.start_processing(len(files_to_send_to_worker_tuples))
+            self.summary_view.start_processing(len(files_to_send_to_worker_tuples)) 
+            self.update_status_bar() 
         
         self.log_manager.info(f"Instantiating OcrWorker for {len(files_to_send_to_worker_tuples)} files.", context="OCR_FLOW")
         self.ocr_worker = OcrWorker(
@@ -401,17 +657,18 @@ class MainWindow(QMainWindow):
 
         files_to_resume_tuples = []
         for original_idx, item_info in enumerate(self.processed_files_info):
-            if item_info.get("ocr_engine_status") in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
-                item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
+            if item_info.get("is_checked", False) and \
+               item_info.get("ocr_engine_status") in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
+               item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
                 files_to_resume_tuples.append((item_info["path"], original_idx))
 
         if not files_to_resume_tuples:
-            self.log_manager.info("OCR resume: No files found with 'Not Processed' or 'Failed' OCR status (and not size-skipped).", context="OCR_FLOW")
-            QMessageBox.information(self, "再開対象なし", "OCR未処理または失敗状態のファイル（サイズ上限内）が見つかりませんでした。")
+            self.log_manager.info("OCR resume: No checked files found with 'Not Processed' or 'Failed' OCR status.", context="OCR_FLOW")
+            QMessageBox.information(self, "再開対象なし", "OCR未処理または失敗状態で、かつチェックされているファイル（サイズ上限内）が見つかりませんでした。")
             self.update_ocr_controls()
             return
-
-        message = f"{len(files_to_resume_tuples)} 件の未処理または失敗したファイルに対してOCR処理を再開します。\n\n" \
+        
+        message = f"{len(files_to_resume_tuples)} 件の選択されたファイルに対してOCR処理を再開します。\n\n" \
                     "よろしいですか？"
         reply = QMessageBox.question(self, "OCR再開の確認", message,
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -438,6 +695,7 @@ class MainWindow(QMainWindow):
         self.list_view.update_files(self.processed_files_info)
         if hasattr(self.summary_view, 'start_processing'):
             self.summary_view.start_processing(len(files_to_resume_tuples))
+            self.update_status_bar()
 
         self.log_manager.info(f"Instantiating OcrWorker for {len(files_to_resume_tuples)} files (resume).", context="OCR_FLOW")
         self.ocr_worker = OcrWorker(
@@ -468,7 +726,7 @@ class MainWindow(QMainWindow):
                 target_file_info["ocr_engine_status"] = OCR_STATUS_MERGING
 
             if not self.update_timer.isActive():
-                self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+                self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS) 
         else:
             self.log_manager.warning(f"Status update received for unknown file: {original_file_path}", context="UI_STATUS_UPDATE_WARN")
 
@@ -493,7 +751,7 @@ class MainWindow(QMainWindow):
                     if current_engine_status in [OCR_STATUS_PROCESSING, OCR_STATUS_SPLITTING, OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING]:
                         item_info["ocr_engine_status"] = OCR_STATUS_NOT_PROCESSED 
                         item_info["status"] = "待機中(中断)"
-                self.perform_batch_list_view_update()
+                self.perform_batch_list_view_update() 
                 self.update_ocr_controls()
                 QMessageBox.information(self, "処理状態", "OCR処理は既に停止されているか、開始されていませんでした。UIを整合しました。")
             else:
@@ -502,32 +760,36 @@ class MainWindow(QMainWindow):
     def update_ocr_controls(self):
         running = self.is_ocr_running
         
-        can_start_action = False
-        if not running and self.processed_files_info:
-             can_start_action = any(
-                 f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
-                 for f in self.processed_files_info
-             )
+        has_checked_and_processable_for_start = any(
+            f_info.get("is_checked", False) and \
+            f_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+            for f_info in self.processed_files_info
+        )
+        can_start_action = not running and has_checked_and_processable_for_start
 
         if self.start_ocr_action.isEnabled() != can_start_action:
             self.start_ocr_action.setEnabled(can_start_action)
 
         can_resume_action = False
         if not running and self.processed_files_info:
-            has_failed_or_not_processed_eligible_files = any(
+            has_checked_for_resume = any(
+                f.get("is_checked", False) and \
                 f.get("ocr_engine_status") in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
                 f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
                 for f in self.processed_files_info
             )
-            eligible_files_for_resume_check = [
-                f for f in self.processed_files_info if f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+            
+            eligible_checked_files_for_resume_check = [
+                f for f in self.processed_files_info 
+                if f.get("is_checked", False) and f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
             ]
-            all_eligible_are_pristine_not_processed = False
-            if eligible_files_for_resume_check:
-                all_eligible_are_pristine_not_processed = all(
-                    f.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED for f in eligible_files_for_resume_check
+            all_eligible_checked_are_pristine_not_processed = False
+            if eligible_checked_files_for_resume_check: 
+                all_eligible_checked_are_pristine_not_processed = all(
+                    f.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED for f in eligible_checked_files_for_resume_check
                 )
-            if has_failed_or_not_processed_eligible_files and not all_eligible_are_pristine_not_processed:
+
+            if has_checked_for_resume and not all_eligible_checked_are_pristine_not_processed:
                 can_resume_action = True
         
         if hasattr(self, 'resume_ocr_action') and self.resume_ocr_action.isEnabled() != can_resume_action:
@@ -546,12 +808,13 @@ class MainWindow(QMainWindow):
         if self.option_action.isEnabled() != enable_actions_if_not_running:
             self.option_action.setEnabled(enable_actions_if_not_running)
         
-        if not self.toggle_view_action.isEnabled():
+        if not self.toggle_view_action.isEnabled(): 
             self.toggle_view_action.setEnabled(True)
 
     def perform_batch_list_view_update(self):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if self.list_view: self.list_view.update_files(self.processed_files_info)
+        self.update_all_status_displays() 
 
     def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_status_for_original):
         self.log_manager.debug(
@@ -563,10 +826,7 @@ class MainWindow(QMainWindow):
             return
             
         target_file_info = self.processed_files_info[original_file_main_idx]
-        # Path mismatch warning removed as it's expected when worker processes a subset. Logging in worker is sufficient.
-        # if target_file_info["path"] != original_file_path:
-        #     self.log_manager.debug(f"Path mismatch for original_file_main_idx {original_file_main_idx}. Expected '{target_file_info['path']}', got '{original_file_path}'. This is normal if worker processes a subset. Updating by index.", context="CALLBACK_INFO")
-
+        
         ocr_stage_successful = False 
         if ocr_error_info_for_original:
             target_file_info["status"] = "OCR失敗" 
@@ -606,14 +866,16 @@ class MainWindow(QMainWindow):
              target_file_info["json_status"] = "対象外(OCR失敗)"
         
         output_format = self.config.get("file_actions", {}).get("output_format", "both")
-        if target_file_info["ocr_engine_status"] == OCR_STATUS_FAILED:
-            self.summary_view.update_for_processed_file(is_success=False)
-        elif target_file_info["ocr_engine_status"] == OCR_STATUS_COMPLETED and output_format == "json_only":
-            self.summary_view.update_for_processed_file(is_success=True)
-            target_file_info["status"] = "完了" 
+        if output_format == "json_only": 
+            if target_file_info.get("ocr_engine_status") == OCR_STATUS_FAILED:
+                self.summary_view.update_for_processed_file(is_success=False)
+            elif target_file_info.get("ocr_engine_status") == OCR_STATUS_COMPLETED:
+                self.summary_view.update_for_processed_file(is_success=True)
+                target_file_info["status"] = "完了" 
+            self.update_status_bar() 
 
         self.update_ocr_controls()
-        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS) 
 
 
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
@@ -623,10 +885,7 @@ class MainWindow(QMainWindow):
             return
             
         target_file_info = self.processed_files_info[original_file_main_idx]
-        # Path mismatch warning removed
-        # if target_file_info["path"] != original_file_path:
-        #      self.log_manager.debug(f"Path mismatch for original_file_main_idx {original_file_main_idx} (PDF). Expected '{target_file_info['path']}', got '{original_file_path}'. This is normal if worker processes a subset. Updating by index.", context="CALLBACK_INFO")
-
+        
         output_format = self.config.get("file_actions", {}).get("output_format", "both")
         ocr_engine_status_for_file = target_file_info.get("ocr_engine_status") 
 
@@ -681,8 +940,9 @@ class MainWindow(QMainWindow):
         if output_format != "json_only":
             is_overall_success_for_summary = (ocr_engine_status_for_file == OCR_STATUS_COMPLETED and pdf_stage_final_success)
             self.summary_view.update_for_processed_file(is_success=is_overall_success_for_summary)
-        
-        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+            self.update_status_bar() 
+
+        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS) 
 
 
     def on_all_files_processed(self):
@@ -707,7 +967,7 @@ class MainWindow(QMainWindow):
                     item_info["json_status"] = json_status_on_interrupt
                     item_info["searchable_pdf_status"] = pdf_status_on_interrupt
         self.is_ocr_running = False
-        self.perform_batch_list_view_update()
+        self.perform_batch_list_view_update() 
         self.update_ocr_controls()
         final_message = "全てのファイルのOCR処理が完了しました。"
         if was_interrupted_by_user:
@@ -741,9 +1001,7 @@ class MainWindow(QMainWindow):
     def perform_rescan(self):
         self.log_manager.info("Performing UI clear and input folder rescan.", context="UI_ACTION_RESCAN")
         if hasattr(self.summary_view, 'reset_summary'): 
-            self.summary_view.reset_summary()
-            self.summary_view.total_files = 0 
-            self.summary_view.update_display()
+            self.summary_view.reset_summary() 
 
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             self.log_manager.info(f"Rescanning input folder: {self.input_folder_path}", context="UI_ACTION_RESCAN")
@@ -752,6 +1010,7 @@ class MainWindow(QMainWindow):
             self.log_manager.info("Rescan: Input folder not set or invalid. File list cleared.", context="UI_ACTION_RESCAN")
             self.processed_files_info = []
             self.list_view.update_files(self.processed_files_info)
+            self.update_all_status_displays() 
         if self.is_ocr_running: self.is_ocr_running = False
         self.update_ocr_controls()
 
