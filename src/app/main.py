@@ -68,8 +68,8 @@ class OcrConfirmationDialog(QDialog):
         self.setLayout(layout)
 
 class OcrWorker(QThread):
-    file_processed = pyqtSignal(int, str, object, object, object)
-    searchable_pdf_processed = pyqtSignal(int, str, object, object)
+    file_processed = pyqtSignal(int, str, object, object, object) # original_idx, path, ocr_result, ocr_error, json_status
+    searchable_pdf_processed = pyqtSignal(int, str, object, object) # original_idx, path, pdf_final_path, pdf_error_info
     all_files_processed = pyqtSignal()
     original_file_status_update = pyqtSignal(str, str)
 
@@ -142,8 +142,8 @@ class OcrWorker(QThread):
 
             original_size_bytes = os.path.getsize(original_filepath)
             if total_pages == 1 or original_size_bytes <= chunk_size_bytes:
-                 self.log_manager.info(f"PDF '{original_basename}' is small or single page. Treating as single part initially.", context="WORKER_PDF_SPLIT")
-                 return [] 
+                self.log_manager.info(f"PDF '{original_basename}' is small or single page. Treating as single part initially.", context="WORKER_PDF_SPLIT")
+                return [] 
             
             estimated_total_parts = max(1, -(-original_size_bytes // chunk_size_bytes)) 
             current_writer = PdfWriter()
@@ -222,6 +222,8 @@ class OcrWorker(QThread):
                     merger.append(part_path)
                 else:
                     self.log_manager.error(f"PDF part not found for merging: {part_path}", context="WORKER_PDF_MERGE_ERROR")
+                    try: merger.close() 
+                    except: pass
                     return None, {"message": f"結合用PDF部品が見つかりません: {os.path.basename(part_path)}"}
             
             final_dir = os.path.dirname(final_merged_pdf_path)
@@ -233,6 +235,8 @@ class OcrWorker(QThread):
             return final_merged_pdf_path, None 
         except Exception as e:
             self.log_manager.error(f"Error merging PDF parts into {final_merged_pdf_path}: {e}", context="WORKER_PDF_MERGE_ERROR", exc_info=True)
+            try: merger.close()
+            except: pass
             if os.path.exists(final_merged_pdf_path):
                 try: os.remove(final_merged_pdf_path)
                 except: pass
@@ -250,7 +254,12 @@ class OcrWorker(QThread):
 
         results_folder_name = self.file_actions_config.get("results_folder_name", "OCR結果")
         
-        for original_file_main_idx, (original_file_path, _) in enumerate(self.files_to_process_tuples):
+        ##### MODIFIED START #####
+        # Loop through (file_path, original_global_idx) tuples
+        # The first element of enumerate (worker_internal_idx) is the index within self.files_to_process_tuples
+        # The second element (original_file_global_idx) is the index in MainWindow's self.processed_files_info
+        for worker_internal_idx, (original_file_path, original_file_global_idx) in enumerate(self.files_to_process_tuples):
+        ##### MODIFIED END #####
             if not self.is_running:
                 self.log_manager.info("OcrWorker run loop aborted by stop signal (outer loop).", context="WORKER_LIFECYCLE")
                 break
@@ -261,7 +270,7 @@ class OcrWorker(QThread):
             original_file_parent_dir = os.path.dirname(original_file_path)
             base_name_for_output_prefix = os.path.splitext(original_file_basename)[0]
             
-            self.log_manager.info(f"Starting processing for original file: '{original_file_basename}'", context="WORKER_ORIGINAL_FILE")
+            self.log_manager.info(f"Starting processing for original file: '{original_file_basename}' (Global index: {original_file_global_idx})", context="WORKER_ORIGINAL_FILE")
 
             files_to_ocr_for_this_original = []
             temp_dir_for_this_file_source_parts = None 
@@ -275,8 +284,10 @@ class OcrWorker(QThread):
                 original_file_size_bytes = os.path.getsize(original_file_path)
             except OSError as e:
                 self.log_manager.error(f"Cannot get size of '{original_file_basename}', skipping: {e}", context="WORKER_ORIGINAL_FILE_ERROR")
-                self.file_processed.emit(original_file_main_idx, original_file_path, None, {"message": "ファイルサイズ取得エラー"}, "エラー")
-                self.searchable_pdf_processed.emit(original_file_main_idx, original_file_path, None, {"message": "ファイルサイズ取得エラー"})
+                ##### MODIFIED START #####
+                self.file_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイルサイズ取得エラー"}, "エラー")
+                self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイルサイズ取得エラー"})
+                ##### MODIFIED END #####
                 continue
 
             if split_enabled and original_file_size_bytes > (split_chunk_size_mb * 1024 * 1024):
@@ -290,16 +301,20 @@ class OcrWorker(QThread):
                     os.makedirs(parts_results_temp_dir, exist_ok=True)
                 except Exception as e_mkdir:
                     self.log_manager.error(f"Failed to create temp subdirs for '{original_file_basename}': {e_mkdir}", context="WORKER_FILE_SPLIT_ERROR", exc_info=True)
-                    self.file_processed.emit(original_file_main_idx, original_file_path, None, {"message": "分割用一時フォルダ作成失敗"}, "エラー")
-                    self.searchable_pdf_processed.emit(original_file_main_idx, original_file_path, None, {"message": "分割用一時フォルダ作成失敗"})
+                    ##### MODIFIED START #####
+                    self.file_processed.emit(original_file_global_idx, original_file_path, None, {"message": "分割用一時フォルダ作成失敗"}, "エラー")
+                    self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "分割用一時フォルダ作成失敗"})
+                    ##### MODIFIED END #####
                     continue
 
                 files_to_ocr_for_this_original = self._split_file(original_file_path, split_chunk_size_mb, temp_dir_for_this_file_source_parts)
                 
                 if not files_to_ocr_for_this_original:
                     self.log_manager.error(f"Splitting failed for '{original_file_basename}'.", context="WORKER_FILE_SPLIT_ERROR")
-                    self.file_processed.emit(original_file_main_idx, original_file_path, None, {"message": "ファイル分割失敗"}, "エラー")
-                    self.searchable_pdf_processed.emit(original_file_main_idx, original_file_path, None, {"message": "ファイル分割失敗"})
+                    ##### MODIFIED START #####
+                    self.file_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイル分割失敗"}, "エラー")
+                    self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイル分割失敗"})
+                    ##### MODIFIED END #####
                     if temp_dir_for_this_file_source_parts and os.path.isdir(temp_dir_for_this_file_source_parts):
                         try: shutil.rmtree(temp_dir_for_this_file_source_parts)
                         except: pass
@@ -310,15 +325,17 @@ class OcrWorker(QThread):
                 was_split = True
                 self.log_manager.info(f"File '{original_file_basename}' split into {len(files_to_ocr_for_this_original)} parts.", context="WORKER_FILE_SPLIT")
             else: 
-                 files_to_ocr_for_this_original = [original_file_path]
-                 parts_results_temp_dir = os.path.join(original_file_parent_dir, results_folder_name)
-                 try:
+                files_to_ocr_for_this_original = [original_file_path]
+                parts_results_temp_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                try:
                     os.makedirs(parts_results_temp_dir, exist_ok=True)
-                 except Exception as e_mkdir_nonsplit:
-                     self.log_manager.error(f"Failed to create results directory for non-split file '{original_file_basename}': {e_mkdir_nonsplit}", context="WORKER_IO_ERROR")
-                     self.file_processed.emit(original_file_main_idx, original_file_path, None, {"message": "結果フォルダ作成失敗"}, "エラー")
-                     self.searchable_pdf_processed.emit(original_file_main_idx, original_file_path, None, {"message": "結果フォルダ作成失敗"})
-                     continue
+                except Exception as e_mkdir_nonsplit:
+                    self.log_manager.error(f"Failed to create results directory for non-split file '{original_file_basename}': {e_mkdir_nonsplit}", context="WORKER_IO_ERROR")
+                    ##### MODIFIED START #####
+                    self.file_processed.emit(original_file_global_idx, original_file_path, None, {"message": "結果フォルダ作成失敗"}, "エラー")
+                    self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "結果フォルダ作成失敗"})
+                    ##### MODIFIED END #####
+                    continue
 
 
             part_ocr_results_agg = [] 
@@ -329,15 +346,15 @@ class OcrWorker(QThread):
             json_status_for_original_file = "作成しない(設定)" 
             pdf_final_path_for_signal = None
             pdf_error_for_signal = None
-            merge_error_info_local = None # ★ PDF結合エラーを保持するローカル変数
 
 
             for part_idx, current_processing_path in enumerate(files_to_ocr_for_this_original):
-                if not self.is_running or not all_parts_processed_successfully:
+                if not self.is_running:
                     all_parts_processed_successfully = False
+                    self.log_manager.info(f"Processing of parts for '{original_file_basename}' interrupted by stop signal.", context="WORKER_PART_PROCESS")
                     break 
-
-                current_part_basename = os.path.basename(current_processing_path)
+                
+                current_part_basename = os.path.basename(current_processing_path) 
                 status_msg_for_ui = f"{OCR_STATUS_PART_PROCESSING} ({part_idx + 1}/{len(files_to_ocr_for_this_original)})"
                 if not was_split: status_msg_for_ui = OCR_STATUS_PROCESSING
                 self.original_file_status_update.emit(original_file_path, status_msg_for_ui)
@@ -353,11 +370,12 @@ class OcrWorker(QThread):
 
                 part_ocr_results_agg.append({"path": current_processing_path, "result": part_ocr_result_json})
                 
-                should_create_json_output = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
-                if should_create_json_output:
-                    part_json_filename = os.path.splitext(current_part_basename)[0] + ".json"
-                    target_json_save_dir = parts_results_temp_dir if was_split else os.path.join(original_file_parent_dir, results_folder_name)
-                    part_json_filepath = os.path.join(target_json_save_dir, part_json_filename)
+                should_create_json_output_for_part = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
+                if should_create_json_output_for_part:
+                    part_json_filename = os.path.splitext(current_part_basename)[0] + ".json" 
+                    target_json_save_dir_for_part = parts_results_temp_dir
+                    
+                    part_json_filepath = os.path.join(target_json_save_dir_for_part, part_json_filename)
                     try:
                         with open(part_json_filepath, 'w', encoding='utf-8') as f_json:
                             json.dump(part_ocr_result_json, f_json, ensure_ascii=False, indent=2)
@@ -365,8 +383,8 @@ class OcrWorker(QThread):
                     except Exception as e_json_save:
                         self.log_manager.error(f"  Failed to save JSON for part '{current_part_basename}': {e_json_save}", context="WORKER_PART_IO_ERROR")
                 
-                should_create_pdf_output = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
-                if should_create_pdf_output:
+                should_create_pdf_output_for_part = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
+                if should_create_pdf_output_for_part:
                     self.log_manager.info(f"  Creating searchable PDF for part: '{current_part_basename}'", context="WORKER_PART_PDF")
                     part_pdf_content, part_pdf_error_info = self.api_client.make_searchable_pdf(current_processing_path)
 
@@ -376,9 +394,9 @@ class OcrWorker(QThread):
                         pdf_error_for_signal = part_pdf_error_info
                         break
                     elif part_pdf_content:
-                        part_pdf_filename = os.path.splitext(current_part_basename)[0] + "_searchable.pdf"
-                        target_pdf_save_dir = parts_results_temp_dir if was_split else os.path.join(original_file_parent_dir, results_folder_name)
-                        part_pdf_filepath = os.path.join(target_pdf_save_dir, part_pdf_filename)
+                        part_pdf_filename = current_part_basename # Use source part name (e.g., original.split#01.pdf)
+                        target_pdf_save_dir_for_part = parts_results_temp_dir
+                        part_pdf_filepath = os.path.join(target_pdf_save_dir_for_part, part_pdf_filename)
                         try:
                             with open(part_pdf_filepath, 'wb') as f_pdf:
                                 f_pdf.write(part_pdf_content)
@@ -390,68 +408,151 @@ class OcrWorker(QThread):
                             pdf_error_for_signal = {"message": f"部品PDF保存エラー: {e_pdf_save}"}
                             break
             
-            if not self.is_running: break 
+            if not self.is_running and not all_parts_processed_successfully:
+                 self.log_manager.info(f"Processing for '{original_file_basename}' stopped by user.", context="WORKER_LIFECYCLE")
+                 if not final_ocr_error_for_main: final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました"}
+            elif not self.is_running and all_parts_processed_successfully:
+                 self.log_manager.warning(f"Processing for '{original_file_basename}' marked successful but run was stopped.", context="WORKER_LIFECYCLE_UNEXPECTED")
+
 
             if all_parts_processed_successfully:
                 self.log_manager.info(f"All parts of '{original_file_basename}' processed successfully for OCR and intermediate file saving.", context="WORKER_ORIGINAL_FILE")
                 
                 if was_split:
                     final_ocr_result_for_main = {"status": "parts_processed_ok", "num_parts": len(files_to_ocr_for_this_original), "detail": f"{len(files_to_ocr_for_this_original)}部品のOCR完了"}
-                elif part_ocr_results_agg: 
+                elif part_ocr_results_agg:
                     final_ocr_result_for_main = part_ocr_results_agg[0]["result"]
                 else: 
-                    final_ocr_result_for_main = {"status": "ocr_done_no_parts_data"}
+                    final_ocr_result_for_main = {"status": "ocr_done_no_parts_data_unexpected", "message": "OCR成功(データ無)"}
 
-                if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
-                    json_status_for_original_file = "部品JSON作成済 (結合保留)" if was_split else "JSON作成成功"
-                
-                if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                    if was_split and part_pdf_paths_agg:
-                        self.original_file_status_update.emit(original_file_path, OCR_STATUS_MERGING)
-                        final_merged_pdf_dir = os.path.join(original_file_parent_dir, results_folder_name)
-                        merged_pdf_filename = f"{base_name_for_output_prefix}.pdf"
-                        final_merged_pdf_path_unique = self._get_unique_filepath(final_merged_pdf_dir, merged_pdf_filename)
+                should_create_json_globally = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
+                if should_create_json_globally:
+                    if was_split:
+                        final_json_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                        os.makedirs(final_json_output_dir, exist_ok=True)
                         
-                        merged_path_result, merge_error_info_local = self._merge_searchable_pdfs(part_pdf_paths_agg, final_merged_pdf_path_unique)
-                        if merged_path_result and not merge_error_info_local:
-                            pdf_final_path_for_signal = merged_path_result
+                        copied_json_count = 0
+                        total_json_parts_expected = len(files_to_ocr_for_this_original)
+                        original_base_name_no_ext = os.path.splitext(original_file_basename)[0]
+
+                        if parts_results_temp_dir and os.path.isdir(parts_results_temp_dir):
+                            for item_name in os.listdir(parts_results_temp_dir):
+                                if item_name.startswith(original_base_name_no_ext) and \
+                                   item_name.endswith(".json") and \
+                                   ".split#" in item_name:
+                                    
+                                    src_json_path = os.path.join(parts_results_temp_dir, item_name)
+                                    dest_json_path = self._get_unique_filepath(final_json_output_dir, item_name)
+                                    try:
+                                        shutil.copy2(src_json_path, dest_json_path)
+                                        self.log_manager.info(f"Copied split JSON part to final destination: {dest_json_path}", context="WORKER_PART_IO")
+                                        copied_json_count += 1
+                                    except Exception as e_copy:
+                                        self.log_manager.error(f"Failed to copy split JSON part '{src_json_path}' to final destination: {e_copy}", context="WORKER_PART_IO_ERROR")
+                            
+                            if total_json_parts_expected == 0 and copied_json_count == 0:
+                                json_status_for_original_file = "部品JSONなし (対象部品0)"
+                            elif copied_json_count == total_json_parts_expected:
+                                json_status_for_original_file = f"{copied_json_count}個の部品JSON出力成功"
+                            elif copied_json_count > 0:
+                                json_status_for_original_file = f"部品JSON一部出力 ({copied_json_count}/{total_json_parts_expected})"
+                            else: 
+                                json_status_for_original_file = "部品JSON出力失敗 (コピーエラー)"
                         else:
-                            all_parts_processed_successfully = False 
-                            pdf_error_for_signal = merge_error_info_local if merge_error_info_local else {"message": "PDF結合中に不明なエラー"}
-                    elif not was_split and part_pdf_paths_agg: 
+                             self.log_manager.warning(f"Parts results temp dir not found or not a dir, cannot copy split JSONs: {parts_results_temp_dir}", context="WORKER_PART_IO")
+                             json_status_for_original_file = "部品JSON出力エラー (一時フォルダなし)"
+                    else: 
+                        json_status_for_original_file = "JSON作成成功"
+                else: 
+                    json_status_for_original_file = "作成しない(設定)"
+                
+                should_create_pdf_globally = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
+                if should_create_pdf_globally:
+                    if was_split and part_pdf_paths_agg:
+                        merge_pdfs_enabled = self.current_api_options.get("merge_split_pdf_parts", True)
+                        if merge_pdfs_enabled: 
+                            self.original_file_status_update.emit(original_file_path, OCR_STATUS_MERGING)
+                            final_merged_pdf_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                            merged_pdf_filename = f"{base_name_for_output_prefix}.pdf"
+                            final_merged_pdf_path_unique = self._get_unique_filepath(final_merged_pdf_dir, merged_pdf_filename)
+                            
+                            merged_path_result, merge_error = self._merge_searchable_pdfs(part_pdf_paths_agg, final_merged_pdf_path_unique)
+                            if merged_path_result and not merge_error:
+                                pdf_final_path_for_signal = merged_path_result
+                            else:
+                                pdf_error_for_signal = merge_error if merge_error else {"message": "PDF結合中に不明なエラー"}
+                        else: 
+                            self.log_manager.info(f"PDF merging disabled by config. {len(part_pdf_paths_agg)} PDF parts will be copied individually.", context="WORKER_PDF_PARTS_COPY")
+                            final_pdf_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                            os.makedirs(final_pdf_output_dir, exist_ok=True)
+                            
+                            copied_pdf_count = 0
+                            expected_pdf_parts = len(part_pdf_paths_agg)
+
+                            for src_pdf_part_path in part_pdf_paths_agg:
+                                if os.path.exists(src_pdf_part_path):
+                                    pdf_part_filename = os.path.basename(src_pdf_part_path)
+                                    dest_pdf_part_path = self._get_unique_filepath(final_pdf_output_dir, pdf_part_filename)
+                                    try:
+                                        shutil.copy2(src_pdf_part_path, dest_pdf_part_path)
+                                        self.log_manager.info(f"Copied split PDF part to final destination: {dest_pdf_part_path}", context="WORKER_PART_IO")
+                                        copied_pdf_count +=1
+                                    except Exception as e_copy_pdf:
+                                        self.log_manager.error(f"Failed to copy split PDF part '{src_pdf_part_path}' to final destination: {e_copy_pdf}", context="WORKER_PART_IO_ERROR")
+                                else:
+                                    self.log_manager.warning(f"PDF part path not found, cannot copy: {src_pdf_part_path}", context="WORKER_PART_IO")
+                            
+                            if expected_pdf_parts == 0 and copied_pdf_count == 0:
+                                pdf_error_for_signal = {"message": "対象のPDF部品なし (コピー対象0)", "code": "NO_PARTS_TO_COPY"}
+                            elif copied_pdf_count == expected_pdf_parts and expected_pdf_parts > 0 : # Ensure expected_pdf_parts > 0 for success
+                                pdf_error_for_signal = {"message": f"{copied_pdf_count}個の部品PDF出力成功", "code": "PARTS_COPIED_SUCCESS"}
+                            elif copied_pdf_count > 0:
+                                pdf_error_for_signal = {"message": f"部品PDF一部出力 ({copied_pdf_count}/{expected_pdf_parts})", "code": "PARTS_COPIED_PARTIAL"}
+                            else: 
+                                pdf_error_for_signal = {"message": "部品PDF出力失敗 (コピーエラー)", "code": "PARTS_COPY_ERROR"}
+                    elif not was_split and part_pdf_paths_agg:
                         pdf_final_path_for_signal = part_pdf_paths_agg[0]
-                    elif not part_pdf_paths_agg: # PDF作成すべきだが部品がない場合
-                        all_parts_processed_successfully = False
-                        pdf_error_for_signal = {"message": "PDF部品が見つかりません (結合前)"}
+                    elif not part_pdf_paths_agg and should_create_pdf_globally:
+                        pdf_error_for_signal = {"message": "PDF部品が見つかりません (作成対象)"}
             
             else: 
-                if not final_ocr_error_for_main: # パーツループ内でエラーが設定されていなければ
-                     final_ocr_error_for_main = {"message": f"'{original_file_basename}' の部品処理中にエラー発生"}
-                json_status_for_original_file = "エラー" 
-                # pdf_error_for_signal は既にパーツループ内で設定されているか、この段階で設定する
-                if not pdf_error_for_signal:
-                    pdf_error_for_signal = {"message": f"'{original_file_basename}' の部品処理エラーによりPDF作成不可"}
+                if not final_ocr_error_for_main and not self.user_stopped : 
+                    final_ocr_error_for_main = {"message": f"'{original_file_basename}' の部品処理中にエラー発生"}
+                elif self.user_stopped and not final_ocr_error_for_main:
+                    final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました"}
 
-
-            # 最終的なPDFステータスの決定
-            if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                if pdf_final_path_for_signal and not pdf_error_for_signal :
-                     pdf_status_for_original_file = "PDF作成成功"
-                elif pdf_error_for_signal:
-                     pdf_status_for_original_file = "PDF作成失敗"
-                elif not all_parts_processed_successfully: # OCRまたは部品PDF作成で失敗した場合
-                     pdf_status_for_original_file = "対象外(エラー)" if final_ocr_error_for_main else "PDF作成失敗"
-                # else pdf_status_for_original_file は初期値 "作成しない(設定)" または上記条件で設定済
-            else:
-                pdf_status_for_original_file = "作成しない(設定)"
-
-
-            self.file_processed.emit(original_file_main_idx, original_file_path, final_ocr_result_for_main, final_ocr_error_for_main, json_status_for_original_file)
-            self.searchable_pdf_processed.emit(original_file_main_idx, original_file_path, pdf_final_path_for_signal, pdf_error_for_signal)
+                if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
+                    json_status_for_original_file = "エラー" if not self.user_stopped else "中断"
+                else:
+                    json_status_for_original_file = "作成しない(設定)" 
+                
+                if not pdf_error_for_signal and self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
+                    if self.user_stopped:
+                         pdf_error_for_signal = {"message": "処理中止によりPDF作成不可"}
+                    else:
+                         pdf_error_for_signal = {"message": f"'{original_file_basename}' の処理エラー等によりPDF作成不可"}
+            
+            ##### MODIFIED START #####
+            self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_main, final_ocr_error_for_main, json_status_for_original_file)
+            self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, pdf_final_path_for_signal, pdf_error_for_signal)
+            ##### MODIFIED END #####
 
             move_original_file_succeeded_final = all_parts_processed_successfully
-            # ★ 結合エラーも最終的な成功判定に含める
-            if pdf_error_for_signal and self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
+            
+            if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
+                 if not ("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file): # If status indicates an error or partial success that's considered failure for move
+                     move_original_file_succeeded_final = False
+            
+            if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
+                if pdf_error_for_signal: # If pdf_error_for_signal is not None, means either an error or info about parts
+                    # If it's an error (code doesn't indicate success), then overall failed for PDF part
+                    if not (pdf_error_for_signal.get("code") and "SUCCESS" in pdf_error_for_signal.get("code").upper()):
+                        move_original_file_succeeded_final = False
+                elif not pdf_final_path_for_signal: # No merged PDF and no successful parts copy info
+                    # This implies PDF was expected but not produced successfully in any form
+                    move_original_file_succeeded_final = False
+            
+            if self.user_stopped:
                 move_original_file_succeeded_final = False
 
 
@@ -469,27 +570,66 @@ class OcrWorker(QThread):
                 elif not move_original_file_succeeded_final and move_on_failure_enabled_cfg:
                     destination_subfolder_for_move = failure_folder_name_cfg
                 
-                if destination_subfolder_for_move and self.is_running:
+                if destination_subfolder_for_move and self.is_running: # Check is_running before moving
                     self._move_file_with_collision_handling(current_source_file_to_move, 
                                                             original_file_parent_dir, 
                                                             destination_subfolder_for_move, 
                                                             collision_action_cfg)
+                elif destination_subfolder_for_move and not self.is_running and self.user_stopped:
+                     self.log_manager.info(f"File moving for '{original_file_basename}' skipped due to process interruption.", context="WORKER_FILE_MOVE")
 
-            if temp_dir_for_this_file_source_parts and os.path.isdir(temp_dir_for_this_file_source_parts):
+
+            if temp_dir_for_this_file_source_parts and os.path.isdir(temp_dir_for_this_file_source_parts) and self.main_temp_dir_for_splits in temp_dir_for_this_file_source_parts:
                 try: shutil.rmtree(temp_dir_for_this_file_source_parts)
-                except Exception as e: self.log_manager.warning(f"Failed to cleanup source parts temp dir: {e}", context="WORKER_TEMP_CLEANUP")
+                except Exception as e: self.log_manager.warning(f"Failed to cleanup source parts temp dir: {temp_dir_for_this_file_source_parts}, Error: {e}", context="WORKER_TEMP_CLEANUP")
             
             if was_split and parts_results_temp_dir and os.path.isdir(parts_results_temp_dir) and self.main_temp_dir_for_splits in parts_results_temp_dir:
-                 try: shutil.rmtree(parts_results_temp_dir)
-                 except Exception as e: self.log_manager.warning(f"Failed to cleanup results parts temp dir after merge: {e}", context="WORKER_TEMP_CLEANUP")
+                try: shutil.rmtree(parts_results_temp_dir)
+                except Exception as e: self.log_manager.warning(f"Failed to cleanup results parts temp dir: {parts_results_temp_dir}, Error: {e}", context="WORKER_TEMP_CLEANUP")
             
             time.sleep(0.01)
         
         self._cleanup_main_temp_dir()
         self.all_files_processed.emit()
-        if self.is_running: self.log_manager.info("All files processed by OcrWorker.", context="WORKER_LIFECYCLE")
-        else: self.log_manager.info("OcrWorker processing was stopped.", context="WORKER_LIFECYCLE")
+        if self.is_running:
+             self.log_manager.info("All files processed by OcrWorker.", context="WORKER_LIFECYCLE")
+        elif self.user_stopped:
+             self.log_manager.info("OcrWorker processing was stopped by user.", context="WORKER_LIFECYCLE")
+        else:
+             self.log_manager.warning("OcrWorker processing finished, but final state of is_running is unclear.", context="WORKER_LIFECYCLE")
+
         self.log_manager.debug(f"OcrWorker thread finished.", context="WORKER_LIFECYCLE", thread_id=thread_id)
+
+    def stop(self):
+        self.log_manager.info("OcrWorker stop requested.", context="WORKER_LIFECYCLE")
+        self.is_running = False
+        self.user_stopped = True
+
+    def _move_file_with_collision_handling(self, source_path, root_dest_dir, subfolder_name, collision_action):
+        source_filename = os.path.basename(source_path)
+        destination_folder = os.path.join(root_dest_dir, subfolder_name)
+        os.makedirs(destination_folder, exist_ok=True)
+        destination_path = os.path.join(destination_folder, source_filename)
+
+        if os.path.exists(destination_path):
+            if collision_action == "overwrite":
+                self.log_manager.info(f"Overwriting existing file at '{destination_path}' with '{source_path}'.", context="WORKER_FILE_MOVE")
+            elif collision_action == "rename":
+                destination_path = self._get_unique_filepath(destination_folder, source_filename)
+                self.log_manager.info(f"Renaming new file to '{os.path.basename(destination_path)}' due to collision at '{destination_folder}'.", context="WORKER_FILE_MOVE")
+            elif collision_action == "skip":
+                self.log_manager.info(f"Skipping move of '{source_path}' to '{destination_folder}' due to existing file and 'skip' policy.", context="WORKER_FILE_MOVE")
+                return
+            else: 
+                destination_path = self._get_unique_filepath(destination_folder, source_filename)
+                self.log_manager.warning(f"Unknown collision action '{collision_action}'. Defaulting to rename: '{os.path.basename(destination_path)}'.", context="WORKER_FILE_MOVE")
+        
+        try:
+            shutil.move(source_path, destination_path)
+            self.log_manager.info(f"Successfully moved '{source_path}' to '{destination_path}'.", context="WORKER_FILE_MOVE")
+        except Exception as e:
+            self.log_manager.error(f"Failed to move '{source_path}' to '{destination_path}'. Error: {e}", context="WORKER_FILE_MOVE_ERROR", exc_info=True)
+
 
 LISTVIEW_UPDATE_INTERVAL_MS = 300
 
@@ -498,7 +638,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.log_manager = LogManager()
         self.log_manager.debug("MainWindow initializing...", context="MAINWIN_LIFECYCLE")
-        self.setWindowTitle("AI inside Cube Client Ver.0.0.12")
+        self.setWindowTitle("AI inside Cube Client Ver.0.0.12") # Consider updating version number
         self.config = ConfigManager.load()
         self.is_ocr_running = False
         self.processed_files_info = [] 
@@ -755,11 +895,19 @@ class MainWindow(QMainWindow):
         if move_on_success: summary_lines.append(f"  移動先サブフォルダ名: <strong>{success_folder_name_cfg}</strong>"); summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{success_folder_name_cfg}' サブフォルダを作成し移動)</small>")
         move_on_failure = file_actions_cfg.get("move_on_failure_enabled", False); failure_folder_name_cfg = file_actions_cfg.get("failure_folder_name", "(未設定)"); summary_lines.append(f"失敗ファイル移動: {'<strong>する</strong>' if move_on_failure else 'しない'}");
         if move_on_failure: summary_lines.append(f"  移動先サブフォルダ名: <strong>{failure_folder_name_cfg}</strong>"); summary_lines.append(f"    <small>(備考: 元ファイルの各場所に '{failure_folder_name_cfg}' サブフォルダを作成し移動)</small>")
-        if move_on_success or move_on_failure: collision_map = {"overwrite": "上書き", "rename": "リネームする (例: file.pdf --> file(1).pdf)", "skip": "スキップ"}; collision_act = collision_map.get(file_actions_cfg.get("collision_action", "rename"), "リネームする (例: file.pdf --> file(1).pdf)"); summary_lines.append(f"ファイル名衝突時 (移動先): {collision_act}")
+        if move_on_success or move_on_failure:
+            collision_map = {"overwrite": "上書き", "rename": "リネームする (例: file.pdf --> file (1).pdf)", "skip": "スキップ"}
+            collision_act_key = file_actions_cfg.get("collision_action", "rename")
+            collision_act_display = collision_map.get(collision_act_key, "リネームする (例: file.pdf --> file (1).pdf)")
+            summary_lines.append(f"ファイル名衝突時 (移動先): {collision_act_display}")
         summary_lines.append("<br>"); summary_lines.append("<strong>【ファイル検索設定】</strong>"); summary_lines.append(f"最大処理ファイル数: {ocr_opts.get('max_files_to_process', 100)}"); summary_lines.append(f"再帰検索の深さ (入力フォルダ自身を0): {ocr_opts.get('recursion_depth', 5)}")
         summary_lines.append(f"アップロード上限サイズ: {ocr_opts.get('upload_max_size_mb', 50)} MB")
         if ocr_opts.get('split_large_files_enabled', False):
             summary_lines.append(f"ファイル分割: <strong>有効</strong> (分割サイズ目安: {ocr_opts.get('split_chunk_size_mb',10)} MB)")
+            if ocr_opts.get('merge_split_pdf_parts', True): 
+                 summary_lines.append(f"  <small>分割PDF部品の結合: <strong>有効</strong></small>")
+            else:
+                 summary_lines.append(f"  <small>分割PDF部品の結合: <strong>無効</strong> (部品ごとに出力)</small>")
         else:
             summary_lines.append("ファイル分割: 無効")
         summary_lines.append(f"処理対象ファイル数 (収集結果・サイズフィルタ後): {files_to_process_count} 件"); 
@@ -784,6 +932,7 @@ class MainWindow(QMainWindow):
         if not files_eligible_for_ocr_info:
             self.log_manager.info("OCR start aborted: No eligible files to process.", context="OCR_FLOW")
             QMessageBox.information(self,"対象ファイルなし", "処理対象となるファイル（サイズ上限内）が見つかりませんでした。")
+            self.update_ocr_controls()
             return
 
         ocr_already_attempted_in_eligible_list = any(
@@ -793,12 +942,12 @@ class MainWindow(QMainWindow):
         
         if ocr_already_attempted_in_eligible_list:
             message = "OCR処理を再度実行します。\n\n" \
-                      "現在リストされている処理対象ファイルのOCR処理状態がリセットされ、最初から処理されます。\n" \
-                      "(サイズ上限でスキップされたファイルは影響を受けません)\n\n" \
-                      "よろしいですか？"
+                        "現在リストされている処理対象ファイルのOCR処理状態がリセットされ、最初から処理されます。\n" \
+                        "(サイズ上限でスキップされたファイルは影響を受けません)\n\n" \
+                        "よろしいですか？"
             reply = QMessageBox.question(self, "OCR再実行の確認", message,
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                         QMessageBox.StandardButton.No)
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
                 self.log_manager.info("OCR re-execution cancelled by user.", context="OCR_FLOW")
                 return
@@ -855,7 +1004,7 @@ class MainWindow(QMainWindow):
         files_to_resume_tuples = []
         for original_idx, item_info in enumerate(self.processed_files_info):
             if item_info.get("ocr_engine_status") in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
-               item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                item_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT:
                 files_to_resume_tuples.append((item_info["path"], original_idx))
 
         if not files_to_resume_tuples:
@@ -865,10 +1014,10 @@ class MainWindow(QMainWindow):
             return
 
         message = f"{len(files_to_resume_tuples)} 件の未処理または失敗したファイルに対してOCR処理を再開します。\n\n" \
-                  "よろしいですか？"
+                    "よろしいですか？"
         reply = QMessageBox.question(self, "OCR再開の確認", message,
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                     QMessageBox.StandardButton.Yes)
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.Yes)
         if reply == QMessageBox.StandardButton.No:
             self.log_manager.info("OCR resume cancelled by user.", context="OCR_FLOW")
             return
@@ -890,7 +1039,7 @@ class MainWindow(QMainWindow):
         
         self.list_view.update_files(self.processed_files_info)
         if hasattr(self.summary_view, 'start_processing'):
-             self.summary_view.start_processing(len(files_to_resume_tuples))
+            self.summary_view.start_processing(len(files_to_resume_tuples))
 
         self.log_manager.info(f"Instantiating OcrWorker for {len(files_to_resume_tuples)} files (resume).", context="OCR_FLOW")
         self.ocr_worker = OcrWorker(
@@ -918,7 +1067,7 @@ class MainWindow(QMainWindow):
             elif OCR_STATUS_PART_PROCESSING in status_message:
                 target_file_info["ocr_engine_status"] = OCR_STATUS_PART_PROCESSING
             elif status_message == OCR_STATUS_MERGING:
-                 target_file_info["ocr_engine_status"] = OCR_STATUS_MERGING
+                target_file_info["ocr_engine_status"] = OCR_STATUS_MERGING
 
             if not self.update_timer.isActive():
                 self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
@@ -955,55 +1104,43 @@ class MainWindow(QMainWindow):
     def update_ocr_controls(self):
         running = self.is_ocr_running
         
-        has_processable_files = any(
-            f_info.get("ocr_engine_status") not in [
-                OCR_STATUS_SKIPPED_SIZE_LIMIT, 
-                OCR_STATUS_COMPLETED, 
-                OCR_STATUS_FAILED, 
-                OCR_STATUS_PROCESSING, 
-                OCR_STATUS_SPLITTING, 
-                OCR_STATUS_PART_PROCESSING,
-                OCR_STATUS_MERGING
-            ]
-            for f_info in self.processed_files_info
-        ) or any ( 
-            f_info.get("ocr_engine_status") == OCR_STATUS_FAILED and f_info.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
-            for f_info in self.processed_files_info
-        )
-        can_start = not running and has_processable_files
-
-        if self.start_ocr_action.isEnabled() != can_start:
-            self.start_ocr_action.setEnabled(can_start)
-
-        can_resume_eval = False
+        can_start_action = False
         if not running and self.processed_files_info:
-            has_failed_files = any(f.get("ocr_engine_status") == OCR_STATUS_FAILED for f in self.processed_files_info if f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT)
-            has_eligible_not_processed_files = any(
-                f.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED 
-                for f in self.processed_files_info if f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+             can_start_action = any(
+                 f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+                 for f in self.processed_files_info
+             )
+
+        if self.start_ocr_action.isEnabled() != can_start_action:
+            self.start_ocr_action.setEnabled(can_start_action)
+
+        can_resume_action = False
+        if not running and self.processed_files_info:
+            has_failed_or_not_processed_eligible_files = any(
+                f.get("ocr_engine_status") in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
+                f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
+                for f in self.processed_files_info
             )
-            processable_files_for_resume_check = [
+            eligible_files_for_resume_check = [
                 f for f in self.processed_files_info if f.get("ocr_engine_status") != OCR_STATUS_SKIPPED_SIZE_LIMIT
             ]
-            all_processable_are_pristine_not_processed = False
-            if processable_files_for_resume_check:
-                all_processable_are_pristine_not_processed = all(
-                    f.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED for f in processable_files_for_resume_check
+            all_eligible_are_pristine_not_processed = False
+            if eligible_files_for_resume_check:
+                all_eligible_are_pristine_not_processed = all(
+                    f.get("ocr_engine_status") == OCR_STATUS_NOT_PROCESSED for f in eligible_files_for_resume_check
                 )
-            if has_failed_files:
-                can_resume_eval = True
-            elif has_eligible_not_processed_files and not all_processable_are_pristine_not_processed:
-                can_resume_eval = True
+            if has_failed_or_not_processed_eligible_files and not all_eligible_are_pristine_not_processed:
+                can_resume_action = True
         
-        if hasattr(self, 'resume_ocr_action') and self.resume_ocr_action.isEnabled() != can_resume_eval:
-            self.resume_ocr_action.setEnabled(can_resume_eval)
+        if hasattr(self, 'resume_ocr_action') and self.resume_ocr_action.isEnabled() != can_resume_action:
+            self.resume_ocr_action.setEnabled(can_resume_action)
 
         if self.stop_ocr_action.isEnabled() != running:
             self.stop_ocr_action.setEnabled(running)
         
-        can_rescan = not running and (len(self.processed_files_info) > 0 or bool(self.input_folder_path))
-        if self.rescan_action.isEnabled() != can_rescan:
-            self.rescan_action.setEnabled(can_rescan)
+        can_rescan_action = not running and (len(self.processed_files_info) > 0 or bool(self.input_folder_path))
+        if self.rescan_action.isEnabled() != can_rescan_action:
+            self.rescan_action.setEnabled(can_rescan_action)
         
         enable_actions_if_not_running = not running
         if self.input_folder_action.isEnabled() != enable_actions_if_not_running:
@@ -1012,39 +1149,46 @@ class MainWindow(QMainWindow):
             self.option_action.setEnabled(enable_actions_if_not_running)
         
         if not self.toggle_view_action.isEnabled():
-             self.toggle_view_action.setEnabled(True)
+            self.toggle_view_action.setEnabled(True)
 
     def perform_batch_list_view_update(self):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if self.list_view: self.list_view.update_files(self.processed_files_info)
 
-    def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_info_for_original):
+    def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_status_for_original):
         self.log_manager.debug(
-            f"Original File OCR stage processed (MainWin): {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Success={not ocr_error_info_for_original}",
+            f"Original File OCR stage processed (MainWin): {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Success={not ocr_error_info_for_original}, JSON Status='{json_save_status_for_original}'",
             context="CALLBACK_OCR_ORIGINAL"
         )
         if not (0 <= original_file_main_idx < len(self.processed_files_info)):
-            self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx} received in on_file_ocr_processed. Max idx: {len(self.processed_files_info)-1}", context="CALLBACK_ERROR")
+            self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx} received in on_file_ocr_processed. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR")
             return
             
         target_file_info = self.processed_files_info[original_file_main_idx]
         if target_file_info["path"] != original_file_path:
-             self.log_manager.warning(f"Path mismatch for original_file_main_idx {original_file_main_idx}. Expected '{target_file_info['path']}', got '{original_file_path}'. Updating based on index.", context="CALLBACK_WARN")
+            # This warning is expected if skipped files exist and worker only processes a subset
+            self.log_manager.debug(f"Path mismatch for original_file_main_idx {original_file_main_idx}. Expected '{target_file_info['path']}', got '{original_file_path}'. This is normal if worker processes a subset. Updating by index.", context="CALLBACK_INFO")
 
-        ocr_overall_succeeded = False
+        ocr_stage_successful = False 
         if ocr_error_info_for_original:
-            target_file_info["status"] = "OCR失敗"
+            target_file_info["status"] = "OCR失敗" 
             target_file_info["ocr_engine_status"] = OCR_STATUS_FAILED
-            target_file_info["ocr_result_summary"] = ocr_error_info_for_original.get('message', '不明なエラー')
+            target_file_info["ocr_result_summary"] = ocr_error_info_for_original.get('message', '不明なOCRエラー')
         elif ocr_result_data_for_original:
             target_file_info["status"] = "OCR成功" 
             target_file_info["ocr_engine_status"] = OCR_STATUS_COMPLETED 
-            ocr_overall_succeeded = True
-            # ★ 修正: Workerから渡される辞書の形式に合わせて表示を調整
-            if isinstance(ocr_result_data_for_original, dict) and "message" in ocr_result_data_for_original:
-                target_file_info["ocr_result_summary"] = ocr_result_data_for_original["message"]
-            elif isinstance(ocr_result_data_for_original, dict) and "status" in ocr_result_data_for_original and ocr_result_data_for_original["status"] == "parts_processed_ok":
-                target_file_info["ocr_result_summary"] = ocr_result_data_for_original.get("detail", f"{ocr_result_data_for_original.get('num_parts','?')}部品のOCR完了")
+            ocr_stage_successful = True
+            
+            if isinstance(ocr_result_data_for_original, dict):
+                if "detail" in ocr_result_data_for_original:
+                    target_file_info["ocr_result_summary"] = ocr_result_data_for_original["detail"]
+                elif "message" in ocr_result_data_for_original:
+                    target_file_info["ocr_result_summary"] = ocr_result_data_for_original["message"]
+                else: 
+                    fulltext = ocr_result_data_for_original.get("fulltext", "") or \
+                               (ocr_result_data_for_original.get("result", {}) or {}).get("fulltext", "") or \
+                               (ocr_result_data_for_original.get("result", {}) or {}).get("aGroupingFulltext", "")
+                    target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
             elif isinstance(ocr_result_data_for_original, list) and len(ocr_result_data_for_original) > 0 : 
                 try:
                     first_page_result = ocr_result_data_for_original[0].get("result", {})
@@ -1052,61 +1196,94 @@ class MainWindow(QMainWindow):
                     target_file_info["ocr_result_summary"] = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
                 except Exception: target_file_info["ocr_result_summary"] = "結果解析エラー(集約)"
             else:
-                 target_file_info["ocr_result_summary"] = "OCR結果あり(形式不明)"
-        else:
+                target_file_info["ocr_result_summary"] = "OCR結果あり(形式不明)"
+        else: 
             target_file_info["status"] = "OCR状態不明"
             target_file_info["ocr_engine_status"] = OCR_STATUS_FAILED 
-            target_file_info["ocr_result_summary"] = "APIレスポンスなし(集約)" # ★ 修正
+            target_file_info["ocr_result_summary"] = "APIレスポンスなし(OCR)"
 
-        if isinstance(json_save_info_for_original, str):
-            target_file_info["json_status"] = json_save_info_for_original
-        elif ocr_error_info_for_original : target_file_info["json_status"] = "対象外(OCR失敗)"
-        else: target_file_info["json_status"] = "JSON状態不明"
+        if isinstance(json_save_status_for_original, str):
+            target_file_info["json_status"] = json_save_status_for_original
+        elif ocr_error_info_for_original :
+             target_file_info["json_status"] = "対象外(OCR失敗)"
         
-        if hasattr(self.summary_view, 'update_for_processed_file'):
-             self.summary_view.update_for_processed_file(is_success=ocr_overall_succeeded)
-        
+        output_format = self.config.get("file_actions", {}).get("output_format", "both")
+        if target_file_info["ocr_engine_status"] == OCR_STATUS_FAILED:
+            self.summary_view.update_for_processed_file(is_success=False)
+        elif target_file_info["ocr_engine_status"] == OCR_STATUS_COMPLETED and output_format == "json_only":
+            self.summary_view.update_for_processed_file(is_success=True)
+            target_file_info["status"] = "完了" 
+
         self.update_ocr_controls()
-        self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+
 
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
         self.log_manager.debug(f"Original File Searchable PDF processed: {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Path={pdf_final_path}, Error={pdf_error_info}", context="CALLBACK_PDF_ORIGINAL")
         if not (0 <= original_file_main_idx < len(self.processed_files_info)):
-            self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx} received in on_file_searchable_pdf_processed. Max idx: {len(self.processed_files_info)-1}", context="CALLBACK_ERROR")
+            self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx} received in on_file_searchable_pdf_processed. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR")
             return
             
         target_file_info = self.processed_files_info[original_file_main_idx]
         if target_file_info["path"] != original_file_path:
-             self.log_manager.warning(f"Path mismatch for original_file_main_idx {original_file_main_idx} (PDF). Expected '{target_file_info['path']}', got '{original_file_path}'. Updating based on index.", context="CALLBACK_WARN")
+             self.log_manager.debug(f"Path mismatch for original_file_main_idx {original_file_main_idx} (PDF). Expected '{target_file_info['path']}', got '{original_file_path}'. This is normal if worker processes a subset. Updating by index.", context="CALLBACK_INFO")
 
-        current_config = ConfigManager.load(); output_format = current_config.get("file_actions", {}).get("output_format", "both")
-        ocr_engine_status_for_file = target_file_info.get("ocr_engine_status")
+        output_format = self.config.get("file_actions", {}).get("output_format", "both")
+        ocr_engine_status_for_file = target_file_info.get("ocr_engine_status") 
+
+        pdf_stage_final_success = False
 
         if output_format == "json_only": 
             target_file_info["searchable_pdf_status"] = "作成しない(設定)"
-        elif isinstance(pdf_error_info, dict) and pdf_error_info.get("message") == "作成対象外(設定)":
-            target_file_info["searchable_pdf_status"] = "作成しない(設定)"
-        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path):
+        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path): 
             target_file_info["searchable_pdf_status"] = "PDF作成成功"
-            if target_file_info["ocr_engine_status"] == OCR_STATUS_COMPLETED:
-                 target_file_info["status"] = "完了" 
-        elif ocr_engine_status_for_file == OCR_STATUS_FAILED : 
-             target_file_info["searchable_pdf_status"] = "対象外(OCR失敗)"
+            pdf_stage_final_success = True
+            if ocr_engine_status_for_file == OCR_STATUS_COMPLETED:
+                target_file_info["status"] = "完了" 
         elif pdf_error_info: 
-            target_file_info["searchable_pdf_status"] = "PDF作成失敗"
             error_msg = pdf_error_info.get('message', 'PDF作成で不明なエラー')
-            # エラーメッセージをOCR結果サマリーに追加（既にOCR失敗でない場合）
-            if "OCR失敗" not in target_file_info.get("status", ""):
-                if target_file_info["ocr_result_summary"]:
-                    target_file_info["ocr_result_summary"] += f" (PDFエラー: {error_msg})"
-                else:
-                    target_file_info["ocr_result_summary"] = f"PDFエラー: {error_msg}"
-            if target_file_info["status"] != "OCR失敗": # UI上の全体ステータスも更新
-                target_file_info["status"] = "PDF作成失敗"
-        else: 
+            error_code = pdf_error_info.get('code', '')
+
+            if error_code == "PARTS_COPIED_SUCCESS":
+                target_file_info["searchable_pdf_status"] = error_msg 
+                pdf_stage_final_success = True 
+                if ocr_engine_status_for_file == OCR_STATUS_COMPLETED:
+                    target_file_info["status"] = "完了" 
+            elif error_code in ["PARTS_COPIED_PARTIAL", "PARTS_COPY_ERROR", "NO_PARTS_TO_COPY"]:
+                target_file_info["searchable_pdf_status"] = error_msg
+                pdf_stage_final_success = False 
+                if ocr_engine_status_for_file == OCR_STATUS_COMPLETED:
+                     target_file_info["status"] = "部品PDFエラー" 
+            elif "作成対象外" in error_msg or "作成しない" in error_msg or "部品PDFは結合されません(設定)" in error_msg: 
+                target_file_info["searchable_pdf_status"] = error_msg
+            else: 
+                target_file_info["searchable_pdf_status"] = "PDF作成失敗"
+                pdf_stage_final_success = False
+            
+            if ocr_engine_status_for_file == OCR_STATUS_COMPLETED and not pdf_stage_final_success:
+                if target_file_info["searchable_pdf_status"] == "PDF作成失敗": 
+                    target_file_info["status"] = "PDF作成失敗"
+                    if target_file_info["ocr_result_summary"] and \
+                       "部品のOCR完了" not in target_file_info["ocr_result_summary"] and \
+                       "PDFエラー" not in target_file_info["ocr_result_summary"]: 
+                         target_file_info["ocr_result_summary"] += f" (PDFエラー: {error_msg})"
+                    elif "部品のOCR完了" not in target_file_info.get("ocr_result_summary","") and \
+                         "PDFエラー" not in target_file_info["ocr_result_summary"]:
+                         target_file_info["ocr_result_summary"] = f"PDFエラー: {error_msg}"
+        elif ocr_engine_status_for_file == OCR_STATUS_FAILED : 
+            target_file_info["searchable_pdf_status"] = "対象外(OCR失敗)"
+        elif output_format in ["pdf_only", "both"]: 
             target_file_info["searchable_pdf_status"] = "PDF状態不明"
+            if ocr_engine_status_for_file == OCR_STATUS_COMPLETED:
+                 target_file_info["status"] = "PDF状態不明"
+        else: 
+            target_file_info["searchable_pdf_status"] = "-"
+
+        if output_format != "json_only":
+            is_overall_success_for_summary = (ocr_engine_status_for_file == OCR_STATUS_COMPLETED and pdf_stage_final_success)
+            self.summary_view.update_for_processed_file(is_success=is_overall_success_for_summary)
         
-        self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
 
     def on_all_files_processed(self):
@@ -1119,16 +1296,17 @@ class MainWindow(QMainWindow):
             self.log_manager.info("OCR processing was interrupted by user.", context="OCR_FLOW_COMPLETE")
             current_config = ConfigManager.load()
             output_format_cfg = current_config.get("file_actions", {}).get("output_format", "both")
-            initial_json_status_ui = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
-            initial_pdf_status_ui = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
+            json_status_on_interrupt = "中断" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
+            pdf_status_on_interrupt = "中断" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
             for item_info in self.processed_files_info:
                 current_engine_status = item_info.get("ocr_engine_status")
-                if current_engine_status in [OCR_STATUS_PROCESSING, OCR_STATUS_SPLITTING, OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING]:
-                    item_info["ocr_engine_status"] = OCR_STATUS_NOT_PROCESSED
-                    item_info["status"] = "待機中(中断)"
-                    item_info["ocr_result_summary"] = "(中断されました)"
-                    item_info["json_status"] = initial_json_status_ui
-                    item_info["searchable_pdf_status"] = initial_pdf_status_ui
+                if current_engine_status in [OCR_STATUS_PROCESSING, OCR_STATUS_SPLITTING, OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING] or \
+                   (item_info.get("status") == OCR_STATUS_PROCESSING and current_engine_status == OCR_STATUS_PROCESSING):
+                    item_info["ocr_engine_status"] = OCR_STATUS_FAILED 
+                    item_info["status"] = "中断"
+                    item_info["ocr_result_summary"] = "(処理が中止されました)"
+                    item_info["json_status"] = json_status_on_interrupt
+                    item_info["searchable_pdf_status"] = pdf_status_on_interrupt
         self.is_ocr_running = False
         self.perform_batch_list_view_update()
         self.update_ocr_controls()
@@ -1140,6 +1318,15 @@ class MainWindow(QMainWindow):
             try: 
                 self.ocr_worker.original_file_status_update.disconnect(self.on_original_file_status_update_from_worker)
             except (TypeError, RuntimeError): pass 
+            try:
+                self.ocr_worker.file_processed.disconnect(self.on_file_ocr_processed)
+            except (TypeError, RuntimeError): pass
+            try:
+                self.ocr_worker.searchable_pdf_processed.disconnect(self.on_file_searchable_pdf_processed)
+            except (TypeError, RuntimeError): pass
+            try:
+                self.ocr_worker.all_files_processed.disconnect(self.on_all_files_processed)
+            except (TypeError, RuntimeError): pass
             self.ocr_worker = None
     
     def confirm_rescan_ui(self):
@@ -1156,6 +1343,9 @@ class MainWindow(QMainWindow):
         self.log_manager.info("Performing UI clear and input folder rescan.", context="UI_ACTION_RESCAN")
         if hasattr(self.summary_view, 'reset_summary'): 
             self.summary_view.reset_summary()
+            self.summary_view.total_files = 0 
+            self.summary_view.update_display()
+
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             self.log_manager.info(f"Rescanning input folder: {self.input_folder_path}", context="UI_ACTION_RESCAN")
             self.perform_initial_scan() 
@@ -1163,7 +1353,6 @@ class MainWindow(QMainWindow):
             self.log_manager.info("Rescan: Input folder not set or invalid. File list cleared.", context="UI_ACTION_RESCAN")
             self.processed_files_info = []
             self.list_view.update_files(self.processed_files_info)
-            if hasattr(self.summary_view, 'reset_summary'): self.summary_view.reset_summary()
         if self.is_ocr_running: self.is_ocr_running = False
         self.update_ocr_controls()
 
@@ -1171,10 +1360,10 @@ class MainWindow(QMainWindow):
         self.log_manager.debug("Application closeEvent triggered.", context="SYSTEM_LIFECYCLE");
         if self.update_timer.isActive(): self.update_timer.stop()
         if self.is_ocr_running:
-            reply = QMessageBox.question(self, "処理中の終了確認", "OCR処理が実行中です。本当にアプリケーションを終了しますか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            reply = QMessageBox.question(self, "処理中の終了確認", "OCR処理が実行中です。本当にアプリケーションを終了しますか？\n(進行中の処理は中断されます)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No: event.ignore(); return
             else:
-                if self.ocr_worker and self.ocr_worker.isRunning(): self.ocr_worker.stop()
+                if self.ocr_worker and self.ocr_worker.isRunning(): self.log_manager.info("Close event: OCR running, stopping worker before exit.", context="SYSTEM_LIFECYCLE"); self.ocr_worker.stop()
         current_config_to_save = self.config.copy(); normal_geom = self.normalGeometry(); current_config_to_save["window_state"] = "maximized" if self.isMaximized() else "normal"; current_config_to_save["window_size"] = {"width": normal_geom.width(), "height": normal_geom.height()}
         if not self.isMaximized(): current_config_to_save["window_position"] = {"x": normal_geom.x(), "y": normal_geom.y()}
         elif "window_position" in current_config_to_save: del current_config_to_save["window_position"]

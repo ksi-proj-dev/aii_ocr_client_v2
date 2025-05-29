@@ -53,7 +53,7 @@ class OptionDialog(QDialog):
         upload_split_form_layout = QFormLayout()
 
         self.upload_max_size_spinbox = QSpinBox()
-        self.upload_max_size_spinbox.setRange(1, 99)
+        self.upload_max_size_spinbox.setRange(1, 99) # Assuming 99MB is a reasonable practical upper limit for this setting
         self.upload_max_size_spinbox.setValue(current_ocr_options.get("upload_max_size_mb", 50))
         self.upload_max_size_spinbox.setSuffix(" MB")
         self.upload_max_size_spinbox.setToolTip("OCR対象としてアップロードするファイルサイズの上限値。これを超過するファイルは処理対象外となります。")
@@ -66,7 +66,7 @@ class OptionDialog(QDialog):
         upload_split_form_layout.addRow(self.split_enabled_chk)
 
         self.split_chunk_size_spinbox = QSpinBox()
-        self.split_chunk_size_spinbox.setRange(1, 99)
+        self.split_chunk_size_spinbox.setRange(1, 99) # Should not exceed upload_max_size_mb
         self.split_chunk_size_spinbox.setValue(current_ocr_options.get("split_chunk_size_mb", 10))
         self.split_chunk_size_spinbox.setSuffix(" MB")
         self.split_chunk_size_spinbox.setToolTip("自動分割を有効にした場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。")
@@ -124,12 +124,14 @@ class OptionDialog(QDialog):
         file_process_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
         collision_label = QLabel("ファイル名衝突時の処理 (移動先):")
         self.collision_overwrite_radio = QRadioButton("上書きする")
-        self.collision_rename_radio = QRadioButton("リネームする (例: file.pdf --> file(1).pdf)")
+        ##### MODIFIED START #####
+        self.collision_rename_radio = QRadioButton("リネームする (例: file.pdf --> file (1).pdf)")
+        ##### MODIFIED END #####
         self.collision_skip_radio = QRadioButton("スキップ（移動しない）")
         collision_action = file_actions_config.get("collision_action", "rename")
         if collision_action == "overwrite": self.collision_overwrite_radio.setChecked(True)
         elif collision_action == "skip": self.collision_skip_radio.setChecked(True)
-        else: self.collision_rename_radio.setChecked(True)
+        else: self.collision_rename_radio.setChecked(True) # Default to rename
         
         collision_layout_v = QVBoxLayout()
         collision_layout_v.addWidget(self.collision_overwrite_radio)
@@ -148,28 +150,28 @@ class OptionDialog(QDialog):
         main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
-        self.toggle_split_options_enabled_state()
+        self.toggle_split_options_enabled_state() # Set initial enabled state of split options
 
     def toggle_split_options_enabled_state(self):
         split_is_enabled = False
-        if hasattr(self, 'split_enabled_chk'): # Ensure checkbox exists
+        if hasattr(self, 'split_enabled_chk'): 
             split_is_enabled = self.split_enabled_chk.isChecked()
             
         if hasattr(self, 'split_chunk_size_spinbox'):
             self.split_chunk_size_spinbox.setEnabled(split_is_enabled)
         
-        if hasattr(self, 'merge_pdf_parts_chk'): # Enable/disable merge option based on split_enabled
+        if hasattr(self, 'merge_pdf_parts_chk'): 
             self.merge_pdf_parts_chk.setEnabled(split_is_enabled)
 
 
     def is_valid_folder_name(self, folder_name, field_label):
-        if not folder_name:
+        if not folder_name: # Must not be empty
             QMessageBox.warning(self, "入力エラー", f"{field_label}は必須入力です。")
             return False
         if re.search(INVALID_FOLDER_NAME_CHARS_PATTERN, folder_name):
             QMessageBox.warning(self, "入力エラー", f"{field_label}に使用できない文字が含まれています。\n(使用不可: {INVALID_FOLDER_NAME_CHARS_PATTERN})")
             return False
-        if folder_name == "." or folder_name == "..":
+        if folder_name == "." or folder_name == "..": # Cannot be . or ..
             QMessageBox.warning(self, "入力エラー", f"{field_label}に '.' や '..' は使用できません。")
             return False
         return True
@@ -183,31 +185,7 @@ class OptionDialog(QDialog):
         if not self.is_valid_folder_name(success_folder, "成功ファイル移動先サブフォルダ名"): return
         if not self.is_valid_folder_name(failure_folder, "失敗ファイル移動先サブフォルダ名"): return
         
-        folder_names_list = [results_folder, success_folder, failure_folder]
-        if len(set(folder_names_list)) != len(folder_names_list): # Check for unique names
-            # Allow results_folder to be same as success/failure if move is disabled for that case.
-            # This logic might need refinement if specific overlaps are allowed.
-            # For simplicity, let's assume they should be distinct if all used.
-            # A better check might be: if move_on_success and results_folder == success_folder, warn.
-            # For now, keeping the simple distinct check.
-            # If results_folder can be same as success_folder (when move_on_success is true), this check needs adjustment.
-            # Let's assume for now they must be distinct for clarity.
-            if not ( (not self.move_on_success_chk.isChecked() or results_folder != success_folder) and \
-                     (not self.move_on_failure_chk.isChecked() or results_folder != failure_folder) and \
-                     (not (self.move_on_success_chk.isChecked() and self.move_on_failure_chk.isChecked()) or success_folder != failure_folder) ):
-                 # This condition is complex, let's simplify the warning message or the rule.
-                 # Simple rule: All three must be distinct if all are actively used.
-                 # For now, we stick to the original simple distinct check:
-                 pass # The original simple distinct check might be too strict. Let's remove it for now.
-
-        # Re-checking the distinct folder name logic based on active usage
-        active_folders = {results_folder}
-        if self.move_on_success_chk.isChecked(): active_folders.add(success_folder)
-        if self.move_on_failure_chk.isChecked(): active_folders.add(failure_folder)
-        
-        # Count occurrences of each name in the active set
-        from collections import Counter
-        name_counts = Counter()
+        # Check for distinct folder names if moves are enabled
         if self.move_on_success_chk.isChecked() and self.move_on_failure_chk.isChecked() and success_folder == failure_folder:
             QMessageBox.warning(self, "入力エラー", "「成功ファイル移動先」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください。")
             return
@@ -219,7 +197,7 @@ class OptionDialog(QDialog):
              return
 
 
-        if not self.base_uri_edit.text():
+        if not self.base_uri_edit.text(): # Base URI is mandatory
             QMessageBox.warning(self, "入力エラー", "ベースURIは必須項目です。")
             return
 
@@ -245,7 +223,7 @@ class OptionDialog(QDialog):
         current_api_type_options["enable_checkbox"] = 1 if self.enable_checkbox_chk.isChecked() else 0
         current_api_type_options["fulltext_output_mode"] = self.fulltext_output_mode_combo.currentIndex()
         current_api_type_options["fulltext_linebreak_char"] = 1 if self.fulltext_linebreak_char_chk.isChecked() else 0
-        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0]
+        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0] # Get the key like 'katsuji'
 
         current_api_type_options["upload_max_size_mb"] = upload_max_size
         current_api_type_options["split_large_files_enabled"] = split_enabled
@@ -260,10 +238,10 @@ class OptionDialog(QDialog):
         file_actions["failure_folder_name"] = failure_folder
         if self.collision_overwrite_radio.isChecked(): file_actions["collision_action"] = "overwrite"
         elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
-        else: file_actions["collision_action"] = "rename"
+        else: file_actions["collision_action"] = "rename" # Default
         if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
         elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
-        else: file_actions["output_format"] = "both"
+        else: file_actions["output_format"] = "both" # Default
 
         ConfigManager.save(self.config)
-        self.accept()
+        self.accept() # Close dialog with QDialog.Accepted status
