@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton,
     QVBoxLayout, QLabel
 )
-from config_manager import ConfigManager # ★ ConfigManagerをインポート (直接は使わないが、関連性を示す)
+from config_manager import ConfigManager
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -15,22 +15,37 @@ class OptionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定 (AI inside Cube)")
-        self.config_at_dialog_open = ConfigManager.load() # ★ ダイアログ表示時の設定を保持
+        self.config_at_dialog_open = ConfigManager.load()
         self.cube_options_key = self.config_at_dialog_open.get("api_type", "cube_fullocr")
         self.init_ui()
-        self.resize(550, 930)
+        self.resize(550, 950) # 少し高さを増やす
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        # ★ current_ocr_options はダイアログ表示時の設定を使用
         current_ocr_options = self.config_at_dialog_open.get("options", {}).get(self.cube_options_key, {})
 
         # --- 1. 基本設定グループ ---
         basic_group = QGroupBox("基本設定")
         basic_form_layout = QFormLayout()
+        
+        # API実行モード
+        api_mode_label = QLabel("API実行モード:")
+        self.api_mode_demo_radio = QRadioButton("Demoモード (ダミーAPI)")
+        self.api_mode_live_radio = QRadioButton("Liveモード (実際のAPIコール)")
+        current_api_mode = self.config_at_dialog_open.get("api_execution_mode", "demo")
+        if current_api_mode == "live":
+            self.api_mode_live_radio.setChecked(True)
+        else:
+            self.api_mode_demo_radio.setChecked(True)
+        api_mode_layout_h = QHBoxLayout()
+        api_mode_layout_h.addWidget(self.api_mode_demo_radio)
+        api_mode_layout_h.addWidget(self.api_mode_live_radio)
+        api_mode_layout_h.addStretch()
+        basic_form_layout.addRow(api_mode_label, api_mode_layout_h)
+
         self.api_key_edit = QLineEdit(self.config_at_dialog_open.get("api_key", ""))
-        self.api_key_edit.setPlaceholderText("APIキーを入力 (必須)") # ★ プレースホルダーテキスト設定
-        self.api_key_edit.setToolTip("AI inside Cube APIを利用するためのAPIキーを入力してください。") # ★ ツールチップ追加
+        self.api_key_edit.setPlaceholderText("APIキーを入力 (Liveモードで必須)")
+        self.api_key_edit.setToolTip("AI inside Cube APIを利用するためのAPIキーを入力してください。\nLiveモードでOCRを実行する場合に必要です。")
         basic_form_layout.addRow("APIキー:", self.api_key_edit)
         
         default_base_uri = "http://localhost/api/v1/domains/aiinside/endpoints/"
@@ -47,107 +62,71 @@ class OptionDialog(QDialog):
         self.endpoints_edit = QLineEdit(endpoints_text)
         self.endpoints_edit.setReadOnly(True)
         self.endpoints_edit.setStyleSheet("background-color: lightgray;")
-        self.endpoints_edit.setMinimumHeight(60) # 複数行表示できるように調整（表示のみ）
+        self.endpoints_edit.setMinimumHeight(60)
         basic_form_layout.addRow("エンドポイント情報:", self.endpoints_edit)
         basic_group.setLayout(basic_form_layout)
         main_layout.addWidget(basic_group)
 
         # --- 2. ファイル検索設定グループ ---
+        # (変更なし)
         file_search_group = QGroupBox("ファイル検索設定")
         file_search_form_layout = QFormLayout()
-        self.max_files_spinbox = QSpinBox()
-        self.max_files_spinbox.setRange(1, 9999)
-        self.max_files_spinbox.setValue(current_ocr_options.get("max_files_to_process", 100))
+        self.max_files_spinbox = QSpinBox(); self.max_files_spinbox.setRange(1, 9999); self.max_files_spinbox.setValue(current_ocr_options.get("max_files_to_process", 100))
         self.max_files_spinbox.setToolTip("一度にリストに表示するファイルの最大数。")
         file_search_form_layout.addRow("最大処理ファイル数:", self.max_files_spinbox)
-        
-        self.recursion_depth_spinbox = QSpinBox()
-        self.recursion_depth_spinbox.setRange(0, 10) # 0は入力フォルダのみ、1は1階層下まで
-        self.recursion_depth_spinbox.setValue(current_ocr_options.get("recursion_depth", 5))
+        self.recursion_depth_spinbox = QSpinBox(); self.recursion_depth_spinbox.setRange(0, 10); self.recursion_depth_spinbox.setValue(current_ocr_options.get("recursion_depth", 5))
         self.recursion_depth_spinbox.setToolTip("入力フォルダからのサブフォルダ検索の深さ。\n0を指定すると入力フォルダ直下のファイルのみが対象です。")
         file_search_form_layout.addRow("再帰検索の深さ:", self.recursion_depth_spinbox)
         file_search_group.setLayout(file_search_form_layout)
         main_layout.addWidget(file_search_group)
         
         # --- アップロードとファイル分割設定グループ ---
+        # (変更なし)
         upload_split_group = QGroupBox("アップロードとファイル分割設定")
         upload_split_form_layout = QFormLayout()
-
         self.upload_max_size_spinbox = QSpinBox()
-        self.upload_max_size_spinbox.setRange(1, 200) # 上限を少し上げる (API仕様と合わせる)
-        self.upload_max_size_spinbox.setValue(current_ocr_options.get("upload_max_size_mb", 60)) # API仕様書に記載のデフォルトに近い値
+        self.upload_max_size_spinbox.setRange(1, 200) 
+        self.upload_max_size_spinbox.setValue(current_ocr_options.get("upload_max_size_mb", 60))
         self.upload_max_size_spinbox.setSuffix(" MB")
         self.upload_max_size_spinbox.setToolTip("OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。")
         upload_split_form_layout.addRow("アップロード可能な最大ファイルサイズ:", self.upload_max_size_spinbox)
-
         self.split_enabled_chk = QCheckBox("大きなファイルを自動分割する (PDFのみ)")
         self.split_enabled_chk.setChecked(current_ocr_options.get("split_large_files_enabled", False))
         self.split_enabled_chk.setToolTip("上記「アップロード可能な最大ファイルサイズ」以下のPDFファイルで、\nさらに「分割サイズ」を超える場合に、ファイルをページ単位で分割してからOCR処理を行います。")
         self.split_enabled_chk.stateChanged.connect(self.toggle_split_options_enabled_state)
         upload_split_form_layout.addRow(self.split_enabled_chk)
-
         self.split_chunk_size_spinbox = QSpinBox()
-        self.split_chunk_size_spinbox.setRange(1, 100) # 分割チャンクサイズの上限
+        self.split_chunk_size_spinbox.setRange(1, 100)
         self.split_chunk_size_spinbox.setValue(current_ocr_options.get("split_chunk_size_mb", 10))
         self.split_chunk_size_spinbox.setSuffix(" MB")
         self.split_chunk_size_spinbox.setToolTip("自動分割を有効にした場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。")
         upload_split_form_layout.addRow("分割サイズ (1ファイルあたり):", self.split_chunk_size_spinbox)
-        
         self.merge_pdf_parts_chk = QCheckBox("分割した場合、サーチャブルPDF部品を1つのファイルに結合する")
         self.merge_pdf_parts_chk.setChecked(current_ocr_options.get("merge_split_pdf_parts", True))
         self.merge_pdf_parts_chk.setToolTip("「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。")
         upload_split_form_layout.addRow(self.merge_pdf_parts_chk)
-        
         upload_split_group.setLayout(upload_split_form_layout)
         main_layout.addWidget(upload_split_group)
 
         # --- OCRオプション（Cube API）グループ ---
+        # (変更なし)
         cube_ocr_group = QGroupBox("全文OCRオプション (Cube API)")
         cube_ocr_form_layout = QFormLayout()
-        self.adjust_rotation_chk = QCheckBox("回転補正を行う")
-        self.adjust_rotation_chk.setChecked(current_ocr_options.get("adjust_rotation", 0) == 1)
-        self.adjust_rotation_chk.setToolTip("0=OFF, 1=ON. 90度単位および±5度程度の傾きを補正します。")
-        cube_ocr_form_layout.addRow(self.adjust_rotation_chk)
-        
-        self.character_extraction_chk = QCheckBox("文字ごとの情報を抽出する (文字尤度など)")
-        self.character_extraction_chk.setChecked(current_ocr_options.get("character_extraction", 0) == 1)
-        self.character_extraction_chk.setToolTip("0=OFF, 1=ON. ONにすると結果JSONに1文字ずつの情報が追加されます。")
-        cube_ocr_form_layout.addRow(self.character_extraction_chk)
-        
-        self.concatenate_chk = QCheckBox("強制結合を行う (LLM用途推奨)")
-        self.concatenate_chk.setChecked(current_ocr_options.get("concatenate", 1) == 1)
-        self.concatenate_chk.setToolTip("0=単語区切り, 1=文章として結合. LLM用途ではONを推奨。")
-        cube_ocr_form_layout.addRow(self.concatenate_chk)
-        
-        self.enable_checkbox_chk = QCheckBox("チェックボックスを認識する")
-        self.enable_checkbox_chk.setChecked(current_ocr_options.get("enable_checkbox", 0) == 1)
-        self.enable_checkbox_chk.setToolTip("0=OFF, 1=ON. ONにするとチェックボックスを認識しますが処理時間が増加します。")
-        cube_ocr_form_layout.addRow(self.enable_checkbox_chk)
-        
-        self.fulltext_output_mode_combo = QComboBox()
-        self.fulltext_output_mode_combo.addItems(["詳細情報を取得 (bbox, 表など)", "全文テキストのみ取得"])
-        self.fulltext_output_mode_combo.setCurrentIndex(current_ocr_options.get("fulltext_output_mode", 0)) # APIのfulltextパラメータ (0 or 1)
-        self.fulltext_output_mode_combo.setToolTip("0=詳細情報 (bbox, 表などを含む), 1=全文テキスト(fulltext)のみを返却。")
-        cube_ocr_form_layout.addRow("テキスト出力モード:", self.fulltext_output_mode_combo)
-        
-        self.fulltext_linebreak_char_chk = QCheckBox("全文テキストにグループ区切り文字(\\n)を付加")
-        self.fulltext_linebreak_char_chk.setChecked(current_ocr_options.get("fulltext_linebreak_char", 0) == 1)
-        self.fulltext_linebreak_char_chk.setToolTip("0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。")
-        cube_ocr_form_layout.addRow(self.fulltext_linebreak_char_chk)
-        
-        self.ocr_model_combo = QComboBox()
-        self.ocr_model_combo.addItems(["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"])
-        self.ocr_model_combo.setCurrentText(current_ocr_options.get("ocr_model", "katsuji"))
-        self.ocr_model_combo.setToolTip("OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用")
-        cube_ocr_form_layout.addRow("OCRモデル選択:", self.ocr_model_combo)
+        self.adjust_rotation_chk = QCheckBox("回転補正を行う"); self.adjust_rotation_chk.setChecked(current_ocr_options.get("adjust_rotation", 0) == 1); self.adjust_rotation_chk.setToolTip("0=OFF, 1=ON. 90度単位および±5度程度の傾きを補正します。"); cube_ocr_form_layout.addRow(self.adjust_rotation_chk)
+        self.character_extraction_chk = QCheckBox("文字ごとの情報を抽出する (文字尤度など)"); self.character_extraction_chk.setChecked(current_ocr_options.get("character_extraction", 0) == 1); self.character_extraction_chk.setToolTip("0=OFF, 1=ON. ONにすると結果JSONに1文字ずつの情報が追加されます。"); cube_ocr_form_layout.addRow(self.character_extraction_chk)
+        self.concatenate_chk = QCheckBox("強制結合を行う (LLM用途推奨)"); self.concatenate_chk.setChecked(current_ocr_options.get("concatenate", 1) == 1); self.concatenate_chk.setToolTip("0=単語区切り, 1=文章として結合. LLM用途ではONを推奨。"); cube_ocr_form_layout.addRow(self.concatenate_chk)
+        self.enable_checkbox_chk = QCheckBox("チェックボックスを認識する"); self.enable_checkbox_chk.setChecked(current_ocr_options.get("enable_checkbox", 0) == 1); self.enable_checkbox_chk.setToolTip("0=OFF, 1=ON. ONにするとチェックボックスを認識しますが処理時間が増加します。"); cube_ocr_form_layout.addRow(self.enable_checkbox_chk)
+        self.fulltext_output_mode_combo = QComboBox(); self.fulltext_output_mode_combo.addItems(["詳細情報を取得 (bbox, 表など)", "全文テキストのみ取得"]); self.fulltext_output_mode_combo.setCurrentIndex(current_ocr_options.get("fulltext_output_mode", 0)); self.fulltext_output_mode_combo.setToolTip("0=詳細情報 (bbox, 表などを含む), 1=全文テキスト(fulltext)のみを返却。"); cube_ocr_form_layout.addRow("テキスト出力モード:", self.fulltext_output_mode_combo)
+        self.fulltext_linebreak_char_chk = QCheckBox("全文テキストにグループ区切り文字(\\n)を付加"); self.fulltext_linebreak_char_chk.setChecked(current_ocr_options.get("fulltext_linebreak_char", 0) == 1); self.fulltext_linebreak_char_chk.setToolTip("0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。"); cube_ocr_form_layout.addRow(self.fulltext_linebreak_char_chk)
+        self.ocr_model_combo = QComboBox(); self.ocr_model_combo.addItems(["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"]); self.ocr_model_combo.setCurrentText(current_ocr_options.get("ocr_model", "katsuji")); self.ocr_model_combo.setToolTip("OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用"); cube_ocr_form_layout.addRow("OCRモデル選択:", self.ocr_model_combo)
         cube_ocr_group.setLayout(cube_ocr_form_layout)
         main_layout.addWidget(cube_ocr_group)
 
         # --- ファイル処理後サブフォルダ・出力設定グループ ---
+        # (変更なし)
         file_process_group = QGroupBox("ファイル処理後の出力と移動")
         file_process_form_layout = QFormLayout()
-        file_actions_config = self.config_at_dialog_open.get("file_actions", {}) # ★ ダイアログ表示時の設定を使用
-        
+        file_actions_config = self.config_at_dialog_open.get("file_actions", {})
         output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
         self.output_format_pdf_only_radio = QRadioButton("サーチャブルPDFのみ")
@@ -161,22 +140,12 @@ class OptionDialog(QDialog):
         output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
         output_format_layout_v.addWidget(self.output_format_both_radio)
         file_process_form_layout.addRow(output_format_label, output_format_layout_v)
-        
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
         file_process_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
-        
-        self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")
-        self.move_on_success_chk.setChecked(file_actions_config.get("move_on_success_enabled", False))
-        file_process_form_layout.addRow(self.move_on_success_chk)
-        self.success_folder_name_edit = QLineEdit(file_actions_config.get("success_folder_name", "OCR成功"))
-        file_process_form_layout.addRow("成功ファイル移動先サブフォルダ名:", self.success_folder_name_edit)
-        
-        self.move_on_failure_chk = QCheckBox("OCR失敗時にファイルを移動する")
-        self.move_on_failure_chk.setChecked(file_actions_config.get("move_on_failure_enabled", False))
-        file_process_form_layout.addRow(self.move_on_failure_chk)
-        self.failure_folder_name_edit = QLineEdit(file_actions_config.get("failure_folder_name", "OCR失敗"))
-        file_process_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
-        
+        self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する"); self.move_on_success_chk.setChecked(file_actions_config.get("move_on_success_enabled", False)); file_process_form_layout.addRow(self.move_on_success_chk)
+        self.success_folder_name_edit = QLineEdit(file_actions_config.get("success_folder_name", "OCR成功")); file_process_form_layout.addRow("成功ファイル移動先サブフォルダ名:", self.success_folder_name_edit)
+        self.move_on_failure_chk = QCheckBox("OCR失敗時にファイルを移動する"); self.move_on_failure_chk.setChecked(file_actions_config.get("move_on_failure_enabled", False)); file_process_form_layout.addRow(self.move_on_failure_chk)
+        self.failure_folder_name_edit = QLineEdit(file_actions_config.get("failure_folder_name", "OCR失敗")); file_process_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
         collision_label = QLabel("ファイル名衝突時の処理 (移動先):")
         self.collision_overwrite_radio = QRadioButton("上書きする")
         self.collision_rename_radio = QRadioButton("リネームする (例: file.pdf --> file (1).pdf)")
@@ -185,7 +154,6 @@ class OptionDialog(QDialog):
         if collision_action == "overwrite": self.collision_overwrite_radio.setChecked(True)
         elif collision_action == "skip": self.collision_skip_radio.setChecked(True)
         else: self.collision_rename_radio.setChecked(True)
-        
         collision_layout_v = QVBoxLayout()
         collision_layout_v.addWidget(self.collision_overwrite_radio)
         collision_layout_v.addWidget(self.collision_rename_radio)
@@ -196,30 +164,24 @@ class OptionDialog(QDialog):
 
         # --- ボタン ---
         button_layout = QHBoxLayout()
-        self.save_btn = QPushButton("保存")
-        self.cancel_btn = QPushButton("キャンセル")
+        self.save_btn = QPushButton("保存"); self.cancel_btn = QPushButton("キャンセル")
         self.save_btn.clicked.connect(self.on_save_settings)
         self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addStretch()
-        button_layout.addWidget(self.save_btn)
-        button_layout.addWidget(self.cancel_btn)
+        button_layout.addStretch(); button_layout.addWidget(self.save_btn); button_layout.addWidget(self.cancel_btn)
         main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
         self.toggle_split_options_enabled_state()
 
     def toggle_split_options_enabled_state(self):
+        # (変更なし)
         split_is_enabled = False
-        if hasattr(self, 'split_enabled_chk'): 
-            split_is_enabled = self.split_enabled_chk.isChecked()
-            
-        if hasattr(self, 'split_chunk_size_spinbox'):
-            self.split_chunk_size_spinbox.setEnabled(split_is_enabled)
-        
-        if hasattr(self, 'merge_pdf_parts_chk'): 
-            self.merge_pdf_parts_chk.setEnabled(split_is_enabled)
+        if hasattr(self, 'split_enabled_chk'): split_is_enabled = self.split_enabled_chk.isChecked()
+        if hasattr(self, 'split_chunk_size_spinbox'): self.split_chunk_size_spinbox.setEnabled(split_is_enabled)
+        if hasattr(self, 'merge_pdf_parts_chk'): self.merge_pdf_parts_chk.setEnabled(split_is_enabled)
 
     def is_valid_folder_name(self, folder_name, field_label):
+        # (変更なし)
         if not folder_name:
             QMessageBox.warning(self, "入力エラー", f"{field_label}は必須入力です。")
             return False
@@ -232,11 +194,12 @@ class OptionDialog(QDialog):
         return True
 
     def on_save_settings(self):
-        # ★ APIキーの必須入力チェック
+        # ★ API実行モードが "live" の場合、APIキーが必須であることをチェック
+        selected_api_mode = "live" if self.api_mode_live_radio.isChecked() else "demo"
         api_key = self.api_key_edit.text().strip()
-        if not api_key:
-            QMessageBox.warning(self, "入力エラー", "APIキーは必須入力です。")
-            self.api_key_edit.setFocus() # フォーカスをAPIキー入力欄に戻す
+        if selected_api_mode == "live" and not api_key:
+            QMessageBox.warning(self, "入力エラー", "Liveモードを選択した場合、APIキーは必須入力です。")
+            self.api_key_edit.setFocus()
             return
 
         results_folder = self.results_folder_name_edit.text().strip()
@@ -272,16 +235,12 @@ class OptionDialog(QDialog):
                                 "「分割サイズ」は、「アップロード可能な最大ファイルサイズ」以下の値に設定してください。")
             return
         
-        # ★ self.config_at_dialog_open ではなく、新しいconfigオブジェクトを作成して値をセットし、保存する
-        config_to_save = self.config_at_dialog_open.copy() # 元の設定をコピーして変更する
+        config_to_save = self.config_at_dialog_open.copy()
 
-        config_to_save["api_key"] = api_key # strip()済み
+        config_to_save["api_execution_mode"] = selected_api_mode # ★ API実行モードを保存
+        config_to_save["api_key"] = api_key
         config_to_save["base_uri"] = self.base_uri_edit.text().strip()
         
-        # API種別とエンドポイントは読み取り専用なので、保存時には元の値をそのまま使うか、
-        # ConfigManager.save() 側で内部設定で上書きするならここでは何もしなくても良い。
-        # 今回は ConfigManager.save() 側で上書きされる想定なので、ここでは何もしない。
-
         current_api_type_options = config_to_save.setdefault("options", {}).setdefault(self.cube_options_key, {})
         current_api_type_options["max_files_to_process"] = self.max_files_spinbox.value()
         current_api_type_options["recursion_depth"] = self.recursion_depth_spinbox.value()
@@ -311,5 +270,5 @@ class OptionDialog(QDialog):
         elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
         else: file_actions["output_format"] = "both"
 
-        ConfigManager.save(config_to_save) # ★ 更新されたconfigを保存
+        ConfigManager.save(config_to_save)
         self.accept()

@@ -1,3 +1,5 @@
+# config_manager.py
+
 import os
 import sys
 import json
@@ -6,7 +8,7 @@ from appdirs import user_config_dir
 # --- CONFIG_PATH の決定 ---
 CONFIG_FILE_NAME = "config.json"
 APP_NAME = "AIInside CubeClient"
-APP_AUTHOR = "KSI"
+APP_AUTHOR = "KSI" # ベンダー名を適切に設定
 
 try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
@@ -52,10 +54,10 @@ class ConfigManager:
     def load():
         if not ConfigManager._ensure_config_dir_exists():
             print("エラー: 設定ディレクトリの準備ができないため、デフォルト設定でロードします。")
-            config = INTERNAL_CONFIG.copy()
-            config.setdefault("options", {}).setdefault(config["api_type"], {})
-            config.setdefault("file_actions", {})
-            ConfigManager._apply_default_values(config)
+            config = INTERNAL_CONFIG.copy() # 基本的なエンドポイント情報などをコピー
+            config.setdefault("options", {}).setdefault(config["api_type"], {}) # APIタイプごとのオプション領域
+            config.setdefault("file_actions", {}) # ファイル操作関連の領域
+            ConfigManager._apply_default_values(config) # デフォルト値を適用
             return config
 
         user_config = {}
@@ -66,7 +68,7 @@ class ConfigManager:
                 except json.JSONDecodeError:
                     print(f"警告: {CONFIG_PATH} の読み込みに失敗しました。JSON形式が無効です。デフォルト設定で続行します。")
         
-        ConfigManager._apply_default_values(user_config)
+        ConfigManager._apply_default_values(user_config) # ユーザー設定にデフォルト値を適用・補完
         return user_config
 
     @staticmethod
@@ -76,7 +78,10 @@ class ConfigManager:
         config["api_type"] = INTERNAL_CONFIG["api_type"] # 常に内部設定で上書き
         config["endpoints"] = INTERNAL_CONFIG["endpoints"] # 常に内部設定で上書き
         
-        current_api_type = config.get("api_type", "cube_fullocr") # api_typeを先に取得
+        # ★ API実行モードのデフォルト値を追加
+        config.setdefault("api_execution_mode", "demo") # "demo" or "live"
+
+        current_api_type = config.get("api_type", "cube_fullocr")
         options_for_current_api = config.setdefault("options", {}).setdefault(current_api_type, {})
         
         options_for_current_api.setdefault("max_files_to_process", 100)
@@ -88,10 +93,10 @@ class ConfigManager:
         options_for_current_api.setdefault("fulltext_output_mode", 0)
         options_for_current_api.setdefault("fulltext_linebreak_char", 0)
         options_for_current_api.setdefault("ocr_model", "katsuji")
-        options_for_current_api.setdefault("upload_max_size_mb", 50)
+        options_for_current_api.setdefault("upload_max_size_mb", 60) # API仕様書に合わせる (以前50だった箇所)
         options_for_current_api.setdefault("split_large_files_enabled", False)
         options_for_current_api.setdefault("split_chunk_size_mb", 10)
-        options_for_current_api.setdefault("merge_split_pdf_parts", True) # ★ Stage 4.1 追加
+        options_for_current_api.setdefault("merge_split_pdf_parts", True)
 
         file_actions = config.setdefault("file_actions", {})
         file_actions.setdefault("move_on_success_enabled", False)
@@ -106,11 +111,13 @@ class ConfigManager:
         config.setdefault("window_state", "normal")
         config.setdefault("current_view", 0)
         config.setdefault("log_visible", True)
-        config.setdefault("column_widths", [50, 280, 100, 270, 100, 120, 100])
-        config.setdefault("sort_order", {"column": 0, "order": "asc"})
-        config.setdefault("splitter_sizes", [])
+        # column_widths のデフォルト値の要素数をListViewの列数と合わせる（8列）
+        config.setdefault("column_widths", [35, 50, 280, 100, 270, 100, 120, 100])
+        config.setdefault("sort_order", {"column": 1, "order": "asc"}) # デフォルトはNo列昇順
+        config.setdefault("splitter_sizes", []) # [285, 111] のような値
         config.setdefault("last_target_dir", "")
         
+        # 過去バージョンで使われていた可能性のある不要なキーを削除
         keys_to_remove = [
             "target_dir", "result_dir", "last_result_dir",
             "last_success_move_dir", "last_failure_move_dir",
@@ -130,13 +137,16 @@ class ConfigManager:
             return
         
         config_to_save = config.copy()
+        # api_type と endpoints は常に内部設定で上書き（ユーザー変更不可）
         config_to_save["api_type"] = INTERNAL_CONFIG["api_type"]
         config_to_save["endpoints"] = INTERNAL_CONFIG["endpoints"]
         
+        # 保存前に削除する可能性のあるキー（一時的な状態など）
         keys_to_remove_before_save = [
-            "last_result_dir", "last_success_move_dir", "last_failure_move_dir",
-            "target_dir", "result_dir", "upload_interval_ms", "upload_retry_limit",
-            "retry_timeout_sec", "retry_interval_ms", "retry_count_max", "last_view"
+            # "last_result_dir", "last_success_move_dir", "last_failure_move_dir", # これらは例であり、実際に不要か確認
+            # "target_dir", "result_dir", # これらも同様
+            # "upload_interval_ms", "upload_retry_limit", # 古い設定項目があれば
+            # "retry_timeout_sec", "retry_interval_ms", "retry_count_max", "last_view" # 古い設定項目があれば
         ]
         for key in keys_to_remove_before_save:
             if key in config_to_save: del config_to_save[key]

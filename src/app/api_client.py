@@ -12,26 +12,28 @@ import io
 
 class CubeApiClient:
     def __init__(self, config, log_manager):
-        self.config = config
+        self.config = config # ★ MainWindowから渡されたconfigを保持
         self.log_manager = log_manager
-        self.api_key = self.config.get("api_key")
+        
+        # ★ api_execution_mode を config から読み込む
+        self.api_execution_mode = self.config.get("api_execution_mode", "demo") # デフォルトは "demo"
+        self.api_key = self.config.get("api_key") # APIキーも初期化時に設定
         self.base_uri = self.config.get("base_uri", "")
         api_type = self.config.get("api_type", "cube_fullocr")
         self.endpoints = self.config.get("endpoints", {}).get(api_type, {})
 
-        self.dummy_mode = True 
-        if self.dummy_mode:
-            self.log_manager.info("CubeApiClientはダミーモードで動作します。", context="API_CLIENT_INIT")
-        else:
-            self.log_manager.info("CubeApiClientは実際のAPIモードで動作します。", context="API_CLIENT_INIT")
+        if self.api_execution_mode == "live":
+            self.log_manager.info("CubeApiClientは Liveモード で動作します。", context="API_CLIENT_INIT")
+        else: # demo モードまたは未定義の場合
+            self.log_manager.info("CubeApiClientは Demoモード で動作します。", context="API_CLIENT_INIT")
 
 
     def _get_full_url(self, endpoint_key):
+        # (変更なし)
         endpoint_path = self.endpoints.get(endpoint_key)
         if not endpoint_path:
             err_msg = f"エンドポイントキー '{endpoint_key}' が設定されていません。"
             self.log_manager.error(err_msg, context="API_CLIENT_CONFIG")
-            # ★ エラー情報を辞書で返すように変更
             raise ValueError({"message": err_msg, "code": "CONFIG_ENDPOINT_MISSING"})
         if not self.base_uri:
             err_msg = "ベースURIが設定されていません。"
@@ -41,8 +43,8 @@ class CubeApiClient:
 
     def read_document(self, file_path):
         file_name = os.path.basename(file_path)
-        api_type_key = self.config.get("api_type", "cube_fullocr")
-        ocr_options_from_config = self.config.get("options", {}).get(api_type_key, {})
+        # ★ api_execution_mode は self.config から取得済みなので、再度読み込む必要はない
+        ocr_options_from_config = self.config.get("options", {}).get(self.config.get("api_type"), {})
         
         actual_ocr_params = {
             'adjust_rotation': ocr_options_from_config.get('adjust_rotation'),
@@ -55,43 +57,36 @@ class CubeApiClient:
         }
         actual_ocr_params = {k: v for k, v in actual_ocr_params.items() if v is not None}
 
-
-        if self.dummy_mode:
+        # ★ self.dummy_mode を self.api_execution_mode == "demo" に変更
+        if self.api_execution_mode == "demo":
             log_ctx = "API_DUMMY_READ"
-            self.log_manager.info(f"'/fullocr-read-document' ダミー呼び出し開始: {file_name}", context=log_ctx, options=actual_ocr_params)
-            time.sleep(random.uniform(0.1, 0.3)) # 時間調整
+            self.log_manager.info(f"'/fullocr-read-document' Demoモード呼び出し開始: {file_name}", context=log_ctx, options=actual_ocr_params)
+            time.sleep(random.uniform(0.1, 0.3))
 
-            # ★ ダミーエラーのシミュレーションを少し変更
-            if file_name.startswith("error_"): # 特定のファイル名でエラーを発生させる
+            if file_name.startswith("error_"):
                 error_code_map = {
-                    "error_auth": "DUMMY_AUTH_ERROR",
-                    "error_server": "DUMMY_SERVER_ERROR",
+                    "error_auth": "DUMMY_AUTH_ERROR", "error_server": "DUMMY_SERVER_ERROR",
                     "error_bad_request": "DUMMY_BAD_REQUEST",
                 }
                 error_message_map = {
-                    "error_auth": f"ダミー認証エラー: {file_name}",
-                    "error_server": f"ダミーサーバーエラー: {file_name}",
-                    "error_bad_request": f"ダミー不正リクエスト: {file_name}",
+                    "error_auth": f"Demo認証エラー: {file_name}", "error_server": f"Demoサーバーエラー: {file_name}",
+                    "error_bad_request": f"Demo不正リクエスト: {file_name}",
                 }
                 simulated_error_type = file_name.split("_")[1] if "_" in file_name else "generic"
-                
                 error_code = error_code_map.get(f"error_{simulated_error_type}", "DUMMY_OCR_ERROR")
-                error_msg = error_message_map.get(f"error_{simulated_error_type}", f"ダミーOCRエラー: {file_name}")
-                
+                error_msg = error_message_map.get(f"error_{simulated_error_type}", f"Demo OCRエラー: {file_name}")
                 self.log_manager.error(error_msg, context=log_ctx, error_code=error_code, filename=file_name)
-                # ★ エラー情報を辞書で返す
-                return None, {"message": error_msg, "code": error_code, "detail": "これはダミーモードでシミュレートされたエラーです。"}
+                return None, {"message": error_msg, "code": error_code, "detail": "Demoモードでシミュレートされたエラーです。"}
 
             page_result = {
                 "page": 0,
                 "result": {
-                    "aGroupingFulltext": f"ダミー aGroupingFulltext for {file_name} (Page 1)",
-                    "deskewAngle": round(random.uniform(-1, 1), 2),
-                    "fileName": file_name,
-                    "fulltext": f"これは {file_name} のダミーOCR結果です。\nモデル: {actual_ocr_params.get('horizontal_ocr_model')}\n結合: {actual_ocr_params.get('concatenate')}",
-                    "results": [{"text": f"ダミーテキスト1 from {file_name}", "bbox": {}, "ocrConfidence": 0.95, "detectConfidence": 0.99, "vertices": [], "characters": []}],
+                    "aGroupingFulltext": f"Demo aGroupingFulltext for {file_name} (Page 1)",
+                    "deskewAngle": round(random.uniform(-1, 1), 2), "fileName": file_name,
+                    "fulltext": f"これは {file_name} のDemo OCR結果です。\nモデル: {actual_ocr_params.get('horizontal_ocr_model')}\n結合: {actual_ocr_params.get('concatenate')}",
+                    "results": [{"text": f"Demoテキスト1 from {file_name}", "bbox": {}, "ocrConfidence": 0.95, "detectConfidence": 0.99, "vertices": [], "characters": []}],
                     "tables": [], "textGroups": []
-                }, "status": "success" # API仕様書にはstatusフィールドの記載はないが、便宜上
+                }, "status": "success"
             }
             if actual_ocr_params.get('character_extraction') == 1:
                 if page_result["result"]["results"]:
@@ -99,106 +94,83 @@ class CubeApiClient:
                         if res_item.get("text"):
                             for i, char_text in enumerate(list(res_item["text"])):
                                 res_item["characters"].append({"char": char_text, "ocrConfidence": 0.8, "bbox": {}, "vertices": []})
-
-            response_data = [page_result] # API仕様書ではページ単位の情報の配列
+            response_data = [page_result]
             if actual_ocr_params.get('fulltext') == 1: 
-                # API仕様書に基づくと、fulltext=1の場合はfileNameとfulltextのみになることが多い
-                # ここでは簡略化のため、既存の構造から一部を抽出する形にする
                 simplified_result_data = []
                 for page in response_data:
                     simplified_page = {
                         "page": page.get("page"),
-                        "result": {
-                            "fileName": page.get("result", {}).get("fileName"),
-                            "fulltext": page.get("result", {}).get("fulltext")
-                        }
-                        # "status" はAPI仕様書に明記されていないため、ここでは含めないか検討
+                        "result": { "fileName": page.get("result", {}).get("fileName"), "fulltext": page.get("result", {}).get("fulltext") }
                     }
                     simplified_result_data.append(simplified_page)
                 response_data = simplified_result_data
-
-
-            self.log_manager.info(f"'/fullocr-read-document' ダミー呼び出し完了: {file_name}", context=log_ctx)
-            return response_data, None # 成功時はエラー情報なし
-        else: # 実際のAPI呼び出し部分 (現状コメントアウト)
-            log_ctx = "API_CALL_READ"
-            self.log_manager.info(f"'/fullocr-read-document' API呼び出し開始: {file_name}", context=log_ctx)
+            self.log_manager.info(f"'/fullocr-read-document' Demoモード呼び出し完了: {file_name}", context=log_ctx)
+            return response_data, None
+        else: # Liveモード
+            log_ctx = "API_LIVE_READ"
+            self.log_manager.info(f"'/fullocr-read-document' LiveモードAPI呼び出し開始: {file_name}", context=log_ctx)
             try:
                 url = self._get_full_url("read_document")
-            except ValueError as e_val: # _get_full_url が辞書でエラーを返すように変更した場合
+            except ValueError as e_val:
                 return None, e_val.args[0] if e_val.args and isinstance(e_val.args[0], dict) else \
                        {"message": str(e_val), "code": "CONFIG_ERROR_UNKNOWN"}
 
+            if not self.api_key:
+                err_msg = "APIキーが設定されていません (Liveモード)。"
+                self.log_manager.error(err_msg, context=log_ctx, error_code="API_KEY_MISSING_LIVE")
+                return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
 
-            if not self.api_key: # ★ APIキーのチェック
-                err_msg = "APIキーが設定されていません。"
-                self.log_manager.error(err_msg, context=log_ctx, error_code="API_KEY_MISSING")
-                return None, {"message": err_msg, "code": "API_KEY_MISSING"}
-
-            headers = {"apikey": self.api_key} # APIキーをヘッダーに設定
-
+            headers = {"apikey": self.api_key}
             self.log_manager.info(f"  URL: {url}", context=log_ctx)
             self.log_manager.info(f"  ヘッダーキー: {list(headers.keys())}", context=log_ctx)
             self.log_manager.info(f"  OCRパラメータ: {actual_ocr_params}", context=log_ctx)
-
             try:
-                with open(file_path, 'rb') as f:
-                    files = {'document': (file_name, f, 'application/octet-stream')} # MIMEタイプはAPI仕様に合わせる
-                    # response = requests.post(url, headers=headers, files=files, data=actual_ocr_params, timeout=180) # 例: 180秒タイムアウト
-                    # self.log_manager.info(f"  API応答ステータス: {response.status_code}", context=log_ctx, filename=file_name)
-                    # response.raise_for_status() # 200番台以外は例外発生
-                    # return response.json(), None
-                    self.log_manager.info("実際のAPIコールはコメントアウトされています (read_document)。", context=log_ctx)
-                    # ★ 未実装エラーも辞書で返す
-                    return None, {"message": "実際のAPIコールは未実装です。", "code": "NOT_IMPLEMENTED_API_CALL"}
+                # ここに実際の requests.post(...) 呼び出しが入る
+                # with open(file_path, 'rb') as f:
+                #     files = {'document': (file_name, f, 'application/octet-stream')}
+                #     response = requests.post(url, headers=headers, files=files, data=actual_ocr_params, timeout=180)
+                #     response.raise_for_status()
+                #     return response.json(), None
+                self.log_manager.warning("LiveモードAPIコールは実装されていません (read_document)。Demoモードの動作を返します。", context=log_ctx)
+                # Liveモード未実装時のフォールバックとしてDemoモードの動作を模擬（または専用エラー）
+                return None, {"message": "LiveモードAPIコール未実装。", "code": "NOT_IMPLEMENTED_LIVE_API"}
             except FileNotFoundError:
                 self.log_manager.error(f"ファイルが見つかりません: {file_path}", context=log_ctx, error_code="FILE_NOT_FOUND")
                 return None, {"message": f"ファイルが見つかりません: {file_path}", "code": "FILE_NOT_FOUND"}
-            # except requests.exceptions.HTTPError as e_http:
-            #     err_msg = f"API HTTPエラー: {e_http.response.status_code} - {e_http.response.reason}"
-            #     err_detail = e_http.response.text[:500] # レスポンスボディの先頭500文字
-            #     self.log_manager.error(f"{err_msg}. Detail: {err_detail}", context=log_ctx, filename=file_name, exception_info=e_http, status_code=e_http.response.status_code)
-            #     return None, {"message": err_msg, "code": f"API_HTTP_{e_http.response.status_code}", "detail": err_detail}
-            # except requests.exceptions.RequestException as e_req:
-            #     self.log_manager.error(f"APIリクエスト例外: {str(e_req)}", context=log_ctx, filename=file_name, exception_info=e_req)
-            #     return None, {"message": f"APIリクエストエラー: {str(e_req)}", "code": "API_REQUEST_ERROR"}
-            except Exception as e: # その他の予期せぬエラー
-                self.log_manager.error(f"予期せぬエラー (read_document): {str(e)}", context=log_ctx, filename=file_name, exception_info=e)
-                return None, {"message": f"予期せぬエラー: {str(e)}", "code": "UNEXPECTED_ERROR_READ_DOC"}
+            # except requests.exceptions.HTTPError as e_http: ...
+            # except requests.exceptions.RequestException as e_req: ...
+            except Exception as e:
+                self.log_manager.error(f"予期せぬエラー (read_document Live): {str(e)}", context=log_ctx, filename=file_name, exception_info=e)
+                return None, {"message": f"予期せぬエラー: {str(e)}", "code": "UNEXPECTED_ERROR_READ_DOC_LIVE"}
 
 
     def make_searchable_pdf(self, file_path):
         file_name = os.path.basename(file_path)
-        if self.dummy_mode:
+        # ★ self.dummy_mode を self.api_execution_mode == "demo" に変更
+        if self.api_execution_mode == "demo":
             log_ctx = "API_DUMMY_PDF"
-            self.log_manager.info(f"'/make-searchable-pdf' ダミー呼び出し開始: {file_name}", context=log_ctx)
+            self.log_manager.info(f"'/make-searchable-pdf' Demoモード呼び出し開始: {file_name}", context=log_ctx)
             time.sleep(random.uniform(0.1, 0.3))
-
-            if file_name.startswith("pdf_error_"): # 特定のファイル名でエラー
-                error_msg = f"ダミーPDF作成エラー: {file_name}"
+            if file_name.startswith("pdf_error_"):
+                error_msg = f"Demo PDF作成エラー: {file_name}"
                 self.log_manager.error(error_msg, context=log_ctx, error_code="DUMMY_PDF_ERROR", filename=file_name)
-                return None, {"message": error_msg, "code": "DUMMY_PDF_ERROR", "detail": "ダミーモードでのPDF作成エラーです。"}
-            
-            try: # ダミーPDF生成
+                return None, {"message": error_msg, "code": "DUMMY_PDF_ERROR", "detail": "DemoモードでのPDF作成エラーです。"}
+            try:
                 writer = PdfWriter()
-                try:
-                    writer.add_blank_page(width=595, height=842)
-                except TypeError:
-                    writer.add_blank_page()
-                
+                try: writer.add_blank_page(width=595, height=842)
+                except TypeError: writer.add_blank_page()
                 with io.BytesIO() as bytes_stream:
                     writer.write(bytes_stream)
                     dummy_pdf_content = bytes_stream.getvalue()
-                
-                self.log_manager.info(f"'/make-searchable-pdf' ダミー呼び出し完了 (有効なPDF生成): {file_name}", context=log_ctx)
+                self.log_manager.info(f"'/make-searchable-pdf' Demoモード呼び出し完了: {file_name}", context=log_ctx)
                 return dummy_pdf_content, None
             except Exception as e:
-                error_msg = f"ダミーPDF生成エラー: {file_name}, Error: {e}"
+                error_msg = f"Demo PDF生成エラー: {file_name}, Error: {e}"
                 self.log_manager.error(error_msg, context=log_ctx, error_code="DUMMY_PDF_GEN_ERROR", filename=file_name, exc_info=True)
                 return None, {"message": error_msg, "code": "DUMMY_PDF_GEN_ERROR", "detail": str(e)}
-        else: # 実際のAPI呼び出し
-            log_ctx = "API_CALL_PDF"
-            self.log_manager.info(f"'/make-searchable-pdf' API呼び出し開始: {file_name}", context=log_ctx)
+        else: # Liveモード
+            log_ctx = "API_LIVE_PDF"
+            self.log_manager.info(f"'/make-searchable-pdf' LiveモードAPI呼び出し開始: {file_name}", context=log_ctx)
             try:
                 url = self._get_full_url("make_searchable_pdf")
             except ValueError as e_val:
@@ -206,35 +178,42 @@ class CubeApiClient:
                        {"message": str(e_val), "code": "CONFIG_ERROR_UNKNOWN_PDF"}
 
             if not self.api_key:
-                err_msg = "APIキーが設定されていません。"
-                self.log_manager.error(err_msg, context=log_ctx, error_code="API_KEY_MISSING_PDF")
-                return None, {"message": err_msg, "code": "API_KEY_MISSING_PDF"}
+                err_msg = "APIキーが設定されていません (Liveモード)。"
+                self.log_manager.error(err_msg, context=log_ctx, error_code="API_KEY_MISSING_PDF_LIVE")
+                return None, {"message": err_msg, "code": "API_KEY_MISSING_PDF_LIVE"}
 
             headers = {"apikey": self.api_key}
-
             self.log_manager.info(f"  URL: {url}", context=log_ctx)
             self.log_manager.info(f"  ヘッダーキー: {list(headers.keys())}", context=log_ctx)
-
             try:
-                with open(file_path, 'rb') as f:
-                    files = {'document': (file_name, f, 'application/octet-stream')}
-                    # response = requests.post(url, headers=headers, files=files, timeout=300) # 例: 300秒タイムアウト
-                    # self.log_manager.info(f"  API応答ステータス: {response.status_code}", context=log_ctx, filename=file_name)
-                    # response.raise_for_status()
-                    # return response.content, None
-                    self.log_manager.info("実際のAPIコールはコメントアウトされています (make_searchable_pdf)。", context=log_ctx)
-                    return None, {"message": "実際のAPIコールは未実装です。", "code": "NOT_IMPLEMENTED_API_CALL_PDF"}
+                # ここに実際の requests.post(...) 呼び出しが入る
+                # with open(file_path, 'rb') as f:
+                #     files = {'document': (file_name, f, 'application/octet-stream')}
+                #     response = requests.post(url, headers=headers, files=files, timeout=300)
+                #     response.raise_for_status()
+                #     return response.content, None
+                self.log_manager.warning("LiveモードAPIコールは実装されていません (make_searchable_pdf)。Demoモードの動作を返します。", context=log_ctx)
+                return None, {"message": "LiveモードAPIコール未実装。", "code": "NOT_IMPLEMENTED_LIVE_API_PDF"}
             except FileNotFoundError:
                 self.log_manager.error(f"ファイルが見つかりません: {file_path}", context=log_ctx, error_code="FILE_NOT_FOUND_PDF")
                 return None, {"message": f"ファイルが見つかりません: {file_path}", "code": "FILE_NOT_FOUND_PDF"}
-            # except requests.exceptions.HTTPError as e_http:
-            #     err_msg = f"API HTTPエラー (PDF): {e_http.response.status_code} - {e_http.response.reason}"
-            #     err_detail = e_http.response.text[:200] # レスポンスボディの先頭
-            #     self.log_manager.error(f"{err_msg}. Detail: {err_detail}", context=log_ctx, filename=file_name, exception_info=e_http, status_code=e_http.response.status_code)
-            #     return None, {"message": err_msg, "code": f"API_HTTP_PDF_{e_http.response.status_code}", "detail": err_detail}
-            # except requests.exceptions.RequestException as e_req:
-            #     self.log_manager.error(f"APIリクエスト例外 (PDF): {str(e_req)}", context=log_ctx, filename=file_name, exception_info=e_req)
-            #     return None, {"message": f"APIリクエストエラー (PDF): {str(e_req)}", "code": "API_REQUEST_ERROR_PDF"}
+            # except requests.exceptions.HTTPError as e_http: ...
+            # except requests.exceptions.RequestException as e_req: ...
             except Exception as e:
-                self.log_manager.error(f"予期せぬエラー (make_searchable_pdf): {str(e)}", context=log_ctx, filename=file_name, exception_info=e)
-                return None, {"message": f"予期せぬエラー (PDF): {str(e)}", "code": "UNEXPECTED_ERROR_PDF"}
+                self.log_manager.error(f"予期せぬエラー (make_searchable_pdf Live): {str(e)}", context=log_ctx, filename=file_name, exception_info=e)
+                return None, {"message": f"予期せぬエラー (PDF Live): {str(e)}", "code": "UNEXPECTED_ERROR_PDF_LIVE"}
+
+    def update_config(self, new_config: dict): # ★ MainWindowから新しいconfigを受け取るメソッド
+        """ApiClientが保持するconfigオブジェクトと関連属性を更新する"""
+        self.log_manager.info("ApiClient: Updating internal config.", context="API_CLIENT_CONFIG_UPDATE")
+        self.config = new_config
+        self.api_execution_mode = self.config.get("api_execution_mode", "demo")
+        self.api_key = self.config.get("api_key")
+        self.base_uri = self.config.get("base_uri", "")
+        api_type = self.config.get("api_type", "cube_fullocr")
+        self.endpoints = self.config.get("endpoints", {}).get(api_type, {})
+
+        if self.api_execution_mode == "live":
+            self.log_manager.info("CubeApiClientは Liveモード に更新されました。", context="API_CLIENT_CONFIG_UPDATE")
+        else:
+            self.log_manager.info("CubeApiClientは Demoモード に更新されました。", context="API_CLIENT_CONFIG_UPDATE")

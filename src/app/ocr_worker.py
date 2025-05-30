@@ -20,7 +20,7 @@ from app_constants import (
 class OcrWorker(QThread):
     file_processed = pyqtSignal(int, str, object, object, object)
     searchable_pdf_processed = pyqtSignal(int, str, object, object)
-    all_files_processed = pyqtSignal()
+    all_files_processed = pyqtSignal() # 引数なし (中断かどうかの情報は Orchestrator が持つ user_stopped や fatal_error で判断)
     original_file_status_update = pyqtSignal(str, str)
 
     def __init__(self, api_client, files_to_process_tuples, input_root_folder, log_manager, config):
@@ -36,6 +36,8 @@ class OcrWorker(QThread):
         self.file_actions_config = self.config.get("file_actions", {})
         self.main_temp_dir_for_splits = None
         self.log_manager.debug("OcrWorker initialized.", context="WORKER_LIFECYCLE", num_original_files=len(self.files_to_process_tuples))
+        self.encountered_fatal_error = False
+        self.fatal_error_info = None # ★ 致命的エラー情報を保持
 
     def _get_unique_filepath(self, target_dir, filename):
         base, ext = os.path.splitext(filename)
@@ -82,7 +84,6 @@ class OcrWorker(QThread):
         original_basename = os.path.basename(original_filepath)
         original_ext = os.path.splitext(original_basename)[1]
         part_counter = 1
-        
         try:
             reader = PdfReader(original_filepath)
             total_pages = len(reader.pages)
@@ -90,29 +91,23 @@ class OcrWorker(QThread):
                 msg = f"PDF '{original_basename}' にはページがありません。分割できません。"
                 self.log_manager.warning(msg, context="WORKER_PDF_SPLIT")
                 return [], {"message": msg, "code": "PDF_ZERO_PAGES"}
-            
             original_size_bytes = os.path.getsize(original_filepath)
             if total_pages == 1 or original_size_bytes <= chunk_size_bytes:
                 self.log_manager.info(f"PDF '{original_basename}' は小さいか単一ページのため、分割しません。", context="WORKER_PDF_SPLIT")
                 return [], None
-            
             estimated_total_parts = max(1, -(-original_size_bytes // chunk_size_bytes)) 
             current_writer = PdfWriter()
-            
             for i in range(total_pages):
                 if not self.is_running: break
-
                 if len(current_writer.pages) > 0:
                     with io.BytesIO() as temp_buffer_check:
                         current_writer.write(temp_buffer_check)
                         current_writer_size = temp_buffer_check.tell()
-                    
                     if current_writer_size >= chunk_size_bytes * 0.85:
                         part_filename = self._get_part_filename(original_basename, part_counter, estimated_total_parts, original_ext)
                         part_filepath = os.path.join(temp_dir_for_parts, part_filename)
                         try:
-                            with open(part_filepath, "wb") as f_out:
-                                current_writer.write(f_out)
+                            with open(part_filepath, "wb") as f_out: current_writer.write(f_out)
                             split_files.append(part_filepath)
                             self.log_manager.info(f"PDF部品保存: {part_filepath} ({len(current_writer.pages)} ページ, サイズ: {current_writer_size} バイト)", context="WORKER_PDF_SPLIT")
                         except IOError as e_io_write:
@@ -121,43 +116,33 @@ class OcrWorker(QThread):
                             return [], {"message": msg, "code": "SPLIT_PART_WRITE_ERROR", "detail": str(e_io_write)}
                         part_counter += 1
                         current_writer = PdfWriter()
-
                 current_writer.add_page(reader.pages[i])
-            
             if len(current_writer.pages) > 0 and self.is_running:
                 part_filename = self._get_part_filename(original_basename, part_counter, estimated_total_parts, original_ext)
                 part_filepath = os.path.join(temp_dir_for_parts, part_filename)
                 try:
-                    with open(part_filepath, "wb") as f_out:
-                        current_writer.write(f_out)
+                    with open(part_filepath, "wb") as f_out: current_writer.write(f_out)
                     split_files.append(part_filepath)
                     self.log_manager.info(f"最終PDF部品保存: {part_filepath} ({len(current_writer.pages)} ページ)", context="WORKER_PDF_SPLIT")
                 except IOError as e_io_write_final:
                     msg = f"最終PDF部品 '{part_filename}' の書き出しに失敗: {e_io_write_final}"
                     self.log_manager.error(msg, context="WORKER_PDF_SPLIT_IO_ERROR", exc_info=True)
                     return [], {"message": msg, "code": "SPLIT_FINAL_PART_WRITE_ERROR", "detail": str(e_io_write_final)}
-
             if not self.is_running:
                 self.log_manager.info("PDF分割処理が中断されました。", context="WORKER_PDF_SPLIT")
                 return [], {"message": "PDF分割処理が中断されました", "code": "SPLIT_INTERRUPTED"}
-
         except Exception as e:
             msg = f"PDF '{original_basename}' の分割中にエラー発生: {e}"
             self.log_manager.error(msg, context="WORKER_PDF_SPLIT_ERROR", exc_info=True)
             return [], {"message": msg, "code": "SPLIT_PDF_EXCEPTION", "detail": str(e)}
-        
         return split_files, None
 
     def _split_file(self, original_filepath, chunk_size_mb, base_temp_dir_for_parts):
-        """ファイルを分割する。PDF以外は単一の部品としてコピーする。"""
         _, ext = os.path.splitext(original_filepath)
         original_basename = os.path.basename(original_filepath)
         ext_lower = ext.lower()
-        
         split_part_paths = []
         error_info = None
-
-        # ★★★ 修正点: ファイルごとの一時ディレクトリを作成 ★★★
         file_specific_temp_dir = os.path.join(base_temp_dir_for_parts, os.path.splitext(original_basename)[0] + "_parts")
         try:
             os.makedirs(file_specific_temp_dir, exist_ok=True)
@@ -166,7 +151,6 @@ class OcrWorker(QThread):
             msg = f"ファイル '{original_basename}' 用の一時部品フォルダ作成に失敗: {e_mkdir}"
             self.log_manager.error(msg, context="WORKER_FILE_SPLIT_ERROR", exc_info=True)
             return [], {"message": msg, "code": "TEMP_PART_DIR_ERROR", "detail": str(e_mkdir)}
-
         if ext_lower == ".pdf":
             split_part_paths, error_info = self._split_pdf_by_size(original_filepath, chunk_size_mb * 1024 * 1024, file_specific_temp_dir)
             if error_info:
@@ -174,7 +158,6 @@ class OcrWorker(QThread):
                 return [], error_info
         else: 
             self.log_manager.info(f"ファイル種別 {ext_lower} はサイズによる分割対象外です。単一部品として扱います: {original_basename}", context="WORKER_FILE_SPLIT")
-        
         if not split_part_paths and not error_info: 
             try:
                 single_part_filename = self._get_part_filename(original_basename, 1, 1, ext)
@@ -187,21 +170,13 @@ class OcrWorker(QThread):
                 self.log_manager.error(msg, context="WORKER_FILE_SPLIT_ERROR", exc_info=True)
                 self._try_cleanup_specific_temp_dirs(file_specific_temp_dir, None)
                 return [], {"message": msg, "code": "COPY_SINGLE_PART_ERROR", "detail": str(e)}
-        
-        if not split_part_paths and not error_info:
-             self.log_manager.warning(f"No parts created for '{original_basename}' and no error reported. This might be unexpected.", context="WORKER_FILE_SPLIT")
-             # 部品がない場合はエラーとして扱う
-             # return [], {"message": f"部品が生成されませんでした: {original_basename}", "code": "NO_PARTS_GENERATED"} # この行は元のロジックで問題がなければ不要
-
         return split_part_paths, None
-
 
     def _merge_searchable_pdfs(self, pdf_part_paths, final_merged_pdf_path):
         if not pdf_part_paths:
             msg = "結合対象のPDF部品がありません。"
             self.log_manager.warning(msg, context="WORKER_PDF_MERGE")
             return None, {"message": msg, "code": "MERGE_NO_PARTS"}
-
         merger = PdfMerger()
         try:
             for part_path in pdf_part_paths:
@@ -211,10 +186,8 @@ class OcrWorker(QThread):
                     msg = f"結合用のPDF部品が見つかりません: {os.path.basename(part_path)}"
                     self.log_manager.error(msg, context="WORKER_PDF_MERGE_ERROR")
                     return None, {"message": msg, "code": "MERGE_PART_NOT_FOUND"}
-            
             final_dir = os.path.dirname(final_merged_pdf_path)
             os.makedirs(final_dir, exist_ok=True)
-            
             merger.write(final_merged_pdf_path)
             self.log_manager.info(f"サーチャブルPDF部品を正常に結合しました: {final_merged_pdf_path}", context="WORKER_PDF_MERGE")
             return final_merged_pdf_path, None 
@@ -229,7 +202,6 @@ class OcrWorker(QThread):
             try: merger.close()
             except Exception: pass
 
-
     def run(self):
         thread_id = threading.get_ident()
         self.log_manager.debug(f"OcrWorker thread started.", context="WORKER_LIFECYCLE", thread_id=thread_id, num_original_files=len(self.files_to_process_tuples))
@@ -243,24 +215,23 @@ class OcrWorker(QThread):
         
         try:
             for worker_internal_idx, (original_file_path, original_file_global_idx) in enumerate(self.files_to_process_tuples):
-                if not self.is_running:
-                    self.log_manager.info("OcrWorker処理ループが停止シグナルにより中断されました (外部ループ)。", context="WORKER_LIFECYCLE")
+                if not self.is_running or self.encountered_fatal_error:
+                    if self.encountered_fatal_error:
+                        self.log_manager.warning(f"OcrWorker: 致命的なエラー ({self.fatal_error_info.get('code') if self.fatal_error_info else 'N/A'}) が発生したため、後続のファイル処理を中止します。", context="WORKER_LIFECYCLE")
+                    else: # user_stopped
+                        self.log_manager.info("OcrWorker処理ループが停止シグナルにより中断されました (外部ループ)。", context="WORKER_LIFECYCLE")
                     break
                 
                 self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PROCESSING} (準備中)")
-
                 original_file_basename = os.path.basename(original_file_path)
                 original_file_parent_dir = os.path.dirname(original_file_path)
                 base_name_for_output_prefix = os.path.splitext(original_file_basename)[0]
-                
                 self.log_manager.info(f"元ファイル処理開始: '{original_file_basename}' (グローバルインデックス: {original_file_global_idx})", context="WORKER_ORIGINAL_FILE")
 
                 files_to_ocr_for_this_original = []
-                current_file_parts_source_dir = None # このファイル専用の部品ソース一時ディレクトリ
-                parts_results_temp_dir = None     # このファイル専用の部品結果一時ディレクトリ (分割時)
+                current_file_parts_source_dir = None
+                parts_results_temp_dir = None     
                 was_split = False
-
-                split_enabled = self.current_api_options.get("split_large_files_enabled", False)
                 split_chunk_size_mb = self.current_api_options.get("split_chunk_size_mb", 10)
                 
                 try:
@@ -273,12 +244,8 @@ class OcrWorker(QThread):
                     self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, err_dict)
                     continue
 
-                # ファイル準備 (分割または一時フォルダへのコピー)
-                # _split_file は内部でファイル固有の一時ディレクトリを作成し、そこに部品を格納する
                 files_to_ocr_for_this_original, prep_error_info = self._split_file(
-                    original_file_path, 
-                    split_chunk_size_mb, 
-                    self.main_temp_dir_for_splits # ベースとなるメイン一時ディレクトリ
+                    original_file_path, split_chunk_size_mb, self.main_temp_dir_for_splits
                 )
 
                 if prep_error_info or not files_to_ocr_for_this_original:
@@ -286,19 +253,16 @@ class OcrWorker(QThread):
                     err_dict = prep_error_info if prep_error_info else {"message": "ファイル準備失敗 (詳細不明)", "code": "FILE_PREP_UNKNOWN_ERROR"}
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, err_dict, "エラー")
                     self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, err_dict)
-                    # _split_file 内でエラー時に一時ディレクトリの掃除が試みられる
                     continue
                 
-                if files_to_ocr_for_this_original: # 処理対象の部品パスが取得できた場合
-                    current_file_parts_source_dir = os.path.dirname(files_to_ocr_for_this_original[0]) # 部品が格納されたディレクトリ
+                if files_to_ocr_for_this_original:
+                    current_file_parts_source_dir = os.path.dirname(files_to_ocr_for_this_original[0])
 
-                # 分割されたかの判定を修正: 元のファイルパスと処理対象の最初の部品パスが異なるか、または部品が複数あるか
                 if len(files_to_ocr_for_this_original) > 1 or \
                    (files_to_ocr_for_this_original and os.path.normpath(files_to_ocr_for_this_original[0]) != os.path.normpath(original_file_path)):
                     was_split = True
-                    self.original_file_status_update.emit(original_file_path, OCR_STATUS_SPLITTING)
+                    self.original_file_status_update.emit(original_file_path, OCR_STATUS_SPLITTING if len(files_to_ocr_for_this_original) > 1 else OCR_STATUS_PROCESSING)
                     self.log_manager.info(f"ファイル '{original_file_basename}' は {len(files_to_ocr_for_this_original)} 個の部品として処理されます。", context="WORKER_FILE_SPLIT_INFO")
-                    # 分割した場合の部品結果の一時保存先 (ファイル固有の一時ディレクトリの下に作成)
                     parts_results_temp_dir = os.path.join(current_file_parts_source_dir, base_name_for_output_prefix + "_results_parts")
                     try:
                         os.makedirs(parts_results_temp_dir, exist_ok=True)
@@ -321,7 +285,7 @@ class OcrWorker(QThread):
                         err_dict = {"message": msg, "code": "RESULTS_DIR_ERROR", "detail":str(e_mkdir_nonsplit)}
                         self.file_processed.emit(original_file_global_idx, original_file_path, None, err_dict, "エラー")
                         self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, err_dict)
-                        self._try_cleanup_specific_temp_dirs(current_file_parts_source_dir, None) # current_file_parts_source_dir は _split_file で作られたパス
+                        self._try_cleanup_specific_temp_dirs(current_file_parts_source_dir, None)
                         continue
 
                 part_ocr_results_agg = [] 
@@ -334,11 +298,13 @@ class OcrWorker(QThread):
                 pdf_error_for_signal = None
 
                 for part_idx, current_processing_path in enumerate(files_to_ocr_for_this_original):
-                    if not self.is_running:
+                    if not self.is_running: # ユーザーによる明示的な停止、または致命的エラーによる停止
                         all_parts_processed_successfully = False
-                        self.log_manager.info(f"'{original_file_basename}' の部品処理が停止シグナルにより中断されました。", context="WORKER_PART_PROCESS")
-                        final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました", "code": "USER_INTERRUPT"}
-                        pdf_error_for_signal = {"message": "処理中止によりPDF作成不可", "code": "USER_INTERRUPT_PDF"}
+                        stop_reason = "ユーザーにより中止されました" if self.user_stopped else "致命的エラーにより停止しました"
+                        stop_code = "USER_INTERRUPT" if self.user_stopped else "FATAL_ERROR_STOP"
+                        self.log_manager.info(f"'{original_file_basename}' の部品処理が「{stop_reason}」のため中断されました。", context="WORKER_PART_PROCESS")
+                        final_ocr_error_for_main = {"message": stop_reason, "code": stop_code}
+                        pdf_error_for_signal = {"message": f"{stop_reason}ためPDF作成不可", "code": f"{stop_code}_PDF"}
                         break 
                     
                     current_part_basename = os.path.basename(current_processing_path) 
@@ -354,6 +320,10 @@ class OcrWorker(QThread):
                         self.log_manager.error(f"  部品 '{current_part_basename}' のOCR API処理失敗。エラー: {part_ocr_api_error_info.get('message')}", context="WORKER_PART_OCR_ERROR", detail=part_ocr_api_error_info)
                         all_parts_processed_successfully = False
                         final_ocr_error_for_main = part_ocr_api_error_info
+                        if part_ocr_api_error_info.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API"]:
+                            self.encountered_fatal_error = True
+                            self.fatal_error_info = part_ocr_api_error_info # ★ 致命的エラー情報を保存
+                            self.is_running = False 
                         break 
 
                     part_ocr_results_agg.append({"path": current_processing_path, "result": part_ocr_result_json})
@@ -362,7 +332,6 @@ class OcrWorker(QThread):
                     if should_create_json_output_for_part:
                         part_json_filename = os.path.splitext(current_part_basename)[0] + ".json" 
                         target_json_save_dir_for_part = parts_results_temp_dir
-                        
                         part_json_filepath = os.path.join(target_json_save_dir_for_part, part_json_filename)
                         try:
                             with open(part_json_filepath, 'w', encoding='utf-8') as f_json:
@@ -384,6 +353,10 @@ class OcrWorker(QThread):
                             self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成API失敗。エラー: {part_pdf_api_error_info.get('message')}", context="WORKER_PART_PDF_ERROR", detail=part_pdf_api_error_info)
                             all_parts_processed_successfully = False
                             pdf_error_for_signal = part_pdf_api_error_info
+                            if part_pdf_api_error_info.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_LIVE_API_PDF"]:
+                                self.encountered_fatal_error = True
+                                self.fatal_error_info = part_pdf_api_error_info # ★ 致命的エラー情報を保存
+                                self.is_running = False
                             break
                         elif part_pdf_content:
                             part_pdf_filename = current_part_basename 
@@ -407,31 +380,33 @@ class OcrWorker(QThread):
                             pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_RESPONSE"}
                             break
                 
-                if not self.is_running and not all_parts_processed_successfully:
-                     self.log_manager.info(f"'{original_file_basename}' の処理がユーザーにより中断されました。", context="WORKER_LIFECYCLE")
-                     if not final_ocr_error_for_main: final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました", "code": "USER_INTERRUPT"}
+                # ループ終了後の処理
+                if not self.is_running and not all_parts_processed_successfully: # ユーザー中断または致命的エラー
+                     stop_reason = "ユーザーにより中止されました" if self.user_stopped else \
+                                   (self.fatal_error_info.get("message", "致命的エラー") if self.fatal_error_info else "エラーにより停止しました")
+                     stop_code = "USER_INTERRUPT" if self.user_stopped else \
+                                 (self.fatal_error_info.get("code", "FATAL_ERROR_STOP") if self.fatal_error_info else "FATAL_ERROR_STOP")
+                     self.log_manager.info(f"'{original_file_basename}' の処理が「{stop_reason}」のため中断/停止されました。", context="WORKER_LIFECYCLE")
+                     if not final_ocr_error_for_main: final_ocr_error_for_main = {"message": stop_reason, "code": stop_code}
                      if not pdf_error_for_signal and self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                         pdf_error_for_signal = {"message": "処理中止によりPDF作成不可", "code": "USER_INTERRUPT_PDF"}
-                elif not self.is_running and all_parts_processed_successfully:
+                         pdf_error_for_signal = {"message": f"{stop_reason}ためPDF作成不可", "code": f"{stop_code}_PDF"}
+
+                elif not self.is_running and all_parts_processed_successfully: # ほぼありえないがログは残す
                      self.log_manager.warning(f"'{original_file_basename}' の処理は成功しましたが、ワーカーは停止されました（予期せぬ状態）。", context="WORKER_LIFECYCLE_UNEXPECTED")
 
                 if all_parts_processed_successfully:
+                    # (変更なし)
                     self.log_manager.info(f"'{original_file_basename}' の全部品のOCR処理と中間ファイル保存が成功しました。", context="WORKER_ORIGINAL_FILE")
-                    if was_split:
-                        final_ocr_result_for_main = {"status": "parts_processed_ok", "num_parts": len(files_to_ocr_for_this_original), "detail": f"{len(files_to_ocr_for_this_original)}部品のOCR完了"}
-                    elif part_ocr_results_agg:
-                        final_ocr_result_for_main = part_ocr_results_agg[0]["result"]
-                    else: 
-                        final_ocr_result_for_main = {"status": "ocr_done_no_parts_data_unexpected", "message": "OCR成功(データ無)", "code": "OCR_NO_DATA"}
-
+                    if was_split: final_ocr_result_for_main = {"status": "parts_processed_ok", "num_parts": len(files_to_ocr_for_this_original), "detail": f"{len(files_to_ocr_for_this_original)}部品のOCR完了"}
+                    elif part_ocr_results_agg: final_ocr_result_for_main = part_ocr_results_agg[0]["result"]
+                    else: final_ocr_result_for_main = {"status": "ocr_done_no_parts_data_unexpected", "message": "OCR成功(データ無)", "code": "OCR_NO_DATA"}
                     should_create_json_globally = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
                     if should_create_json_globally:
                         if was_split:
                             final_json_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
                             try:
                                 os.makedirs(final_json_output_dir, exist_ok=True)
-                                copied_json_count = 0
-                                total_json_parts_expected = len(files_to_ocr_for_this_original)
+                                copied_json_count = 0; total_json_parts_expected = len(files_to_ocr_for_this_original)
                                 original_base_name_no_ext = os.path.splitext(original_file_basename)[0]
                                 if parts_results_temp_dir and os.path.isdir(parts_results_temp_dir):
                                     for item_name in os.listdir(parts_results_temp_dir):
@@ -442,8 +417,7 @@ class OcrWorker(QThread):
                                                 shutil.copy2(src_json_path, dest_json_path)
                                                 self.log_manager.info(f"分割JSON部品を最終保存先にコピー: {dest_json_path}", context="WORKER_PART_IO_FINAL")
                                                 copied_json_count += 1
-                                            except Exception as e_copy_json:
-                                                self.log_manager.error(f"分割JSON部品 '{src_json_path}' の最終保存先へのコピー失敗: {e_copy_json}", context="WORKER_PART_IO_FINAL_ERROR", exc_info=True)
+                                            except Exception as e_copy_json: self.log_manager.error(f"分割JSON部品 '{src_json_path}' の最終保存先へのコピー失敗: {e_copy_json}", context="WORKER_PART_IO_FINAL_ERROR", exc_info=True)
                                     if total_json_parts_expected == 0 and copied_json_count == 0: json_status_for_original_file = "部品JSONなし (対象部品0)"
                                     elif copied_json_count == total_json_parts_expected and total_json_parts_expected > 0: json_status_for_original_file = f"{copied_json_count}個の部品JSON出力成功"
                                     elif copied_json_count > 0: json_status_for_original_file = f"部品JSON一部出力 ({copied_json_count}/{total_json_parts_expected})"
@@ -455,11 +429,8 @@ class OcrWorker(QThread):
                                 msg = f"最終JSON出力先フォルダ '{final_json_output_dir}' の作成失敗: {e_mkdir_json}"
                                 self.log_manager.error(msg, context="WORKER_IO_ERROR", exc_info=True)
                                 json_status_for_original_file = "JSON出力先フォルダ作成失敗"
-                        else: 
-                            json_status_for_original_file = "JSON作成成功"
-                    else: 
-                        json_status_for_original_file = "作成しない(設定)"
-                    
+                        else: json_status_for_original_file = "JSON作成成功"
+                    else: json_status_for_original_file = "作成しない(設定)"
                     should_create_pdf_globally = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                     if should_create_pdf_globally:
                         if was_split and part_pdf_paths_agg:
@@ -477,8 +448,7 @@ class OcrWorker(QThread):
                                 final_pdf_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
                                 try:
                                     os.makedirs(final_pdf_output_dir, exist_ok=True)
-                                    copied_pdf_count = 0
-                                    expected_pdf_parts = len(part_pdf_paths_agg)
+                                    copied_pdf_count = 0; expected_pdf_parts = len(part_pdf_paths_agg)
                                     for src_pdf_part_path in part_pdf_paths_agg:
                                         if os.path.exists(src_pdf_part_path):
                                             pdf_part_filename = os.path.basename(src_pdf_part_path)
@@ -487,31 +457,26 @@ class OcrWorker(QThread):
                                                 shutil.copy2(src_pdf_part_path, dest_pdf_part_path)
                                                 self.log_manager.info(f"分割PDF部品を最終保存先にコピー: {dest_pdf_part_path}", context="WORKER_PART_IO_FINAL")
                                                 copied_pdf_count +=1
-                                            except Exception as e_copy_pdf:
-                                                self.log_manager.error(f"分割PDF部品 '{src_pdf_part_path}' の最終保存先へのコピー失敗: {e_copy_pdf}", context="WORKER_PART_IO_FINAL_ERROR", exc_info=True)
-                                        else:
-                                            self.log_manager.warning(f"PDF部品パスが見つかりません。コピーできません: {src_pdf_part_path}", context="WORKER_PART_IO_FINAL")
+                                            except Exception as e_copy_pdf: self.log_manager.error(f"分割PDF部品 '{src_pdf_part_path}' の最終保存先へのコピー失敗: {e_copy_pdf}", context="WORKER_PART_IO_FINAL_ERROR", exc_info=True)
+                                        else: self.log_manager.warning(f"PDF部品パスが見つかりません。コピーできません: {src_pdf_part_path}", context="WORKER_PART_IO_FINAL")
                                     if expected_pdf_parts == 0 and copied_pdf_count == 0: pdf_error_for_signal = {"message": "対象のPDF部品なし (コピー対象0)", "code": "NO_PARTS_TO_COPY"}
                                     elif copied_pdf_count == expected_pdf_parts and expected_pdf_parts > 0 : pdf_error_for_signal = {"message": f"{copied_pdf_count}個の部品PDF出力成功", "code": "PARTS_COPIED_SUCCESS"}
                                     elif copied_pdf_count > 0: pdf_error_for_signal = {"message": f"部品PDF一部出力 ({copied_pdf_count}/{expected_pdf_parts})", "code": "PARTS_COPIED_PARTIAL"}
                                     else: pdf_error_for_signal = {"message": "部品PDF出力失敗 (コピーエラー)", "code": "PARTS_COPY_ERROR"}
                                 except Exception as e_mkdir_pdf:
-                                    msg = f"最終PDF出力先フォルダ '{final_pdf_output_dir}' の作成失敗: {e_mkdir_pdf}"
-                                    self.log_manager.error(msg, context="WORKER_IO_ERROR", exc_info=True)
-                                    pdf_error_for_signal = {"message": msg, "code": "PDF_DIR_ERROR"}
-                        elif not was_split and part_pdf_paths_agg:
-                            pdf_final_path_for_signal = part_pdf_paths_agg[0]
-                        elif not part_pdf_paths_agg and should_create_pdf_globally:
-                            pdf_error_for_signal = {"message": "PDF部品が見つかりません (作成対象)", "code": "PDF_PART_MISSING"}
-                    else:
-                        pdf_error_for_signal = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
+                                    msg = f"最終PDF出力先フォルダ '{final_pdf_output_dir}' の作成失敗: {e_mkdir_pdf}"; self.log_manager.error(msg, context="WORKER_IO_ERROR", exc_info=True); pdf_error_for_signal = {"message": msg, "code": "PDF_DIR_ERROR"}
+                        elif not was_split and part_pdf_paths_agg: pdf_final_path_for_signal = part_pdf_paths_agg[0]
+                        elif not part_pdf_paths_agg and should_create_pdf_globally: pdf_error_for_signal = {"message": "PDF部品が見つかりません (作成対象)", "code": "PDF_PART_MISSING"}
+                    else: pdf_error_for_signal = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
                 else: 
-                    if not final_ocr_error_for_main and not self.user_stopped : final_ocr_error_for_main = {"message": f"'{original_file_basename}' の部品処理中にエラー発生", "code": "PART_PROCESSING_ERROR"}
+                    if not final_ocr_error_for_main and not self.user_stopped and not self.encountered_fatal_error: final_ocr_error_for_main = {"message": f"'{original_file_basename}' の部品処理中にエラー発生", "code": "PART_PROCESSING_ERROR"}
                     elif self.user_stopped and not final_ocr_error_for_main: final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました", "code": "USER_INTERRUPT"}
-                    json_status_for_original_file = "エラー" if not self.user_stopped else "中断"
+                    # encountered_fatal_error の場合、final_ocr_error_for_main は既に設定されているはず
+                    json_status_for_original_file = "エラー" if not self.user_stopped and not self.encountered_fatal_error else ("中断" if self.user_stopped else "エラー(致命的)")
                     if not (self.file_actions_config.get("output_format", "both") in ["json_only", "both"]): json_status_for_original_file = "作成しない(設定)"
                     if not pdf_error_for_signal and self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
                         if self.user_stopped: pdf_error_for_signal = {"message": "処理中止によりPDF作成不可", "code": "USER_INTERRUPT_PDF"}
+                        elif self.encountered_fatal_error: pdf_error_for_signal = {"message": "致命的エラーによりPDF作成不可", "code": "FATAL_ERROR_STOP_PDF"}
                         else: pdf_error_for_signal = {"message": f"'{original_file_basename}' の処理エラー等によりPDF作成不可", "code": "PDF_CREATION_FAIL_DUE_TO_OCR_ERROR"}
                 
                 self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_main, final_ocr_error_for_main, json_status_for_original_file)
@@ -519,16 +484,13 @@ class OcrWorker(QThread):
 
                 move_original_file_succeeded_final = all_parts_processed_successfully
                 if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
-                     if not ("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file):
-                         move_original_file_succeeded_final = False
+                     if not ("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file): move_original_file_succeeded_final = False
                 if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
                     if pdf_error_for_signal:
-                        if not (pdf_error_for_signal.get("code") and "SUCCESS" in pdf_error_for_signal.get("code").upper()):
-                            move_original_file_succeeded_final = False
+                        if not (pdf_error_for_signal.get("code") and "SUCCESS" in pdf_error_for_signal.get("code").upper()): move_original_file_succeeded_final = False
                     elif not pdf_final_path_for_signal: 
-                        if not (pdf_error_for_signal and ("作成しない" in pdf_error_for_signal.get("message", "") or "対象外" in pdf_error_for_signal.get("message", ""))):
-                             move_original_file_succeeded_final = False
-                if self.user_stopped: move_original_file_succeeded_final = False
+                        if not (pdf_error_for_signal and ("作成しない" in pdf_error_for_signal.get("message", "") or "対象外" in pdf_error_for_signal.get("message", ""))): move_original_file_succeeded_final = False
+                if self.user_stopped or self.encountered_fatal_error: move_original_file_succeeded_final = False
 
                 current_source_file_to_move = original_file_path 
                 if os.path.exists(current_source_file_to_move):
@@ -540,20 +502,22 @@ class OcrWorker(QThread):
                     collision_action_cfg = self.file_actions_config.get("collision_action", "rename")
                     if move_original_file_succeeded_final and move_on_success_enabled_cfg: destination_subfolder_for_move = success_folder_name_cfg
                     elif not move_original_file_succeeded_final and move_on_failure_enabled_cfg: destination_subfolder_for_move = failure_folder_name_cfg
-                    if destination_subfolder_for_move and self.is_running: 
+                    if destination_subfolder_for_move and (self.is_running or not self.encountered_fatal_error): 
                         self._move_file_with_collision_handling(current_source_file_to_move, original_file_parent_dir, destination_subfolder_for_move, collision_action_cfg)
-                    elif destination_subfolder_for_move and not self.is_running and self.user_stopped:
-                         self.log_manager.info(f"'{original_file_basename}' のファイル移動は処理中断のためスキップされました。", context="WORKER_FILE_MOVE")
+                    elif destination_subfolder_for_move and ((not self.is_running and self.user_stopped) or self.encountered_fatal_error):
+                         self.log_manager.info(f"'{original_file_basename}' のファイル移動は処理中断/停止のためスキップされました。", context="WORKER_FILE_MOVE")
 
                 self._try_cleanup_specific_temp_dirs(current_file_parts_source_dir, parts_results_temp_dir if was_split else None)
                 time.sleep(0.01)
         finally:
             self._cleanup_main_temp_dir()
             self.all_files_processed.emit()
-            if self.is_running and not self.user_stopped:
+            if self.is_running and not self.user_stopped and not self.encountered_fatal_error:
                  self.log_manager.info("OcrWorkerによる全ファイル処理が完了しました。", context="WORKER_LIFECYCLE")
             elif self.user_stopped:
                  self.log_manager.info("OcrWorkerの処理がユーザーにより停止されました。", context="WORKER_LIFECYCLE")
+            elif self.encountered_fatal_error:
+                 self.log_manager.error(f"OcrWorkerの処理が致命的なエラー ({self.fatal_error_info.get('code') if self.fatal_error_info else 'N/A'}) により停止しました。", context="WORKER_LIFECYCLE")
             else:
                  self.log_manager.warning("OcrWorkerの処理が終了しましたが、is_runningフラグの最終状態が不明確、またはエラーによる可能性があります。", context="WORKER_LIFECYCLE")
             self.log_manager.debug(f"OcrWorkerスレッドが終了しました。", context="WORKER_LIFECYCLE", thread_id=thread_id)
