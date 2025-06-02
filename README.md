@@ -1,2 +1,1 @@
-# cube_client
-AI inside Cube Full OCR Windowsデスクトップアプリケーション
+AI inside OCR Client Windows デスクトップアプリケーション
