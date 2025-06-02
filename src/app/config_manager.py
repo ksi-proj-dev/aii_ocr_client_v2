@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List # ★ Optional, Dict, Any, List を
 from appdirs import user_config_dir
 
 CONFIG_FILE_NAME = "config.json"
-APP_NAME = "AIInside CubeClient"
+APP_NAME = "AI inside OCR Client"
 APP_AUTHOR = "KSI"
 
 try:

@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
     def __init__(self, cli_args: Optional[argparse.Namespace] = None):
         super().__init__()
         self.log_manager = LogManager()
-        self.log_manager.info(f"AI inside Cube Client Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
+        self.log_manager.info(f"AI inside OCR Client Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
 
         self.config = ConfigManager.load()
         self.cli_args = cli_args
@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
             profile_name = self.active_api_profile.get("name", "N/A")
         
         mode = self.config.get("api_execution_mode", "demo").upper()
-        self.setWindowTitle(f"AI inside Cube Client Ver.{APP_VERSION} - {profile_name} ({mode} MODE)")
+        self.setWindowTitle(f"AI inside OCR Client Ver.{APP_VERSION} - {profile_name} ({mode} MODE)")
 
     def _connect_orchestrator_signals(self):
         if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator:

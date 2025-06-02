@@ -12,7 +12,7 @@ from config_manager import ConfigManager # MainWindowに渡すため
 if __name__ == "__main__":
     faulthandler.enable()
 
-    parser = argparse.ArgumentParser(description="AI inside Cube Client")
+    parser = argparse.ArgumentParser(description="AI inside OCR Client")
     parser.add_argument(
         "--api", 
         type=str, 
