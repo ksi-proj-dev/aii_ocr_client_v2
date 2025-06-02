@@ -15,10 +15,11 @@ class OptionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定 (AI inside Cube)")
-        self.config_at_dialog_open = ConfigManager.load()
+        # OptionDialog が開かれた時点の最新の設定を ConfigManager からロード
+        self.config_at_dialog_open = ConfigManager.load() 
         self.cube_options_key = self.config_at_dialog_open.get("api_type", "cube_fullocr")
         self.init_ui()
-        self.resize(550, 950) # 少し高さを増やす
+        self.resize(550, 900) # APIモード部分が減るので高さを少し調整
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -28,20 +29,8 @@ class OptionDialog(QDialog):
         basic_group = QGroupBox("基本設定")
         basic_form_layout = QFormLayout()
         
-        # API実行モード
-        api_mode_label = QLabel("API実行モード:")
-        self.api_mode_demo_radio = QRadioButton("Demoモード (ダミーAPI)")
-        self.api_mode_live_radio = QRadioButton("Liveモード (実際のAPIコール)")
-        current_api_mode = self.config_at_dialog_open.get("api_execution_mode", "demo")
-        if current_api_mode == "live":
-            self.api_mode_live_radio.setChecked(True)
-        else:
-            self.api_mode_demo_radio.setChecked(True)
-        api_mode_layout_h = QHBoxLayout()
-        api_mode_layout_h.addWidget(self.api_mode_demo_radio)
-        api_mode_layout_h.addWidget(self.api_mode_live_radio)
-        api_mode_layout_h.addStretch()
-        basic_form_layout.addRow(api_mode_label, api_mode_layout_h)
+        # API実行モードのUIはMainWindowに移動したため、ここでは削除
+        # current_api_mode = self.config_at_dialog_open.get("api_execution_mode", "demo")
 
         self.api_key_edit = QLineEdit(self.config_at_dialog_open.get("api_key", ""))
         self.api_key_edit.setPlaceholderText("APIキーを入力 (Liveモードで必須)")
@@ -62,13 +51,12 @@ class OptionDialog(QDialog):
         self.endpoints_edit = QLineEdit(endpoints_text)
         self.endpoints_edit.setReadOnly(True)
         self.endpoints_edit.setStyleSheet("background-color: lightgray;")
-        self.endpoints_edit.setMinimumHeight(60)
+        self.endpoints_edit.setMinimumHeight(60) # 表示領域を確保
         basic_form_layout.addRow("エンドポイント情報:", self.endpoints_edit)
         basic_group.setLayout(basic_form_layout)
         main_layout.addWidget(basic_group)
 
         # --- 2. ファイル検索設定グループ ---
-        # (変更なし)
         file_search_group = QGroupBox("ファイル検索設定")
         file_search_form_layout = QFormLayout()
         self.max_files_spinbox = QSpinBox(); self.max_files_spinbox.setRange(1, 9999); self.max_files_spinbox.setValue(current_ocr_options.get("max_files_to_process", 100))
@@ -81,12 +69,11 @@ class OptionDialog(QDialog):
         main_layout.addWidget(file_search_group)
         
         # --- アップロードとファイル分割設定グループ ---
-        # (変更なし)
         upload_split_group = QGroupBox("アップロードとファイル分割設定")
         upload_split_form_layout = QFormLayout()
         self.upload_max_size_spinbox = QSpinBox()
         self.upload_max_size_spinbox.setRange(1, 200) 
-        self.upload_max_size_spinbox.setValue(current_ocr_options.get("upload_max_size_mb", 60))
+        self.upload_max_size_spinbox.setValue(current_ocr_options.get("upload_max_size_mb", 60)) # デフォルトをconfig_managerと合わせる
         self.upload_max_size_spinbox.setSuffix(" MB")
         self.upload_max_size_spinbox.setToolTip("OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。")
         upload_split_form_layout.addRow("アップロード可能な最大ファイルサイズ:", self.upload_max_size_spinbox)
@@ -109,7 +96,6 @@ class OptionDialog(QDialog):
         main_layout.addWidget(upload_split_group)
 
         # --- OCRオプション（Cube API）グループ ---
-        # (変更なし)
         cube_ocr_group = QGroupBox("全文OCRオプション (Cube API)")
         cube_ocr_form_layout = QFormLayout()
         self.adjust_rotation_chk = QCheckBox("回転補正を行う"); self.adjust_rotation_chk.setChecked(current_ocr_options.get("adjust_rotation", 0) == 1); self.adjust_rotation_chk.setToolTip("0=OFF, 1=ON. 90度単位および±5度程度の傾きを補正します。"); cube_ocr_form_layout.addRow(self.adjust_rotation_chk)
@@ -123,7 +109,6 @@ class OptionDialog(QDialog):
         main_layout.addWidget(cube_ocr_group)
 
         # --- ファイル処理後サブフォルダ・出力設定グループ ---
-        # (変更なし)
         file_process_group = QGroupBox("ファイル処理後の出力と移動")
         file_process_form_layout = QFormLayout()
         file_actions_config = self.config_at_dialog_open.get("file_actions", {})
@@ -174,14 +159,12 @@ class OptionDialog(QDialog):
         self.toggle_split_options_enabled_state()
 
     def toggle_split_options_enabled_state(self):
-        # (変更なし)
         split_is_enabled = False
         if hasattr(self, 'split_enabled_chk'): split_is_enabled = self.split_enabled_chk.isChecked()
         if hasattr(self, 'split_chunk_size_spinbox'): self.split_chunk_size_spinbox.setEnabled(split_is_enabled)
         if hasattr(self, 'merge_pdf_parts_chk'): self.merge_pdf_parts_chk.setEnabled(split_is_enabled)
 
     def is_valid_folder_name(self, folder_name, field_label):
-        # (変更なし)
         if not folder_name:
             QMessageBox.warning(self, "入力エラー", f"{field_label}は必須入力です。")
             return False
@@ -194,13 +177,9 @@ class OptionDialog(QDialog):
         return True
 
     def on_save_settings(self):
-        # ★ API実行モードが "live" の場合、APIキーが必須であることをチェック
-        selected_api_mode = "live" if self.api_mode_live_radio.isChecked() else "demo"
+        # API実行モードはMainWindowで管理するため、ここでのバリデーションは不要
         api_key = self.api_key_edit.text().strip()
-        if selected_api_mode == "live" and not api_key:
-            QMessageBox.warning(self, "入力エラー", "Liveモードを選択した場合、APIキーは必須入力です。")
-            self.api_key_edit.setFocus()
-            return
+        # Liveモード時のAPIキー必須チェックはMainWindow側で行う (OptionDialogでは保存だけ)
 
         results_folder = self.results_folder_name_edit.text().strip()
         success_folder = self.success_folder_name_edit.text().strip()
@@ -235,9 +214,11 @@ class OptionDialog(QDialog):
                                 "「分割サイズ」は、「アップロード可能な最大ファイルサイズ」以下の値に設定してください。")
             return
         
+        # 保存する設定は、ダイアログを開いた時点のconfigをベースに、変更された値を上書き
         config_to_save = self.config_at_dialog_open.copy()
 
-        config_to_save["api_execution_mode"] = selected_api_mode # ★ API実行モードを保存
+        # API実行モードはMainWindowで管理するので、ここでは保存しない
+        # config_to_save["api_execution_mode"] = selected_api_mode 
         config_to_save["api_key"] = api_key
         config_to_save["base_uri"] = self.base_uri_edit.text().strip()
         
@@ -250,7 +231,7 @@ class OptionDialog(QDialog):
         current_api_type_options["enable_checkbox"] = 1 if self.enable_checkbox_chk.isChecked() else 0
         current_api_type_options["fulltext_output_mode"] = self.fulltext_output_mode_combo.currentIndex()
         current_api_type_options["fulltext_linebreak_char"] = 1 if self.fulltext_linebreak_char_chk.isChecked() else 0
-        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0]
+        current_api_type_options["ocr_model"] = self.ocr_model_combo.currentText().split(" ")[0] # "katsuji" など最初の単語
 
         current_api_type_options["upload_max_size_mb"] = upload_max_size
         current_api_type_options["split_large_files_enabled"] = split_enabled
@@ -265,10 +246,11 @@ class OptionDialog(QDialog):
         file_actions["failure_folder_name"] = failure_folder
         if self.collision_overwrite_radio.isChecked(): file_actions["collision_action"] = "overwrite"
         elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
-        else: file_actions["collision_action"] = "rename"
+        else: file_actions["collision_action"] = "rename" # デフォルト
+        
         if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
         elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
-        else: file_actions["output_format"] = "both"
+        else: file_actions["output_format"] = "both" # デフォルト
 
         ConfigManager.save(config_to_save)
         self.accept()

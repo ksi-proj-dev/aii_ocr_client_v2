@@ -1,18 +1,18 @@
-# ui_main_window.py (NameError: 'Optional' is not defined 修正版)
+# ui_main_window.py
 
 import sys
 import os
 import platform
 import subprocess
-from typing import Optional # ★ typingからOptionalをインポート
+from typing import Optional
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QToolBar, QVBoxLayout, QWidget,
     QLabel, QMessageBox, QFileDialog, QTextEdit, QSplitter,
-    QFormLayout, QPushButton, QHBoxLayout, QFrame
+    QFormLayout, QPushButton, QHBoxLayout, QFrame, QSizePolicy
 )
-from PyQt6.QtGui import QAction, QFontMetrics
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QAction, QFontMetrics, QIcon
+from PyQt6.QtCore import Qt, QTimer, QSize
 
 from list_view import ListView
 from option_dialog import OptionDialog
@@ -187,43 +187,92 @@ class MainWindow(QMainWindow):
     def _setup_toolbars_and_folder_labels(self):
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+
         self.input_folder_action = QAction("📂入力", self)
         self.input_folder_action.triggered.connect(self.select_input_folder)
         toolbar.addAction(self.input_folder_action)
+
         self.toggle_view_action = QAction("📑ビュー", self)
         self.toggle_view_action.triggered.connect(self.toggle_view)
         toolbar.addAction(self.toggle_view_action)
+
         self.option_action = QAction("⚙️設定", self)
         self.option_action.triggered.connect(self.show_option_dialog)
         toolbar.addAction(self.option_action)
+
         toolbar.addSeparator()
+
         self.start_ocr_action = QAction("▶️開始", self)
         self.start_ocr_action.triggered.connect(self.confirm_start_ocr)
         toolbar.addAction(self.start_ocr_action)
+
         self.resume_ocr_action = QAction("↪️再開", self)
         self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します")
         self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr)
         toolbar.addAction(self.resume_ocr_action)
+
         self.stop_ocr_action = QAction("⏹️中止", self)
         self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr)
         toolbar.addAction(self.stop_ocr_action)
+
         self.rescan_action = QAction("🔄再スキャン", self)
         self.rescan_action.triggered.connect(self.confirm_rescan_ui)
         self.rescan_action.setEnabled(False)
         toolbar.addAction(self.rescan_action)
+        
         toolbar.addSeparator()
+        
         self.log_toggle_action = QAction("📄ログ表示", self)
         self.log_toggle_action.triggered.connect(self.toggle_log_display)
         toolbar.addAction(self.log_toggle_action)
+
         self.clear_log_action = QAction("🗑️ログクリア", self)
         self.clear_log_action.triggered.connect(self.clear_log_display)
         toolbar.addAction(self.clear_log_action)
+
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+
+        self.api_mode_toggle_button = QPushButton()
+        self.api_mode_toggle_button.setCheckable(False)
+        self.api_mode_toggle_button.clicked.connect(self._toggle_api_mode)
+        self.api_mode_toggle_button.setMinimumWidth(120)
+        self.api_mode_toggle_button.setStyleSheet("""
+            QPushButton { 
+                padding: 4px 8px; 
+                border: 1px solid #8f8f8f; 
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton[apiMode="live"] { 
+                background-color: #e6fff2; 
+                color: #006400; 
+            }
+            QPushButton[apiMode="demo"] { 
+                background-color: #e6f7ff; 
+                color: #005f9e; 
+            }
+            QPushButton:disabled {
+                background-color: #f0f0f0;
+                color: #a0a0a0;
+            }
+        """)
+        toolbar.addWidget(self.api_mode_toggle_button)
+        self._update_api_mode_toggle_button_display()
+
+        right_spacer = QWidget()
+        right_spacer.setFixedWidth(10) # ★ 間隔を5ピクセルから10ピクセルに変更
+        toolbar.addWidget(right_spacer)
+
+
         folder_label_toolbar = QToolBar("Folder Paths Toolbar")
         folder_label_toolbar.setMovable(False)
         folder_label_widget = QWidget()
         folder_label_layout = QFormLayout(folder_label_widget)
         folder_label_layout.setContentsMargins(5, 5, 5, 5)
         folder_label_layout.setSpacing(3)
+
         self.input_folder_button = QPushButton()
         self._update_folder_display()
         self.input_folder_button.setStyleSheet("""
@@ -237,6 +286,59 @@ class MainWindow(QMainWindow):
         folder_label_toolbar.addWidget(folder_label_widget)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, folder_label_toolbar)
         self.insertToolBarBreak(folder_label_toolbar)
+
+    def _update_api_mode_toggle_button_display(self):
+        current_mode = self.config.get("api_execution_mode", "demo")
+        if current_mode == "live":
+            self.api_mode_toggle_button.setText("🔴 Live モード")
+            self.api_mode_toggle_button.setToolTip("現在 Live モードです。クリックして Demo モードに切り替えます。")
+            self.api_mode_toggle_button.setProperty("apiMode", "live")
+        else: # demo
+            self.api_mode_toggle_button.setText("🔵 Demo モード")
+            self.api_mode_toggle_button.setToolTip("現在 Demo モードです。クリックして Live モードに切り替えます。")
+            self.api_mode_toggle_button.setProperty("apiMode", "demo")
+        
+        self.api_mode_toggle_button.style().unpolish(self.api_mode_toggle_button)
+        self.api_mode_toggle_button.style().polish(self.api_mode_toggle_button)
+        self.api_mode_toggle_button.update()
+
+
+    def _toggle_api_mode(self):
+        if self.is_ocr_running:
+            QMessageBox.warning(self, "モード変更不可", "OCR処理の実行中はAPIモードを変更できません。")
+            return
+
+        current_mode = self.config.get("api_execution_mode", "demo")
+        new_mode = "live" if current_mode == "demo" else "demo"
+
+        if new_mode == "live" and not self.config.get("api_key", "").strip():
+            QMessageBox.warning(self, "APIキー未設定", 
+                                "Liveモードに切り替えるには、まず「⚙️設定」からAPIキーを設定してください。")
+            return
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("APIモード変更の確認")
+        msg_box.setText(f"API実行モードを「{current_mode.upper()}」から「{new_mode.upper()}」に変更しますか？")
+        msg_box.setInformativeText("変更を保存し、関連コンポーネントに適用します。")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        
+        if msg_box.exec() == QMessageBox.StandardButton.Yes:
+            self.config["api_execution_mode"] = new_mode
+            ConfigManager.save(self.config)
+            self.log_manager.info(f"API execution mode changed to: {new_mode.upper()}", context="CONFIG_CHANGE_MAIN")
+
+            if hasattr(self, 'api_client') and self.api_client:
+                self.api_client.update_config(self.config)
+            if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator:
+                self.ocr_orchestrator.update_config(self.config)
+
+            self._update_window_title()
+            self._update_api_mode_toggle_button_display()
+            self.update_ocr_controls()
+            self.log_manager.info(f"MainWindow components updated for {new_mode.upper()} mode.", context="CONFIG_CHANGE_MAIN")
+
 
     def _update_folder_display(self):
         if hasattr(self, 'input_folder_button'):
@@ -259,6 +361,8 @@ class MainWindow(QMainWindow):
             self.log_manager.info("前回終了時の入力フォルダ指定はありませんでした。", context="SYSTEM_INIT")
             self._update_folder_display()
             self._clear_and_update_file_list_display()
+        
+        self._update_api_mode_toggle_button_display()
 
     def _clear_and_update_file_list_display(self):
         self.processed_files_info = []
@@ -322,7 +426,6 @@ class MainWindow(QMainWindow):
         final_message = "全てのファイルのOCR処理が完了しました。"
         if fatal_error_info and isinstance(fatal_error_info, dict):
             final_message = f"OCR処理がエラーにより停止しました。\n理由: {fatal_error_info.get('message', '不明なエラー')}"
-            # ★ Liveモード未実装エラーの場合の専用メッセージ
             if fatal_error_info.get("code") in ["NOT_IMPLEMENTED_LIVE_API", "NOT_IMPLEMENTED_LIVE_API_PDF", "NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_API_CALL_PDF"]:
                 final_message += "\n\nLiveモードでのAPI呼び出しは現在実装されていません。\nDemoモードで実行するか、APIクライアントの実装をご確認ください。"
             QMessageBox.critical(self, "処理停止 (致命的エラー)", final_message)
@@ -334,7 +437,6 @@ class MainWindow(QMainWindow):
 
 
     def update_status_bar(self):
-        # (変更なし)
         total_list_items = len(self.processed_files_info)
         selected_for_processing_count = 0
         ocr_success_count = self.summary_view.ocr_completed_count if hasattr(self, 'summary_view') else 0
@@ -349,7 +451,6 @@ class MainWindow(QMainWindow):
             self.status_error_files_label.setText(f"エラー: {ocr_error_count}")
 
     def update_all_status_displays(self):
-        # (変更なし)
         size_skipped_count = 0
         checked_and_processable_for_summary = 0
         for file_info in self.processed_files_info:
@@ -366,7 +467,6 @@ class MainWindow(QMainWindow):
         self.update_status_bar()
 
     def on_list_item_check_state_changed(self, row_index, is_checked):
-        # (変更なし)
         if 0 <= row_index < len(self.processed_files_info):
             self.processed_files_info[row_index].is_checked = is_checked
             self.log_manager.debug(f"File '{self.processed_files_info[row_index].name}' check state in data model changed to: {is_checked}", context="UI_EVENT")
@@ -374,11 +474,9 @@ class MainWindow(QMainWindow):
             self.update_ocr_controls()
 
     def perform_initial_scan(self):
-        # (変更なし)
         self.log_manager.info(f"スキャン開始: {self.input_folder_path}", context="FILE_SCAN_MAIN")
         if self.update_timer.isActive(): self.update_timer.stop()
         self.processed_files_info = []
-        current_config = self.config
         collected_files_paths, max_files_info, depth_limited_folders = self.file_scanner.scan_folder(
             self.input_folder_path
         )
@@ -411,7 +509,6 @@ class MainWindow(QMainWindow):
         self.update_ocr_controls()
 
     def append_log_message_to_widget(self, level, message):
-        # (変更なし)
         if hasattr(self, 'log_widget') and self.log_widget:
             if level == LogLevel.ERROR: self.log_widget.append(f'<font color="red">{message}</font>')
             elif level == LogLevel.WARNING: self.log_widget.append(f'<font color="orange">{message}</font>')
@@ -420,7 +517,6 @@ class MainWindow(QMainWindow):
             self.log_widget.ensureCursorVisible()
 
     def select_input_folder(self):
-        # (変更なし)
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION")
         last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
         if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")
@@ -439,7 +535,6 @@ class MainWindow(QMainWindow):
         self._update_folder_display()
 
     def open_input_folder_in_explorer(self):
-        # (変更なし)
         self.log_manager.debug(f"Attempting to open folder: {self.input_folder_path}", context="UI_ACTION_OPEN_FOLDER")
         if self.input_folder_path and os.path.isdir(self.input_folder_path):
             try:
@@ -455,40 +550,43 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "フォルダ情報なし", "入力フォルダが選択されていないか、無効なパスです。")
 
     def toggle_view(self):
-        # (変更なし)
         if hasattr(self, 'stack'):
             self.current_view = 1 - self.current_view
             self.stack.setCurrentIndex(self.current_view)
             self.log_manager.info(f"View toggled to: {'ListView' if self.current_view == 1 else 'SummaryView'}", context="UI_ACTION")
 
     def toggle_log_display(self):
-        # (変更なし)
         if hasattr(self, 'log_container'):
             visible = self.log_container.isVisible()
             self.log_container.setVisible(not visible)
             self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
 
     def show_option_dialog(self):
-        # (変更なし)
         self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
         old_config_copy = self.config.copy()
         old_api_type_options = old_config_copy.get("options", {}).get(old_config_copy.get("api_type"), {})
         old_max_files = old_api_type_options.get("max_files_to_process")
         old_recursion_depth = old_api_type_options.get("recursion_depth")
+
         dialog = OptionDialog(self)
         if dialog.exec():
-            self.config = ConfigManager.load()
+            self.config = ConfigManager.load() 
             self.log_manager.info("Options saved and reloaded into MainWindow.", context="CONFIG_EVENT")
+            
             if hasattr(self, 'api_client') and self.api_client:
                 self.api_client.update_config(self.config)
             if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator:
                 self.ocr_orchestrator.update_config(self.config)
             if hasattr(self, 'file_scanner') and self.file_scanner:
                  self.file_scanner.config = self.config
+            
             self._update_window_title()
+            self._update_api_mode_toggle_button_display()
+
             new_api_type_options = self.config.get("options", {}).get(self.config.get("api_type"), {})
             new_max_files = new_api_type_options.get("max_files_to_process")
             new_recursion_depth = new_api_type_options.get("recursion_depth")
+
             rescan_needed_due_to_collection_settings = (old_max_files != new_max_files or old_recursion_depth != new_recursion_depth)
             if rescan_needed_due_to_collection_settings:
                 if self.input_folder_path and os.path.isdir(self.input_folder_path):
@@ -500,13 +598,15 @@ class MainWindow(QMainWindow):
                     self.update_all_status_displays()
                     self.log_manager.info("File collection parameters changed, but no input folder selected. List cleared.", context="CONFIG_EVENT")
             else:
-                self.log_manager.info(f"Settings changed (size limit or output format). Re-evaluating file statuses.", context="CONFIG_EVENT")
-                new_upload_max_size_mb = new_api_type_options.get("upload_max_size_mb", 50)
+                self.log_manager.info(f"Settings changed (e.g., size limit, output format). Re-evaluating file statuses.", context="CONFIG_EVENT")
+                new_upload_max_size_mb = new_api_type_options.get("upload_max_size_mb", 60)
                 new_upload_max_bytes = new_upload_max_size_mb * 1024 * 1024
                 new_file_actions_cfg = self.config.get("file_actions", {})
                 new_output_format_cfg = new_file_actions_cfg.get("output_format", "both")
+                
                 default_json_status = "-" if new_output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
                 default_pdf_status = "-" if new_output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
+                
                 items_status_updated = False
                 for file_info in self.processed_files_info:
                     current_file_size = file_info.size
@@ -531,8 +631,8 @@ class MainWindow(QMainWindow):
                             file_info.ocr_result_summary = ""
                             file_info.is_checked = True
                         if file_info.ocr_engine_status == OCR_STATUS_NOT_PROCESSED:
-                            file_info.json_status = default_json_status
-                            file_info.searchable_pdf_status = default_pdf_status
+                             file_info.json_status = default_json_status
+                             file_info.searchable_pdf_status = default_pdf_status
                     if (file_info.ocr_engine_status != prev_ocr_engine_status or
                         file_info.status != original_status_text or
                         file_info.json_status != original_json_status or
@@ -563,7 +663,6 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.confirm_and_stop_ocr(self)
 
     def on_original_file_status_update_from_worker(self, original_file_path, status_message):
-        # (変更なし)
         target_file_info = next((item for item in self.processed_files_info if item.path == original_file_path), None)
         if target_file_info:
             self.log_manager.debug(f"UI Update for '{target_file_info.name}': {status_message}", context="UI_STATUS_UPDATE")
@@ -576,7 +675,6 @@ class MainWindow(QMainWindow):
             self.log_manager.warning(f"Status update received for unknown file: {original_file_path}", context="UI_STATUS_UPDATE_WARN")
 
     def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_status_for_original):
-        # (変更なし、エラーポップアップ表示条件は前回修正済み)
         self.log_manager.debug(
             f"Original File OCR stage processed (MainWin): {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Success={not ocr_error_info_for_original}, JSON Status='{json_save_status_for_original}'",
             context="CALLBACK_OCR_ORIGINAL"
@@ -604,12 +702,26 @@ class MainWindow(QMainWindow):
                 if "detail" in ocr_result_data_for_original: target_file_info.ocr_result_summary = ocr_result_data_for_original["detail"]
                 elif "message" in ocr_result_data_for_original: target_file_info.ocr_result_summary = ocr_result_data_for_original["message"]
                 else:
-                    fulltext = ocr_result_data_for_original.get("fulltext", "") or (ocr_result_data_for_original.get("result", {}) or {}).get("fulltext", "") or (ocr_result_data_for_original.get("result", {}) or {}).get("aGroupingFulltext", "")
+                    fulltext_parts = []
+                    if "fulltext" in ocr_result_data_for_original and ocr_result_data_for_original["fulltext"]:
+                        fulltext_parts.append(ocr_result_data_for_original["fulltext"])
+                    result_dict = ocr_result_data_for_original.get("result", {})
+                    if isinstance(result_dict, dict):
+                        if "fulltext" in result_dict and result_dict["fulltext"]:
+                            fulltext_parts.append(result_dict["fulltext"])
+                        if "aGroupingFulltext" in result_dict and result_dict["aGroupingFulltext"]:
+                             fulltext_parts.append(result_dict["aGroupingFulltext"])
+                    fulltext = " / ".join(filter(None, fulltext_parts)) if fulltext_parts else ""
                     target_file_info.ocr_result_summary = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
             elif isinstance(ocr_result_data_for_original, list) and len(ocr_result_data_for_original) > 0 :
                 try:
                     first_page_result = ocr_result_data_for_original[0].get("result", {})
-                    fulltext = first_page_result.get("fulltext", "") or first_page_result.get("aGroupingFulltext", "")
+                    fulltext_parts = []
+                    if "fulltext" in first_page_result and first_page_result["fulltext"]:
+                        fulltext_parts.append(first_page_result["fulltext"])
+                    if "aGroupingFulltext" in first_page_result and first_page_result["aGroupingFulltext"]:
+                        fulltext_parts.append(first_page_result["aGroupingFulltext"])
+                    fulltext = " / ".join(filter(None, fulltext_parts)) if fulltext_parts else ""
                     target_file_info.ocr_result_summary = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
                 except Exception: target_file_info.ocr_result_summary = "結果解析エラー(集約)"
             else: target_file_info.ocr_result_summary = "OCR結果あり(形式不明)"
@@ -631,14 +743,13 @@ class MainWindow(QMainWindow):
         if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
-        # (変更なし、エラーポップアップ表示条件は前回修正済み)
         self.log_manager.debug(f"Original File Searchable PDF processed: {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Path={pdf_final_path}, Error={pdf_error_info}", context="CALLBACK_PDF_ORIGINAL")
         if not (0 <= original_file_main_idx < len(self.processed_files_info)):
             self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx} received. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR")
             return
         target_file_info = self.processed_files_info[original_file_main_idx]
         output_format = self.config.get("file_actions", {}).get("output_format", "both")
-        ocr_engine_status_for_file = target_file_info.ocr_engine_status
+        ocr_engine_status_for_file = target_file_info.ocr_engine_status 
         pdf_stage_final_success = False
         if output_format == "json_only": target_file_info.searchable_pdf_status = "作成しない(設定)"
         elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path):
@@ -681,24 +792,23 @@ class MainWindow(QMainWindow):
             self.update_status_bar()
         if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
-    # on_all_files_processed は _handle_ocr_process_finished_from_orchestrator に処理を委譲
     def on_all_files_processed(self, was_interrupted_by_orchestrator: bool, fatal_error_info: Optional[dict] = None):
         self._handle_ocr_process_finished_from_orchestrator(was_interrupted_by_orchestrator, fatal_error_info)
 
     def handle_ocr_interruption_ui_update(self):
-        # (変更なし)
         self.log_manager.info("MainWindow: Handling UI update for OCR interruption.", context="UI_UPDATE_INTERRUPT")
         for file_info in self.processed_files_info:
             current_engine_status = file_info.ocr_engine_status
             if current_engine_status in [OCR_STATUS_PROCESSING, OCR_STATUS_SPLITTING, OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING]:
-                file_info.ocr_engine_status = OCR_STATUS_NOT_PROCESSED
+                file_info.ocr_engine_status = OCR_STATUS_NOT_PROCESSED 
                 file_info.status = "待機中(中断)"
         self.perform_batch_list_view_update()
         self.update_ocr_controls()
 
     def update_ocr_controls(self):
-        # (変更なし)
         running = self.is_ocr_running
+        if hasattr(self, 'api_mode_toggle_button'):
+            self.api_mode_toggle_button.setEnabled(not running)
         has_checked_and_processable_for_start = any(
             f_info.is_checked and f_info.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT
             for f_info in self.processed_files_info
@@ -740,14 +850,12 @@ class MainWindow(QMainWindow):
             self.toggle_view_action.setEnabled(True)
 
     def perform_batch_list_view_update(self):
-        # (変更なし)
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE");
         if hasattr(self, 'list_view') and self.list_view:
             self.list_view.update_files(self.processed_files_info)
         self.update_all_status_displays()
     
     def confirm_rescan_ui(self):
-        # (変更なし)
         self.log_manager.debug("Confirming UI rescan.", context="UI_ACTION")
         if self.is_ocr_running: QMessageBox.warning(self, "再スキャン不可", "OCR処理の実行中は再スキャンできません。"); return
         if not self.processed_files_info and not self.input_folder_path: QMessageBox.information(self, "再スキャン", "クリアまたは再スキャンする対象がありません。"); return
@@ -761,7 +869,6 @@ class MainWindow(QMainWindow):
             self.log_manager.info("User cancelled UI rescan.", context="UI_ACTION")
 
     def perform_rescan(self):
-        # (変更なし)
         self.log_manager.info("Performing UI clear and input folder rescan.", context="UI_ACTION_RESCAN")
         if hasattr(self.summary_view, 'reset_summary'):
             self.summary_view.reset_summary()
@@ -778,27 +885,38 @@ class MainWindow(QMainWindow):
         self.update_ocr_controls()
 
     def closeEvent(self, event):
-        # (変更なし)
         self.log_manager.debug("Application closeEvent triggered.", context="SYSTEM_LIFECYCLE");
         if self.update_timer.isActive(): self.update_timer.stop()
         if self.is_ocr_running:
-            reply = QMessageBox.question(self, "処理中の終了確認", "OCR処理が実行中です。本当にアプリケーションを終了しますか？\n(進行中の処理は中断されます)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.No: event.ignore(); return
+            reply = QMessageBox.question(self, "処理中の終了確認", 
+                                         "OCR処理が実行中です。本当にアプリケーションを終了しますか？\n(進行中の処理は中断されます)",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                         QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No: 
+                event.ignore(); return
             else:
                 if self.ocr_orchestrator:
                      self.log_manager.info("Close event: OCR running, attempting to stop worker via orchestrator before exit.", context="SYSTEM_LIFECYCLE")
                      self.ocr_orchestrator.confirm_and_stop_ocr(self)
-        current_config_to_save = self.config.copy(); normal_geom = self.normalGeometry(); current_config_to_save["window_state"] = "maximized" if self.isMaximized() else "normal"; current_config_to_save["window_size"] = {"width": normal_geom.width(), "height": normal_geom.height()}
-        if not self.isMaximized(): current_config_to_save["window_position"] = {"x": normal_geom.x(), "y": normal_geom.y()}
-        elif "window_position" in current_config_to_save: del current_config_to_save["window_position"]
-        current_config_to_save["last_target_dir"] = self.input_folder_path; current_config_to_save["current_view"] = self.current_view if hasattr(self, 'current_view') else 0
+        current_config_to_save = self.config.copy()
+        normal_geom = self.normalGeometry()
+        current_config_to_save["window_state"] = "maximized" if self.isMaximized() else "normal"
+        current_config_to_save["window_size"] = {"width": normal_geom.width(), "height": normal_geom.height()}
+        if not self.isMaximized(): 
+            current_config_to_save["window_position"] = {"x": normal_geom.x(), "y": normal_geom.y()}
+        elif "window_position" in current_config_to_save: 
+            del current_config_to_save["window_position"]
+        current_config_to_save["last_target_dir"] = self.input_folder_path
+        current_config_to_save["current_view"] = self.current_view if hasattr(self, 'current_view') else 0
         current_config_to_save["log_visible"] = self.log_container.isVisible() if hasattr(self, 'log_container') else True
         if hasattr(self.splitter, 'sizes'): current_config_to_save["splitter_sizes"] = self.splitter.sizes()
         if hasattr(self.list_view, 'get_column_widths') and hasattr(self.list_view, 'get_sort_order'):
-            current_config_to_save["column_widths"] = self.list_view.get_column_widths(); current_config_to_save["sort_order"] = self.list_view.get_sort_order()
-        ConfigManager.save(current_config_to_save); self.log_manager.info("Settings saved. Exiting application.", context="SYSTEM_LIFECYCLE"); super().closeEvent(event)
+            current_config_to_save["column_widths"] = self.list_view.get_column_widths()
+            current_config_to_save["sort_order"] = self.list_view.get_sort_order()
+        ConfigManager.save(current_config_to_save)
+        self.log_manager.info("Settings saved. Exiting application.", context="SYSTEM_LIFECYCLE")
+        super().closeEvent(event)
 
     def clear_log_display(self):
-        # (変更なし)
         if hasattr(self, 'log_widget') and self.log_widget: self.log_widget.clear()
         self.log_manager.info("画面ログをクリアしました（ファイル記録は継続）。", context="UI_ACTION_CLEAR_LOG", emit_to_ui=False)
