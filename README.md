@@ -1,1 +1,1 @@
-AI inside OCR Client Windows デスクトップアプリケーション
+AI inside OCR Client using Gemini
