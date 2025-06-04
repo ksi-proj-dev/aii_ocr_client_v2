@@ -553,16 +553,10 @@ class MainWindow(QMainWindow):
         current_mode = self.config.get("api_execution_mode", "demo")
         new_mode = "live" if current_mode == "demo" else "demo"
 
-        # ★変更箇所: アクティブプロファイルのAPIキーをチェックする
-        if new_mode == "live":
-            active_api_key = ConfigManager.get_active_api_key(self.config) # アクティブプロファイルのAPIキーを取得
-            if not active_api_key or not active_api_key.strip():
-                active_profile_name = self.active_api_profile.get("name", "不明なプロファイル") if self.active_api_profile else "不明なプロファイル"
-                QMessageBox.warning(self, "APIキー未設定",
-                                    f"Liveモードに切り替えるには、まず「⚙️設定」から\n"
-                                    f"現在アクティブなプロファイル「{active_profile_name}」用のAPIキーを設定してください。")
-                return
-        # --- ★変更箇所ここまで ---
+        if new_mode == "live" and not self.config.get("api_key", "").strip():
+            QMessageBox.warning(self, "APIキー未設定", 
+                                "Liveモードに切り替えるには、まず「⚙️設定」からAPIキーを設定してください。")
+            return
 
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("APIモード変更の確認")
