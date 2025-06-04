@@ -14,79 +14,40 @@ from typing import Optional, Dict, Any, Tuple # Tuple を追加
 from config_manager import ConfigManager
 
 class OCRApiClient:
-    def __init__(self, config: Dict[str, Any], log_manager, api_profile_schema: Optional[Dict[str, Any]]):
+    def __init__(self, config: Dict[str, Any], log_manager, api_profile_schema: Optional[Dict[str, Any]]): # ← ここが api_profile_schema
         self.log_manager = log_manager
         self.config: Dict[str, Any] = {}
-        self.active_api_profile_schema: Optional[Dict[str, Any]] = {} # スキーマ情報を保持
-        self.active_options_values: Optional[Dict[str, Any]] = {}   # オプション値(APIキー, BaseURI含む)を保持
+        self.active_api_profile_schema: Optional[Dict[str, Any]] = {} # ★ スキーマ情報を保持
+        self.active_options_values: Optional[Dict[str, Any]] = {}   # ★ オプション値(APIキー, BaseURI含む)を保持
         self.api_execution_mode: str = "demo"
         self.api_key: Optional[str] = "" # これは active_options_values から設定される
-        self.timeout_seconds: int = 60 # APIリクエストのタイムアウト秒数
+        self.timeout_seconds: int = 60
 
         self.update_config(config, api_profile_schema)
 
-    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]):
-        self.log_manager.info("ApiClient: 設定更新中...", context="API_CLIENT_CONFIG_UPDATE")
-        self.config = new_config
-
-        # アクティブなプロファイルのスキーマ部分を設定
-        if new_api_profile_schema:
-            self.active_api_profile_schema = new_api_profile_schema
-        elif "current_api_profile_id" in new_config: # スキーマが直接渡されない場合、configから再取得
-            current_profile_id_from_config = new_config.get("current_api_profile_id")
-            active_profile_schema_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id_from_config)
-            if active_profile_schema_from_cfg:
-                self.active_api_profile_schema = active_profile_schema_from_cfg
-            elif new_config.get("api_profiles"): # current_api_profile_idが無効なら最初のプロファイルをフォールバック
-                self.active_api_profile_schema = new_config["api_profiles"][0]
-                self.log_manager.warning(f"ApiClient: 指定されたcurrent_api_profile_id '{current_profile_id_from_config}' が見つからないため、最初のプロファイル '{self.active_api_profile_schema.get('name', 'N/A')}' を使用します。", context="API_CLIENT_CONFIG_UPDATE")
-            else: # 利用可能なプロファイルが全くない場合
-                self.active_api_profile_schema = {}
-                self.log_manager.error("ApiClient: 利用可能なAPIプロファイルが設定にありません。", context="API_CLIENT_CONFIG_UPDATE_ERROR")
-        else: # new_api_profile_schema も current_api_profile_id もない場合
-             self.active_api_profile_schema = {}
-             self.log_manager.error("ApiClient: update_configで有効なプロファイル情報が不足しており、フォールバックもできませんでした。", context="API_CLIENT_CONFIG_UPDATE_ERROR")
-
-
-        self.active_options_values = ConfigManager.get_active_api_options_values(self.config)
-        if self.active_options_values is None:
-            self.active_options_values = {}
-            self.log_manager.warning("ApiClient: アクティブプロファイルのオプション値が取得できませんでした。", context="API_CLIENT_CONFIG_UPDATE")
-
-        self.api_execution_mode = self.config.get("api_execution_mode", "demo")
-        
-        self.api_key = self.active_options_values.get("api_key", "")
-
-        profile_name_for_log = self.active_api_profile_schema.get('name', 'N/A')
-        key_status_log = "設定あり" if self.api_key else "未設定"
-        base_uri_for_log = self.active_options_values.get("base_uri", self.active_api_profile_schema.get("base_uri", "未設定"))
-
-
-        if self.api_execution_mode == "live":
-            self.log_manager.info(f"ApiClientは Liveモード ({profile_name_for_log}, APIキー: {key_status_log}, BaseURI: {base_uri_for_log}) に更新されました。", context="API_CLIENT_CONFIG_UPDATE")
-        else:
-            self.log_manager.info(f"ApiClientは Demoモード ({profile_name_for_log}) に更新されました。", context="API_CLIENT_CONFIG_UPDATE")
-
     def _get_full_url(self, endpoint_key: str) -> Optional[str]:
-        if not self.active_api_profile_schema:
+        if not self.active_api_profile_schema: # スキーマがないとエンドポイントパスが取れない
             self.log_manager.error("APIプロファイルスキーマがアクティブではありません。", context="API_CLIENT_CONFIG")
             return None
 
+        # ★変更箇所: まず active_options_values から base_uri を試みる
         base_uri = self.active_options_values.get("base_uri") if self.active_options_values else None
         
+        # 値が空文字列の場合や、options_values に base_uri が無かった場合はスキーマのデフォルトを使用
         if not base_uri: 
             base_uri = self.active_api_profile_schema.get("base_uri")
             self.log_manager.debug(f"ユーザー設定のBaseURIが空のため、スキーマ定義のBaseURI '{base_uri}' を使用します。", context="API_CLIENT_CONFIG")
 
-        if not base_uri:
+
+        if not base_uri: # それでも base_uri がない場合
             err_msg = f"ベースURIがプロファイル '{self.active_api_profile_schema.get('id')}' に設定されていません（ユーザー設定にもスキーマ定義にもなし）。"
             self.log_manager.error(err_msg, context="API_CLIENT_CONFIG")
             return None
         
-        # プレースホルダーチェックは呼び出し側で行うか、ここでエラーを明確にする
+        # プレースホルダーチェック (ユーザー設定後 or スキーマデフォルトのURIに対して行う)
         if "{organization_specific_domain}" in base_uri:
-             self.log_manager.warning(f"ベースURI '{base_uri}' にプレースホルダーが含まれています。LiveモードではAPI呼び出し前に解決されている必要があります。", context="API_CLIENT_CONFIG")
-             # Liveモードでの実際の呼び出しの直前にもチェックを入れるのが望ましい
+             self.log_manager.warning(f"ベースURIにプレースホルダーが含まれています: {base_uri}。Liveモードでは正しいドメインに置き換える必要があります。", context="API_CLIENT_CONFIG")
+             # 実際のAPI呼び出し時にこれがエラーになるかは呼び出し側（read_document内など）で再度チェックする
 
         endpoints = self.active_api_profile_schema.get("endpoints", {})
         endpoint_path = endpoints.get(endpoint_key)
@@ -102,8 +63,10 @@ class OCRApiClient:
         file_name = os.path.basename(file_path)
         effective_options = specific_options if specific_options is not None else {}
         
+        # ★変更箇所: self.active_api_profile_schema を使用
         current_flow_type = self.active_api_profile_schema.get("flow_type") if self.active_api_profile_schema else None
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        # --- ★変更箇所ここまで ---
 
         if current_flow_type == "cube_fullocr_single_call":
             actual_ocr_params = {
@@ -141,9 +104,6 @@ class OCRApiClient:
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (read_document): {file_name}", context=log_ctx)
                 url = self._get_full_url("read_document")
                 if not url: return None, {"message": "エンドポイントURL取得失敗 (read_document)", "code": "CONFIG_ENDPOINT_URL_FAIL"}
-                if "{organization_specific_domain}" in url: # Liveモードでプレースホルダが残っていたらエラー
-                     self.log_manager.error(f"ベースURIにプレースホルダーが含まれたままです: {url}", context=log_ctx)
-                     return None, {"message": "ベースURIのプレースホルダー未解決。", "code": "PLACEHOLDER_IN_URI"}
                 if not self.api_key:
                     err_msg_val = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"
                     self.log_manager.error(err_msg_val, context=log_ctx, error_code="API_KEY_MISSING_LIVE")
@@ -237,7 +197,7 @@ class OCRApiClient:
 
                 try:
                     with open(file_path, 'rb') as f_obj:
-                        files_data = {'file': (os.path.basename(file_path), f_obj)}
+                        files_data = {'file': (os.path.basename(file_path), f_obj)} # Content-Type will be auto-detected or can be specified
                         self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, form-data: {payload_data}, file: {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
                         response = requests.post(url, headers=headers, data=payload_data, files=files_data, timeout=self.timeout_seconds)
                         response.raise_for_status()
@@ -269,13 +229,15 @@ class OCRApiClient:
                     self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER_UNEXPECTED_ERROR", exc_info=True)
                     return None, {"message": "DX Suite 登録処理中に予期せぬエラー。", "code": "DXSUITE_REGISTER_UNEXPECTED_ERROR", "detail": str(e_generic)}
         
-        else:
+        else: # 未対応のフロータイプ
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR")
             return None, {"message": f"未対応のAPIフロータイプ: {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE"}
 
     def get_dx_fulltext_ocr_result(self, job_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         log_ctx_prefix = "API_DX_FULLTEXT_V2"
+        # ★変更箇所: self.active_api_profile_schema を使用
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        # --- ★変更箇所ここまで ---
         self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Fulltext V2 - GetResult): job_id={job_id}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
 
         url = self._get_full_url("get_ocr_result")
@@ -323,11 +285,15 @@ class OCRApiClient:
     def make_searchable_pdf(self, file_path: str, specific_options: Optional[Dict[str, Any]] = None) -> Tuple[Optional[bytes], Optional[Dict[str, Any]]]:
         file_name = os.path.basename(file_path)
         effective_options = specific_options if specific_options is not None else {}
+        
+        # ★変更箇所: self.active_api_profile_schema を使用
         current_flow_type = self.active_api_profile_schema.get("flow_type") if self.active_api_profile_schema else None
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        # --- ★変更箇所ここまで ---
 
         if current_flow_type == "cube_fullocr_single_call":
             if self.api_execution_mode == "demo":
+                # ... (Demoロジック - 変更なし) ...
                 log_ctx = "API_DUMMY_PDF_CUBE"
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (make_searchable_pdf): {file_name}", context=log_ctx)
                 time.sleep(random.uniform(0.1, 0.3))
@@ -348,20 +314,19 @@ class OCRApiClient:
                     error_msg_main = f"Demo PDF生成エラー: {file_name}, Error: {error_detail_str}"
                     self.log_manager.error(error_msg_main, context=log_ctx, error_code="DUMMY_PDF_GEN_ERROR", filename=file_name, exc_info=True)
                     return None, {"message": error_msg_main, "code": "DUMMY_PDF_GEN_ERROR", "detail": error_detail_str}
+
             else: # Live モード
+                # ... (Liveロジック - 変更なし) ...
                 log_ctx = "API_LIVE_PDF_CUBE"
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (make_searchable_pdf): {file_name}", context=log_ctx)
                 url = self._get_full_url("make_searchable_pdf")
                 if not url: return None, {"message": "エンドポイントURL取得失敗 (make_searchable_pdf)", "code": "CONFIG_ENDPOINT_URL_FAIL_PDF"}
-                if "{organization_specific_domain}" in url:
-                     self.log_manager.error(f"ベースURIにプレースホルダーが含まれたままです: {url}", context=log_ctx)
-                     return None, {"message": "ベースURIのプレースホルダー未解決。", "code": "PLACEHOLDER_IN_URI"}
                 if not self.api_key:
                     err_msg_val = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"
                     self.log_manager.error(err_msg_val, context=log_ctx, error_code="API_KEY_MISSING_PDF_LIVE")
                     return None, {"message": err_msg_val, "code": "API_KEY_MISSING_PDF_LIVE"}
                 headers = {"apikey": self.api_key}
-                self.log_manager.warning("LiveモードAPIコールは実装されていません (Cube make_searchable_pdf)。", context=log_ctx)
+                self.log_manager.warning("LiveモードAPIコールは実装されていません (Cube make_searchable_pdf)。", context=log_ctx) # Demo動作を返す、という部分は削除
                 return None, {"message": "LiveモードAPIコール未実装 (Cube make_searchable_pdf)。", "code": "NOT_IMPLEMENTED_API_CALL_PDF"}
         
         elif current_flow_type == "dx_fulltext_v2_flow":
@@ -400,42 +365,42 @@ class OCRApiClient:
             else: # Live モード
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2): {file_name}", context=f"{log_ctx_prefix}_LIVE")
                 # TODO: Liveモードでの「サーチャブルPDF登録」「サーチャブルPDF取得」(ポーリング含む) の実装
-                self.log_manager.warning(f"LiveモードAPIコールは実装されていません ({profile_name} - make_searchable_pdf)。", context=f"{log_ctx_prefix}_LIVE")
+                self.log_manager.warning(f"LiveモードAPIコールは実装されていません ({profile_name} - make_searchable_pdf)。", context=f"{log_ctx_prefix}_LIVE") # Demo動作を返す、という部分は削除
                 return None, {"message": f"LiveモードAPIコール未実装 ({profile_name} - make_searchable_pdf)。", "code": "NOT_IMPLEMENTED_API_CALL_DX_SPDF"}
         
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type} (PDF作成)", context="API_CLIENT_ERROR")
             return None, {"message": f"未対応のAPIフロータイプ (PDF作成): {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE_PDF"}
 
-    # update_config は前回提示のものを維持
-    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]):
+    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]): # ★引数名を明確化
         self.log_manager.info("ApiClient: 設定更新中...", context="API_CLIENT_CONFIG_UPDATE")
         self.config = new_config
 
+        # アクティブなプロファイルのスキーマ部分を設定
         if new_api_profile_schema:
             self.active_api_profile_schema = new_api_profile_schema
-        elif "current_api_profile_id" in new_config:
+        elif "current_api_profile_id" in new_config: # スキーマが直接渡されない場合、configから再取得
             current_profile_id_from_config = new_config.get("current_api_profile_id")
             active_profile_schema_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id_from_config)
             if active_profile_schema_from_cfg:
                 self.active_api_profile_schema = active_profile_schema_from_cfg
-            elif new_config.get("api_profiles") and len(new_config.get("api_profiles")) > 0 : # Check if list is not empty
+            elif new_config.get("api_profiles"):
                 self.active_api_profile_schema = new_config["api_profiles"][0]
-                self.log_manager.warning(f"ApiClient: 指定されたcurrent_api_profile_id '{current_profile_id_from_config}' が見つからないか無効なため、最初のプロファイル '{self.active_api_profile_schema.get('name', 'N/A')}' を使用します。", context="API_CLIENT_CONFIG_UPDATE")
             else:
                 self.active_api_profile_schema = {}
-                self.log_manager.error("ApiClient: 利用可能なAPIプロファイルが設定にありません。", context="API_CLIENT_CONFIG_UPDATE_ERROR")
         else:
-             self.active_api_profile_schema = {}
-             self.log_manager.error("ApiClient: update_configで有効なプロファイル情報が不足しており、フォールバックもできませんでした。", context="API_CLIENT_CONFIG_UPDATE_ERROR")
+             self.active_api_profile_schema = {} # フォールバック
 
+        # ★変更箇所: アクティブプロファイルのオプション値(api_key, base_uri含む)を取得・保持
         self.active_options_values = ConfigManager.get_active_api_options_values(self.config)
-        if self.active_options_values is None:
+        if self.active_options_values is None: # 通常は発生しないはずだが念のため
             self.active_options_values = {}
             self.log_manager.warning("ApiClient: アクティブプロファイルのオプション値が取得できませんでした。", context="API_CLIENT_CONFIG_UPDATE")
 
         self.api_execution_mode = self.config.get("api_execution_mode", "demo")
-        self.api_key = self.active_options_values.get("api_key", "")
+        
+        # APIキーを active_options_values から取得
+        self.api_key = self.active_options_values.get("api_key", "") # デフォルト空文字
 
         profile_name_for_log = self.active_api_profile_schema.get('name', 'N/A')
         key_status_log = "設定あり" if self.api_key else "未設定"

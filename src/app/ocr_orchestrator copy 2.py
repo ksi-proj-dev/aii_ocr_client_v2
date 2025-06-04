@@ -222,11 +222,6 @@ class OcrOrchestrator(QObject):
         self.ocr_process_finished_signal.emit(was_interrupted_by_user or bool(final_fatal_error_info), final_fatal_error_info)
         self.request_ui_controls_update_signal.emit()
 
-
-
-
-
-
     def confirm_and_start_ocr(self, processed_files_info: List[FileInfo], input_folder_path: str, parent_widget_for_dialog):
         self.log_manager.debug("OcrOrchestrator: Confirming OCR start...", context="OCR_ORCH_FLOW")
         if not self.api_client:
@@ -238,16 +233,10 @@ class OcrOrchestrator(QObject):
             QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "アクティブなAPIプロファイルが設定されていません。")
             return
 
-        # ★変更箇所: アクティブプロファイルのAPIキーをチェックする
-        if self.config.get("api_execution_mode") == "live":
-            active_api_key = ConfigManager.get_active_api_key(self.config)
-            if not active_api_key or not active_api_key.strip():
-                active_profile_name = self.active_api_profile.get("name", "不明なプロファイル")
-                self.log_manager.warning(f"OcrOrchestrator: API Key for profile '{active_profile_name}' is not set for Live mode. OCR cannot start.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
-                QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
-                                    f"LiveモードでOCRを実行するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
-                return
-        # --- ★変更箇所ここまで ---
+        if self.config.get("api_execution_mode") == "live" and not self.config.get("api_key"):
+            self.log_manager.warning("OcrOrchestrator: API Key is not set for Live mode. OCR cannot start.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
+            QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)", "LiveモードでOCRを実行するには、APIキーを設定してください。")
+            return
 
         if not input_folder_path or not os.path.isdir(input_folder_path):
             self.log_manager.warning("OcrOrchestrator: OCR start aborted: Input folder invalid.", context="OCR_ORCH_FLOW")
@@ -324,16 +313,10 @@ class OcrOrchestrator(QObject):
             QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "アクティブなAPIプロファイルが設定されていません。")
             return
 
-        # ★変更箇所: アクティブプロファイルのAPIキーをチェックする (resume時も同様に)
-        if self.config.get("api_execution_mode") == "live":
-            active_api_key = ConfigManager.get_active_api_key(self.config)
-            if not active_api_key or not active_api_key.strip():
-                active_profile_name = self.active_api_profile.get("name", "不明なプロファイル")
-                self.log_manager.warning(f"OcrOrchestrator: API Key for profile '{active_profile_name}' is not set for Live mode. OCR cannot resume.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
-                QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
-                                    f"LiveモードでOCRを再開するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
-                return
-        # --- ★変更箇所ここまで ---
+        if self.config.get("api_execution_mode") == "live" and not self.config.get("api_key"):
+            self.log_manager.warning("OcrOrchestrator: API Key is not set for Live mode. OCR cannot resume.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
+            QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)", "LiveモードでOCRを実行するには、APIキーを設定してください。")
+            return
 
         if self.is_ocr_running:
             self.log_manager.info("OcrOrchestrator: OCR resume aborted: OCR is already running.", context="OCR_ORCH_FLOW")
@@ -388,8 +371,11 @@ class OcrOrchestrator(QObject):
 
     def confirm_and_stop_ocr(self, parent_widget_for_dialog):
         self.log_manager.debug("OcrOrchestrator: Confirming OCR stop...", context="OCR_ORCH_FLOW_STOP")
+        
         worker_to_stop = self.ocr_worker
+
         if worker_to_stop is not None and hasattr(worker_to_stop, 'isRunning') and worker_to_stop.isRunning():
+            self.log_manager.debug(f"OcrOrchestrator: Worker found and is running. Asking user to confirm stop. Worker ID: {id(worker_to_stop)}", context="OCR_ORCH_FLOW_STOP")
             reply = QMessageBox.question(parent_widget_for_dialog, "OCR中止確認", "OCR処理を中止しますか？",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                         QMessageBox.StandardButton.No)
@@ -428,23 +414,19 @@ class OcrOrchestrator(QObject):
     def set_is_ocr_running(self, is_running: bool): 
         self.is_ocr_running = is_running
 
-    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]): # new_api_profile -> new_api_profile_schema
+    def update_config(self, new_config: dict, new_api_profile: Optional[Dict[str, Any]]):
         self.log_manager.info("OcrOrchestrator: 設定更新中...", context="OCR_ORCH_CONFIG")
         self.config = new_config
-        if new_api_profile_schema:
-            self.active_api_profile_schema = new_api_profile_schema
-            self.log_manager.info(f"OcrOrchestrator: アクティブAPIプロファイルスキーマを '{new_api_profile_schema.get('name')}' に更新しました。", context="OCR_ORCH_CONFIG")
+        if new_api_profile:
+            self.active_api_profile = new_api_profile
+            self.log_manager.info(f"OcrOrchestrator: アクティブAPIプロファイルを '{new_api_profile.get('name')}' に更新しました。", context="OCR_ORCH_CONFIG")
         else: 
             current_profile_id = new_config.get("current_api_profile_id")
-            active_profile_schema_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id) 
-            if active_profile_schema_from_cfg:
-                self.active_api_profile_schema = active_profile_schema_from_cfg
-            elif new_config.get("api_profiles") and len(new_config.get("api_profiles")) > 0: # フォールバック
-                 self.active_api_profile_schema = new_config["api_profiles"][0]
-                 self.log_manager.warning(f"OcrOrchestrator: update_config で current_api_profile_id '{current_profile_id}' に対応するプロファイルスキーマが見つからず、最初のプロファイルを使用します。", context="OCR_ORCH_CONFIG")
+            active_profile_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id)
+            if active_profile_from_cfg:
+                self.active_api_profile = active_profile_from_cfg
             else:
-                 self.log_manager.error("OcrOrchestrator: update_configで有効なAPIプロファイルスキーマが見つかりません。", context="OCR_ORCH_CONFIG")
-                 self.active_api_profile_schema = {} # 空の辞書にフォールバック
-
+                 self.log_manager.error("OcrOrchestrator: update_configで有効なAPIプロファイルが見つかりません。", context="OCR_ORCH_CONFIG")
+        
         if self.api_client: 
-            self.api_client.update_config(new_config, self.active_api_profile_schema)
+            self.api_client.update_config(new_config, self.active_api_profile)
