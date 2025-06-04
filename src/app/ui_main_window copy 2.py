@@ -21,7 +21,7 @@ from option_dialog import OptionDialog
 from summary_view import SummaryView
 from config_manager import ConfigManager
 from log_manager import LogManager, LogLevel
-from api_client import OCRApiClient
+from api_client import CubeApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
@@ -284,8 +284,7 @@ class MainWindow(QMainWindow):
             self.log_manager.critical("アクティブAPIプロファイルが未設定でコンポーネント初期化不可。", context="MAINWIN_LIFECYCLE")
             return
 
-        # ★変更箇所: OCRApiClient を使用
-        self.api_client = OCRApiClient(
+        self.api_client = CubeApiClient(
             config=self.config, 
             log_manager=self.log_manager,
             api_profile=self.active_api_profile 
@@ -734,157 +733,49 @@ class MainWindow(QMainWindow):
     def toggle_log_display(self):
         if hasattr(self, 'log_container'): visible = self.log_container.isVisible(); self.log_container.setVisible(not visible); self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION")
 
-
-
-
-
-
     def show_option_dialog(self):
         self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
         active_profile_id = self.config.get("current_api_profile_id")
-        
-        # アクティブなプロファイルのoptions_schemaを取得
         options_schema = ConfigManager.get_active_api_options_schema(self.config)
-        
-        # アクティブなプロファイルの現在のオプション値 (APIキーを含む) を取得
         current_option_values = ConfigManager.get_active_api_options_values(self.config)
-
-        # ★修正箇所: options_schema が None の場合のみエラーとする
-        # 空の辞書 {} は許容する (APIキー設定や共通設定のためにダイアログは開くべき)
-        if options_schema is None:
-            QMessageBox.warning(self, "設定エラー", 
-                                f"現在アクティブなAPIプロファイル '{active_profile_id}' のオプション定義の取得に失敗しました。\n"
-                                "設定ファイルが破損しているか、プロファイル定義に問題がある可能性があります。")
-            self.log_manager.error(f"オプションスキーマの取得に失敗 (None)。Profile ID: {active_profile_id}", context="CONFIG_ERROR")
-            return
-        
-        # current_option_values が None の場合 (通常は発生しないはずだが念のため)
-        if current_option_values is None:
-            self.log_manager.warning(f"アクティブプロファイル '{active_profile_id}' のオプション値(current_option_values)が取得できませんでした。空のオプションでダイアログを開きます。", context="CONFIG_WARN")
-            current_option_values = {} # APIキー設定などのために空の辞書でフォールバック
-
-        dialog = OptionDialog(
-            options_schema=options_schema, # 空の {} の場合もある
-            current_option_values=current_option_values,
-            global_config=self.config,
-            parent=self
-        )
-
+        if not options_schema: QMessageBox.warning(self, "設定エラー", "現在アクティブなAPIプロファイルのオプション定義が見つかりません。"); self.log_manager.error(f"オプションスキーマが見つかりません。Profile ID: {active_profile_id}", context="CONFIG_ERROR"); return
+        old_api_type_options = current_option_values if current_option_values else {}; old_max_files = old_api_type_options.get("max_files_to_process"); old_recursion_depth = old_api_type_options.get("recursion_depth")
+        dialog = OptionDialog(options_schema=options_schema, current_option_values=current_option_values, global_config=self.config, parent=self)
         if dialog.exec():
-            updated_profile_specific_options, updated_global_config = dialog.get_saved_settings()
-
-            if active_profile_id and updated_profile_specific_options is not None:
-                # options_values_by_profile.[active_profile_id] にAPIキーとOCRオプションを保存
-                self.config["options_values_by_profile"][active_profile_id] = updated_profile_specific_options
-            
-            if updated_global_config is not None:
-                # プロファイルに依存しない共通設定を更新
-                for key, value in updated_global_config.items():
-                    # api_profiles, current_api_profile_id, options_values_by_profile はここでは更新しない
-                    if key not in ["api_profiles", "current_api_profile_id", "options_values_by_profile"]:
-                        self.config[key] = value
-            
-            ConfigManager.save(self.config)
-            self.log_manager.info("Options saved and reloaded into MainWindow.", context="CONFIG_EVENT")
-
-            # 設定変更後に必要な更新処理
-            self.active_api_profile = ConfigManager.get_active_api_profile(self.config) # アクティブプロファイルを再取得
-            if hasattr(self, 'api_client') and self.api_client:
-                self.api_client.update_config(self.config, self.active_api_profile)
-            if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator:
-                self.ocr_orchestrator.update_config(self.config, self.active_api_profile)
-            if hasattr(self, 'file_scanner') and self.file_scanner:
-                self.file_scanner.config = self.config # file_scannerも新しいconfigを参照するように
-
-            self._update_window_title()
-            self._update_api_mode_toggle_button_display() # APIモードボタンの表示更新
-
-            # OCRオプションの変更がファイルリストの再スキャンや再評価を必要とするか確認
-            # (この部分は以前の show_option_dialog のロジックを踏襲)
-            # options_schema から max_files_to_process や recursion_depth を取得する想定だったが、
-            # これらのキーは options_schema のトップレベルではなく、
-            # プロファイル定義の options_schema の中の特定のオプションのスキーマに含まれる。
-            # ここでは、options_values_by_profile から直接取得する。
-            
-            # ★注意: 以下の rescan_needed のロジックは、max_files_to_process や recursion_depth が
-            # ★ options_values_by_profile に直接保存されていることを前提としています。
-            # ★ もしこれらが options_schema の中のネストしたオプションの場合、取得方法の再検討が必要です。
-            # ★ 現状の config_manager.py の DEFAULT_API_PROFILES["cube_fullocr_v1"]["options_schema"] には
-            # ★ これらのキーは直接存在しないため、このロジックは現状では正しく機能しない可能性があります。
-            # ★ 一旦、以前のコードの該当部分をコメントアウトし、ファイルリストの再評価ロジックのみ残します。
-            
-            # old_max_files = old_api_type_options.get("max_files_to_process") # old_api_type_options の定義がない
-            # old_recursion_depth = old_api_type_options.get("recursion_depth")
-            new_api_type_options_values = ConfigManager.get_active_api_options_values(self.config) or {}
-            # new_max_files = new_api_type_options_values.get("max_files_to_process")
-            # new_recursion_depth = new_api_type_options_values.get("recursion_depth")
-            # rescan_needed = (old_max_files != new_max_files or old_recursion_depth != new_recursion_depth)
-            
-            # if rescan_needed:
-            #    if self.input_folder_path and os.path.isdir(self.input_folder_path):
-            #        QMessageBox.information(self, "設定変更の適用", "ファイル検索範囲に関する設定が変更されたため、ファイルリストを再スキャンします。")
-            #        self.perform_rescan()
-            #    else:
-            #        self.processed_files_info = []
-            #        if hasattr(self, 'list_view'): self.list_view.update_files([])
-            #        self.update_all_status_displays()
-            #        self.log_manager.info("File collection parameters changed, but no input folder selected. List cleared.", context="CONFIG_EVENT")
-            # else:
-            self.log_manager.info(f"Settings changed. Re-evaluating file statuses based on new options.", context="CONFIG_EVENT")
-            new_upload_max_mb = new_api_type_options_values.get("upload_max_size_mb", 60) # デフォルト値は適宜調整
-            new_upload_max_bytes = new_upload_max_mb * 1024 * 1024
-            
-            new_file_actions_cfg = self.config.get("file_actions", {})
-            new_output_format = new_file_actions_cfg.get("output_format", "both")
-            
-            default_json_status = "-" if new_output_format in ["json_only", "both"] else "作成しない(設定)"
-            default_pdf_status = "-" if new_output_format in ["pdf_only", "both"] else "作成しない(設定)"
-            
-            items_updated = False
-            for file_info in self.processed_files_info:
-                prev_engine_status = file_info.ocr_engine_status
-                prev_checked = file_info.is_checked
-                orig_status = file_info.status
-                orig_json = file_info.json_status
-                orig_pdf = file_info.searchable_pdf_status
-                
-                is_now_skipped = file_info.size > new_upload_max_bytes
-                
-                if is_now_skipped:
-                    if file_info.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT:
-                        file_info.status = "スキップ(サイズ上限)"
-                        file_info.ocr_engine_status = OCR_STATUS_SKIPPED_SIZE_LIMIT
-                        file_info.ocr_result_summary = f"ファイルサイズが上限 ({new_upload_max_mb}MB) を超過"
-                        file_info.json_status = "スキップ"
-                        file_info.searchable_pdf_status = "スキップ"
-                        file_info.is_checked = False # スキップ対象はチェックを外す
-                else: # スキップ対象ではない場合
-                    if file_info.ocr_engine_status == OCR_STATUS_SKIPPED_SIZE_LIMIT: # 以前はスキップだったが、上限緩和で対象になった
-                        file_info.status = "待機中"
-                        file_info.ocr_engine_status = OCR_STATUS_NOT_PROCESSED
-                        file_info.ocr_result_summary = ""
-                        file_info.is_checked = True # 対象になったのでチェックを入れる
-                    
-                    # OCR未処理の場合、JSON/PDFステータスを出力形式設定に基づいて更新
-                    if file_info.ocr_engine_status == OCR_STATUS_NOT_PROCESSED:
-                        file_info.json_status = default_json_status
-                        file_info.searchable_pdf_status = default_pdf_status
-                        
-                if (file_info.ocr_engine_status != prev_engine_status or \
-                    file_info.status != orig_status or \
-                    file_info.json_status != orig_json or \
-                    file_info.searchable_pdf_status != orig_pdf or \
-                    file_info.is_checked != prev_checked):
-                    items_updated = True
-                    
-            if items_updated:
-                if hasattr(self, 'list_view'): self.list_view.update_files(self.processed_files_info)
-            
-            self.update_all_status_displays()
+            updated_values, updated_global_config = dialog.get_saved_settings()
+            if active_profile_id: self.config["options_values_by_profile"][active_profile_id] = updated_values
+            for key, value in updated_global_config.items():
+                if key not in ["api_profiles", "current_api_profile_id", "options_values_by_profile"]: self.config[key] = value
+            ConfigManager.save(self.config); self.log_manager.info("Options saved and reloaded into MainWindow.", context="CONFIG_EVENT")
+            self.active_api_profile = ConfigManager.get_active_api_profile(self.config)
+            if hasattr(self, 'api_client') and self.api_client: self.api_client.update_config(self.config, self.active_api_profile)
+            if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator: self.ocr_orchestrator.update_config(self.config, self.active_api_profile)
+            if hasattr(self, 'file_scanner') and self.file_scanner: self.file_scanner.config = self.config 
+            self._update_window_title(); self._update_api_mode_toggle_button_display()
+            new_api_type_options_values = ConfigManager.get_active_api_options_values(self.config) or {}; new_max_files = new_api_type_options_values.get("max_files_to_process"); new_recursion_depth = new_api_type_options_values.get("recursion_depth")
+            rescan_needed = (old_max_files != new_max_files or old_recursion_depth != new_recursion_depth)
+            if rescan_needed:
+                if self.input_folder_path and os.path.isdir(self.input_folder_path): QMessageBox.information(self, "設定変更の適用", "ファイル検索範囲に関する設定が変更されたため、ファイルリストを再スキャンします。"); self.perform_rescan()
+                else: self.processed_files_info = []; self.list_view.update_files([]) if hasattr(self, 'list_view') else None; self.update_all_status_displays(); self.log_manager.info("File collection parameters changed, but no input folder selected. List cleared.", context="CONFIG_EVENT")
+            else: 
+                self.log_manager.info(f"Settings changed. Re-evaluating file statuses based on new options.", context="CONFIG_EVENT")
+                new_upload_max_mb = new_api_type_options_values.get("upload_max_size_mb", 60); new_upload_max_bytes = new_upload_max_mb * 1024 * 1024
+                new_file_actions_cfg = self.config.get("file_actions", {}); new_output_format = new_file_actions_cfg.get("output_format", "both")
+                default_json_status = "-" if new_output_format in ["json_only", "both"] else "作成しない(設定)"; default_pdf_status = "-" if new_output_format in ["pdf_only", "both"] else "作成しない(設定)"
+                items_updated = False
+                for file_info in self.processed_files_info:
+                    prev_engine_status = file_info.ocr_engine_status; prev_checked = file_info.is_checked; orig_status = file_info.status; orig_json = file_info.json_status; orig_pdf = file_info.searchable_pdf_status
+                    is_now_skipped = file_info.size > new_upload_max_bytes
+                    if is_now_skipped:
+                        if file_info.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT: file_info.status = "スキップ(サイズ上限)"; file_info.ocr_engine_status = OCR_STATUS_SKIPPED_SIZE_LIMIT; file_info.ocr_result_summary = f"ファイルサイズが上限 ({new_upload_max_mb}MB) を超過"; file_info.json_status = "スキップ"; file_info.searchable_pdf_status = "スキップ"; file_info.is_checked = False
+                    else:
+                        if file_info.ocr_engine_status == OCR_STATUS_SKIPPED_SIZE_LIMIT: file_info.status = "待機中"; file_info.ocr_engine_status = OCR_STATUS_NOT_PROCESSED; file_info.ocr_result_summary = ""; file_info.is_checked = True
+                        if file_info.ocr_engine_status == OCR_STATUS_NOT_PROCESSED: file_info.json_status = default_json_status; file_info.searchable_pdf_status = default_pdf_status
+                    if (file_info.ocr_engine_status != prev_engine_status or file_info.status != orig_status or file_info.json_status != orig_json or file_info.searchable_pdf_status != orig_pdf or file_info.is_checked != prev_checked): items_updated = True
+                if items_updated: self.list_view.update_files(self.processed_files_info) if hasattr(self, 'list_view') else None
+                self.update_all_status_displays()
             self.update_ocr_controls()
-        else:
-            self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
-
+        else: self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
 
     def confirm_start_ocr(self):
         if hasattr(self, 'ocr_orchestrator'): self.ocr_orchestrator.confirm_and_start_ocr(self.processed_files_info, self.input_folder_path, self)

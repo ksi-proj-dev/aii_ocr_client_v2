@@ -29,7 +29,7 @@ except Exception as e:
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "cube_fullocr_v1", # ★変更: プロファイルID変更
-        "name": "AI inside Cube (全文OCR V1)", # ★変更: 名前もバージョンに合わせて更新
+        "name": "Cube (全文OCR V1)", # ★変更箇所: プロファイル名変更
         "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
         "flow_type": "cube_fullocr_single_call",
         "endpoints": {

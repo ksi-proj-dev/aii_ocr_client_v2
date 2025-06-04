@@ -3,13 +3,13 @@
 import os
 from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtCore import QObject, pyqtSignal
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List # ★ 型ヒント用のインポート
 
 from ocr_worker import OcrWorker
-from log_manager import LogManager, LogLevel
-from api_client import OCRApiClient # ★変更箇所: CubeApiClient から OCRApiClient へ
+from log_manager import LogManager, LogLevel 
+from api_client import CubeApiClient
 from ui_dialogs import OcrConfirmationDialog
-from config_manager import ConfigManager
+from config_manager import ConfigManager 
 
 from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -29,7 +29,7 @@ class OcrOrchestrator(QObject):
     request_ui_controls_update_signal = pyqtSignal()
     request_list_view_update_signal = pyqtSignal(list) # list: updated_file_list (List[FileInfo])
 
-    def __init__(self, api_client: OCRApiClient, log_manager: LogManager, config: Dict[str, Any], api_profile: Optional[Dict[str, Any]]):
+    def __init__(self, api_client: CubeApiClient, log_manager: LogManager, config: Dict[str, Any], api_profile: Optional[Dict[str, Any]]):
         super().__init__()
         self.api_client = api_client
         self.log_manager = log_manager

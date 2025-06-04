@@ -21,7 +21,7 @@ from option_dialog import OptionDialog
 from summary_view import SummaryView
 from config_manager import ConfigManager
 from log_manager import LogManager, LogLevel
-from api_client import OCRApiClient
+from api_client import CubeApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
@@ -284,8 +284,7 @@ class MainWindow(QMainWindow):
             self.log_manager.critical("アクティブAPIプロファイルが未設定でコンポーネント初期化不可。", context="MAINWIN_LIFECYCLE")
             return
 
-        # ★変更箇所: OCRApiClient を使用
-        self.api_client = OCRApiClient(
+        self.api_client = CubeApiClient(
             config=self.config, 
             log_manager=self.log_manager,
             api_profile=self.active_api_profile 
