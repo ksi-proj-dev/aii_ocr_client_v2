@@ -1,16 +1,16 @@
-# ui_main_window.py (抜粋)
+# ui_main_window.py
 
 import sys
 import os
 import platform
 import subprocess
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List # List を追加
 import argparse
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QToolBar, QVBoxLayout, QWidget,
     QLabel, QMessageBox, QFileDialog, QTextEdit, QSplitter,
-    QFormLayout, QPushButton, QHBoxLayout, QFrame, QSizePolicy,
+    QFormLayout, QPushButton, QHBoxLayout, QFrame, QSizePolicy, 
     QDialog, QDialogButtonBox, QComboBox
 )
 from PyQt6.QtGui import QAction, QFontMetrics, QIcon
@@ -33,14 +33,10 @@ from app_constants import (
     LISTVIEW_UPDATE_INTERVAL_MS
 )
 
-APP_VERSION = "0.0.14" # バージョンは適宜更新してください
+APP_VERSION = "0.0.14"
 
 class ApiSelectionDialog(QDialog):
-    # (ApiSelectionDialogのコードは変更なしのため省略)
-    # ★変更の可能性: 後ほど、CLIで指定されたIDのみ表示する場合、
-    # 初期化時に表示するプロファイルのリストを渡せるように変更するかもしれません。
-    # 現時点では、渡されたIDが1つの場合はダイアログ自体をスキップするため、一旦そのままとします。
-    def __init__(self, api_profiles: list[dict], current_profile_id: Optional[str], parent=None, initial_selection_filter: Optional[List[str]] = None):
+    def __init__(self, api_profiles: list[dict], current_profile_id: Optional[str], parent=None):
         super().__init__(parent)
         self.setWindowTitle("APIプロファイル選択")
         self.selected_profile_id: Optional[str] = None
@@ -50,32 +46,17 @@ class ApiSelectionDialog(QDialog):
         layout.addWidget(label)
         
         self.combo_box = QComboBox()
+        self.profile_map = {} 
         
-        # initial_selection_filter があれば、それに基づいてプロファイルをフィルタリング
-        profiles_to_display = []
-        if initial_selection_filter:
-            for profile_id_to_filter in initial_selection_filter:
-                profile = next((p for p in api_profiles if p.get("id") == profile_id_to_filter), None)
-                if profile:
-                    profiles_to_display.append(profile)
-            if not profiles_to_display: # フィルタ結果が空なら、全プロファイルを表示（エラーケースのフォールバック）
-                profiles_to_display = api_profiles
-                self.log_manager.warning(f"ApiSelectionDialog: initial_selection_filterで有効なプロファイルが見つかりませんでした。全プロファイルを表示します。Filter: {initial_selection_filter}", context="UI_DIALOG_WARN")
-
-        else:
-            profiles_to_display = api_profiles
-
-        for profile in profiles_to_display:
+        for profile in api_profiles:
             profile_id = profile.get("id")
             profile_name = profile.get("name", profile_id) 
             if profile_id:
                 self.combo_box.addItem(profile_name, userData=profile_id)
-                if profile_id == current_profile_id and not initial_selection_filter: # フィルタがない場合のみ現在のプロファイルを選択
+                self.profile_map[profile_name] = profile_id
+                if profile_id == current_profile_id:
                     self.combo_box.setCurrentText(profile_name)
-                elif initial_selection_filter and profile_id == initial_selection_filter[0]: # フィルタがある場合、フィルタの最初のものを選択
-                    self.combo_box.setCurrentText(profile_name)
-
-
+        
         layout.addWidget(self.combo_box)
         
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -90,26 +71,19 @@ class ApiSelectionDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self, cli_args: Optional[argparse.Namespace] = None):
         super().__init__()
-        self.log_manager = LogManager() # LogManagerを最初に初期化
+        self.log_manager = LogManager()
         self.log_manager.info(f"AI inside OCR Client Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
 
         self.config = ConfigManager.load()
         self.cli_args = cli_args
-        self.active_api_profile: Optional[Dict[str, Any]] = None # ★active_api_profileを初期化
+        
+        self._handle_api_profile_selection() 
 
-        # APIプロファイル選択処理
-        # このメソッド内で、選択キャンセル時や致命的なエラー時には sys.exit() が呼ばれる可能性があります。
-        self._handle_api_profile_selection()
+        if not hasattr(self, 'active_api_profile') or self.active_api_profile is None:
+            self.log_manager.critical("アクティブなAPIプロファイルが設定できませんでした。アプリケーションを終了します。", context="SYSTEM_LIFECYCLE")
+            QMessageBox.critical(None, "致命的なエラー", "APIプロファイルの読み込みまたは選択に失敗しました。\n設定ファイルを確認するか、管理者に連絡してください。")
+            sys.exit(1) 
 
-        # _handle_api_profile_selection でプロファイルが設定されなかった場合 (致命的エラーで、かつ上記でexitしなかった場合)
-        if self.active_api_profile is None:
-            self.log_manager.critical("アクティブなAPIプロファイルが設定できませんでした。アプリケーションを終了します。", context="SYSTEM_LIFECYCLE_CRITICAL")
-            # ユーザーがダイアログキャンセルで終了した場合メッセージは不要なので、
-            # このパスに来るのは予期せぬ設定不備の場合のみとする。
-            QMessageBox.critical(None, "致命的な設定エラー", "利用可能なAPIプロファイルの読み込みまたは選択に失敗しました。\n設定ファイルを確認するか、管理者に連絡してください。")
-            sys.exit(1) # 強制終了
-
-        # これ以降の初期化処理は active_api_profile が確定している前提で進む
         self.log_manager.debug(f"MainWindow initializing with API Profile: {self.active_api_profile.get('name')}", context="MAINWIN_LIFECYCLE")
 
         self._initialize_core_components_based_on_profile()
@@ -123,152 +97,51 @@ class MainWindow(QMainWindow):
 
         self.log_manager.info(f"Application initialized. API: {self.active_api_profile.get('name')}, Mode: {self.config.get('api_execution_mode', 'demo').upper()}", context="SYSTEM_LIFECYCLE")
 
-
-
-
-
-
     def _handle_api_profile_selection(self):
-        """
-        起動時のAPIプロファイル選択を処理します。
-        CLI引数、保存された設定、またはユーザー選択ダイアログに基づいて active_api_profile を設定します。
-        適切なプロファイルが選択できない場合、このメソッド内でアプリケーションを終了させることがあります。
-        """
+        selected_profile_id_from_cli = getattr(self.cli_args, 'api', None)
+        
         available_profiles = self.config.get("api_profiles", [])
         if not available_profiles:
-            self.log_manager.critical("設定にAPIプロファイルが定義されていません。アプリケーションを終了します。", context="CONFIG_ERROR_CRITICAL")
-            QMessageBox.critical(None, "設定エラー", "利用可能なAPIプロファイルが設定ファイルに定義されていません。")
-            sys.exit(1)
+            self.log_manager.error("設定にAPIプロファイルが定義されていません。", context="CONFIG_ERROR")
+            self.active_api_profile = None
+            return
 
         current_saved_profile_id = self.config.get("current_api_profile_id")
-        cli_profile_ids: Optional[List[str]] = getattr(self.cli_args, 'api', None)
 
-        target_profile_id_from_cli: Optional[str] = None
-        ids_for_dialog_filter: Optional[List[str]] = None
-
-        # --- CLI引数の処理 ---
-        if cli_profile_ids is not None: # --api オプションが指定された場合 (空リストの場合も含む)
-            if not cli_profile_ids: # --api とだけ指定され、IDが続かなかった場合 (args.api が空リスト [])
-                self.log_manager.info("--api オプションがIDなしで指定されたため、プロファイル選択ダイアログを表示します。", context="SYSTEM_INIT_CLI")
-                # この後のダイアログ表示ロジックに任せる (target_profile_id_from_cli は None のまま)
-            else:
-                # ★修正箇所: 重複を許容しないようにsetを使用
-                valid_cli_ids_set = set()
-                invalid_cli_ids = []
-                processed_cli_ids_for_error_msg = set() # 重複した無効IDをエラーメッセージで何度も表示しないため
-
-                for cli_id in cli_profile_ids:
-                    if any(p.get("id") == cli_id for p in available_profiles):
-                        valid_cli_ids_set.add(cli_id)
-                    elif cli_id not in processed_cli_ids_for_error_msg: #まだ警告していない無効IDのみ追加
-                        invalid_cli_ids.append(cli_id)
-                        processed_cli_ids_for_error_msg.add(cli_id)
-                
-                valid_cli_ids = list(valid_cli_ids_set) # 重複のない有効なIDのリスト
-
-                if invalid_cli_ids:
-                    invalid_ids_str = ", ".join(invalid_cli_ids)
-                    msg = f"コマンドラインで指定された以下のAPIプロファイルIDは無効（未実装など）です:\n{invalid_ids_str}\n\n"
-                    if valid_cli_ids:
-                        msg += "有効なIDでの処理を続行しますか？\n（「キャンセル」でアプリケーションを終了します）"
-                        reply = QMessageBox.warning(None, "無効なプロファイルID", msg,
-                                                    QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-                                                    QMessageBox.StandardButton.Ok)
-                        if reply == QMessageBox.StandardButton.Cancel:
-                            self.log_manager.warning(f"ユーザーが無効なプロファイルID警告後にキャンセルを選択しました。アプリを終了します。Invalid IDs: {invalid_ids_str}", context="SYSTEM_INIT_CLI_CANCEL")
-                            sys.exit(0)
-                        self.log_manager.info(f"無効なプロファイルID ({invalid_ids_str}) がありましたが、ユーザーは処理継続を選択しました。", context="SYSTEM_INIT_CLI")
-                    else:
-                        msg += "有効なプロファイルIDが一つも指定されませんでした。アプリケーションを終了します。"
-                        self.log_manager.error(msg, context="SYSTEM_INIT_CLI_ERROR")
-                        QMessageBox.critical(None, "プロファイル指定エラー", msg)
-                        sys.exit(1)
-
-                if not valid_cli_ids:
-                    # 有効なIDが結果的になかった場合 (すべて無効でユーザーがOKしたケースは上の critical で終了)
-                    # このパスに到達するのは、例えば --api invalid_id のみでユーザーがOKした場合など。
-                    # この場合、ダイアログ表示ロジックに進み、そこで利用可能なプロファイルがなければエラーとなる。
-                    pass # 下のダイアログ表示ロジックに任せる
-
-                if len(valid_cli_ids) == 1:
-                    target_profile_id_from_cli = valid_cli_ids[0]
-                    self.log_manager.info(f"コマンドラインからAPIプロファイル '{target_profile_id_from_cli}' が指定されました。", context="SYSTEM_INIT_CLI")
-                elif len(valid_cli_ids) > 1:
-                    self.log_manager.info(f"コマンドラインから複数の有効なAPIプロファイル {valid_cli_ids} が指定されたため、選択ダイアログを表示します。", context="SYSTEM_INIT_CLI")
-                    ids_for_dialog_filter = valid_cli_ids # ★重複のないリストをダイアログフィルタに設定
-                # else: valid_cli_idsが0個の場合、上のロジックで既に終了しているか、ダイアログに進む
-
-        # --- プロファイルの確定 ---
-        if target_profile_id_from_cli: # CLIで単一の有効なIDが確定している場合
-            self.active_api_profile = ConfigManager.get_api_profile(self.config, target_profile_id_from_cli)
-            if self.active_api_profile:
-                if current_saved_profile_id != target_profile_id_from_cli:
-                    self.config["current_api_profile_id"] = target_profile_id_from_cli
+        if selected_profile_id_from_cli:
+            profile_exists = any(p.get("id") == selected_profile_id_from_cli for p in available_profiles)
+            if profile_exists:
+                self.log_manager.info(f"コマンドラインからAPIプロファイルが指定されました: {selected_profile_id_from_cli}", context="SYSTEM_INIT")
+                if current_saved_profile_id != selected_profile_id_from_cli:
+                    self.config["current_api_profile_id"] = selected_profile_id_from_cli
                     ConfigManager.save(self.config)
-            else: # get_api_profileがNoneを返した場合 (ありえないはずだが念のため)
-                self.log_manager.error(f"CLIで指定された有効なはずのプロファイルID '{target_profile_id_from_cli}' が見つかりませんでした。アプリを終了します。", context="SYSTEM_INIT_CRITICAL")
-                QMessageBox.critical(None, "内部エラー", f"プロファイル '{target_profile_id_from_cli}' の読み込みに失敗しました。")
-                sys.exit(1)
-            return # active_api_profile が設定されたのでメソッド終了
-
-        # --- ダイアログ表示の判断 ---
-        # CLIで特定のプロファイルが選択されなかった場合にダイアログ表示を検討
-        # ids_for_dialog_filter が設定されていれば、それらのみでダイアログを表示
-        # ids_for_dialog_filter が None で available_profiles が複数あれば全件表示
-        # ids_for_dialog_filter が None で available_profiles が1つならそれを自動選択
-
-        if len(available_profiles) == 1 and not ids_for_dialog_filter:
-            self.active_api_profile = available_profiles[0]
-            profile_id_to_save = self.active_api_profile.get("id")
-            if current_saved_profile_id != profile_id_to_save:
-                self.config["current_api_profile_id"] = profile_id_to_save
-                ConfigManager.save(self.config)
-            self.log_manager.info(f"単一のAPIプロファイル '{self.active_api_profile.get('name')}' を自動選択しました。", context="SYSTEM_INIT_AUTO")
-        else: # 複数のプロファイルが存在する、またはCLIフィルタがある場合
-            # ダイアログに渡す初期選択IDを決定
-            initial_dialog_selection_id = current_saved_profile_id
-            if ids_for_dialog_filter: # CLIフィルタがある場合
-                if current_saved_profile_id in ids_for_dialog_filter:
-                    initial_dialog_selection_id = current_saved_profile_id
-                elif valid_cli_ids: # valid_cli_ids が空でないことを確認
-                    initial_dialog_selection_id = valid_cli_ids[0] # フィルタの先頭を選択候補に
-                # else: initial_dialog_selection_id は current_saved_profile_id のまま (フィルタが空だった場合など)
-            
-            # ダイアログに表示するプロファイルのリストを決定
-            profiles_for_dialog = []
-            if ids_for_dialog_filter:
-                temp_profile_ids_in_dialog = set() # ダイアログ内での重複も防ぐ
-                for pid in ids_for_dialog_filter:
-                    profile = ConfigManager.get_api_profile(self.config, pid)
-                    if profile and pid not in temp_profile_ids_in_dialog:
-                        profiles_for_dialog.append(profile)
-                        temp_profile_ids_in_dialog.add(pid)
-            else: # CLIフィルタがない場合は全プロファイル
-                profiles_for_dialog = available_profiles
-
-            if not profiles_for_dialog: # 表示するプロファイルが結果的になかった場合
-                self.log_manager.error("表示可能なAPIプロファイルが見つかりませんでした。アプリを終了します。", context="SYSTEM_INIT_CRITICAL")
-                QMessageBox.critical(None, "設定エラー", "利用可能なAPIプロファイルがありません。")
-                sys.exit(1)
-
-
-            dialog = ApiSelectionDialog(profiles_for_dialog, initial_dialog_selection_id, self) # フィルタされたプロファイルリストを渡す
-            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_profile_id:
-                selected_id = dialog.selected_profile_id
-                self.active_api_profile = ConfigManager.get_api_profile(self.config, selected_id) # 設定から再取得
-                if self.active_api_profile:
-                    if current_saved_profile_id != selected_id:
-                        self.config["current_api_profile_id"] = selected_id
-                        ConfigManager.save(self.config)
-                    self.log_manager.info(f"ユーザーがAPIプロファイル '{self.active_api_profile.get('name')}' を選択しました。", context="SYSTEM_INIT_DIALOG")
-                else: #ありえないはずだが、選択されたIDでプロファイルが取得できなかった場合
-                    self.log_manager.error(f"ダイアログで選択されたプロファイルID '{selected_id}' が見つかりませんでした。アプリを終了します。", context="SYSTEM_INIT_CRITICAL")
-                    QMessageBox.critical(None, "内部エラー", f"選択されたプロファイル '{selected_id}' の読み込みに失敗しました。")
-                    sys.exit(1)
+                self.active_api_profile = ConfigManager.get_api_profile(self.config, selected_profile_id_from_cli)
+                return
             else:
-                self.log_manager.warning("APIプロファイル選択がキャンセルされました。アプリケーションを終了します。", context="SYSTEM_INIT_DIALOG_CANCEL")
-                sys.exit(0)
+                self.log_manager.warning(f"コマンドラインで指定されたAPIプロファイルID '{selected_profile_id_from_cli}' は無効です。保存されている設定または選択ダイアログを使用します。", context="SYSTEM_INIT")
 
+        if len(available_profiles) == 1:
+            self.active_api_profile = available_profiles[0]
+            if current_saved_profile_id != self.active_api_profile.get("id"):
+                self.config["current_api_profile_id"] = self.active_api_profile.get("id")
+                ConfigManager.save(self.config)
+            self.log_manager.info(f"単一のAPIプロファイル '{self.active_api_profile.get('name')}' を自動選択しました。", context="SYSTEM_INIT")
+        else: 
+            dialog = ApiSelectionDialog(available_profiles, current_saved_profile_id, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_profile_id:
+                if current_saved_profile_id != dialog.selected_profile_id:
+                    self.config["current_api_profile_id"] = dialog.selected_profile_id
+                    ConfigManager.save(self.config)
+                self.active_api_profile = ConfigManager.get_api_profile(self.config, dialog.selected_profile_id)
+                self.log_manager.info(f"ユーザーがAPIプロファイル '{self.active_api_profile.get('name')}' を選択しました。", context="SYSTEM_INIT")
+            else: 
+                self.log_manager.warning("APIプロファイル選択がキャンセルされたか、失敗しました。前回保存された設定を使用します。", context="SYSTEM_INIT")
+                self.active_api_profile = ConfigManager.get_active_api_profile(self.config)
+                if not self.active_api_profile and available_profiles:
+                     self.active_api_profile = available_profiles[0]
+                     self.config["current_api_profile_id"] = self.active_api_profile.get("id")
+                     ConfigManager.save(self.config)
+                     self.log_manager.info(f"フォールバックとしてAPIプロファイル '{self.active_api_profile.get('name')}' を使用します。", context="SYSTEM_INIT")
 
 
     def _initialize_core_components_based_on_profile(self):

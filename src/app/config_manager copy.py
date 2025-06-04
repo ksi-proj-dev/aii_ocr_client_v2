@@ -3,9 +3,9 @@
 import os
 import sys
 import json
-import datetime
-import shutil
-from typing import Optional, Dict, Any, List
+import datetime # ★ datetime をインポート
+import shutil   # ★ shutil をインポート
+from typing import Optional, Dict, Any, List # ★ Optional, Dict, Any, List をインポート
 from appdirs import user_config_dir
 
 CONFIG_FILE_NAME = "config.json"
@@ -26,17 +26,17 @@ except Exception as e:
         print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
         CONFIG_PATH = None; CONFIG_DIR = None
 
-DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
+DEFAULT_API_PROFILES: List[Dict[str, Any]] = [ # ★ 型ヒントを追加
     {
-        "id": "cube_fullocr_v1", # ★変更: プロファイルID変更
-        "name": "AI inside Cube (全文OCR V1)", # ★変更: 名前もバージョンに合わせて更新
+        "id": "cube_fullocr",
+        "name": "AI inside Cube (全文OCR)",
         "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
-        "flow_type": "cube_fullocr_single_call",
+        "flow_type": "cube_fullocr_single_call", 
         "endpoints": {
             "read_document": "/fullocr-read-document",
             "make_searchable_pdf": "/make-searchable-pdf"
         },
-        "options_schema": {
+        "options_schema": { 
             "adjust_rotation": {"type": "bool", "default": 0, "label": "回転補正を行う", "tooltip": "0=OFF, 1=ON. 90度単位および±5度程度の傾きを補正します。"},
             "character_extraction": {"type": "bool", "default": 0, "label": "文字ごとの情報を抽出する (文字尤度など)", "tooltip": "0=OFF, 1=ON. ONにすると結果JSONに1文字ずつの情報が追加されます。"},
             "concatenate": {"type": "bool", "default": 1, "label": "強制結合を行う (LLM用途推奨)", "tooltip": "0=単語区切り, 1=文章として結合. LLM用途ではONを推奨。"},
@@ -49,38 +49,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":100, "suffix": " MB", "label": "分割サイズ (1ファイルあたり):", "tooltip": "自動分割を有効にした場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
         }
-    },
-    # ★追加: 新規プロファイルのプレースホルダー
-    {
-        "id": "dx_fulltext_v2",
-        "name": "DX Suite (全文OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
-        "flow_type": "dx_fulltext_v2_flow", # 仮
-        "endpoints": { # 仮
-            "read_document": "/fulltextOcr",
-            "make_searchable_pdf": "/searchablePdf"
-        },
-        "options_schema": { # 仮 (API仕様に応じて後で詳細化)
-            "option_dx_1": {"type": "bool", "default": True, "label": "DX Suiteオプション1"},
-            "upload_max_size_mb": {"type": "int", "default": 50, "min": 1, "max": 100, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite用のファイルサイズ上限。"}
-            # ... 他のDX Suite 全文OCR V2用オプション
-        }
-    },
-    {
-        "id": "dx_atypical_v2",
-        "name": "DX Suite (非定型OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
-        "flow_type": "dx_atypical_v2_flow", # 仮
-        "endpoints": {}, # 仮
-        "options_schema": {} # 仮
-    },
-    {
-        "id": "dx_standard_v2",
-        "name": "DX Suite (標準OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
-        "flow_type": "dx_standard_v2_flow", # 仮
-        "endpoints": {}, # 仮
-        "options_schema": {} # 仮
     }
 ]
 
@@ -100,7 +68,7 @@ class ConfigManager:
         return True
 
     @staticmethod
-    def load() -> Dict[str, Any]:
+    def load() -> Dict[str, Any]: # ★ 型ヒントを追加
         if not ConfigManager._ensure_config_dir_exists():
             print("エラー: 設定ディレクトリの準備ができないため、デフォルト設定でロードします。")
             return ConfigManager._get_default_config_structure()
@@ -118,9 +86,9 @@ class ConfigManager:
                 print(f"警告: {CONFIG_PATH} の読み込み中に予期せぬエラーが発生しました: {e}。デフォルト設定でバックアップを作成し、デフォルト設定で続行します。")
                 ConfigManager._backup_corrupted_config()
                 user_config = ConfigManager._get_default_config_structure()
-        else:
+        else: 
              user_config = ConfigManager._get_default_config_structure()
-
+        
         ConfigManager._apply_and_migrate_default_values(user_config)
         return user_config
 
@@ -129,69 +97,62 @@ class ConfigManager:
         if CONFIG_PATH and os.path.exists(CONFIG_PATH):
             try:
                 backup_path = CONFIG_PATH + ".corrupted_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                shutil.copy2(CONFIG_PATH, backup_path)
+                shutil.copy2(CONFIG_PATH, backup_path) # ★ shutil を使用
                 print(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。")
             except Exception as e_backup:
                 print(f"破損した設定ファイルのバックアップに失敗: {e_backup}")
 
 
     @staticmethod
-    def _get_default_config_structure() -> Dict[str, Any]:
-        config: Dict[str, Any] = {}
+    def _get_default_config_structure() -> Dict[str, Any]: # ★ 型ヒントを追加
+        config: Dict[str, Any] = {} # ★ 型ヒントを追加
         ConfigManager._apply_and_migrate_default_values(config, force_defaults=True)
         return config
 
     @staticmethod
-    def _apply_and_migrate_default_values(config: Dict[str, Any], force_defaults: bool = False):
+    def _apply_and_migrate_default_values(config: Dict[str, Any], force_defaults: bool = False): # ★ 型ヒントを追加
         if force_defaults or "api_profiles" not in config or not isinstance(config["api_profiles"], list) or not config["api_profiles"]:
-            config["api_profiles"] = json.loads(json.dumps(DEFAULT_API_PROFILES))
+            config["api_profiles"] = json.loads(json.dumps(DEFAULT_API_PROFILES)) 
         else:
             existing_profile_ids = {p.get("id") for p in config["api_profiles"]}
             for default_profile in DEFAULT_API_PROFILES:
                 if default_profile["id"] not in existing_profile_ids:
                     config["api_profiles"].append(json.loads(json.dumps(default_profile)))
-                else:
+                else: 
                     cfg_profile = next((p for p in config["api_profiles"] if p.get("id") == default_profile["id"]), None)
                     if cfg_profile:
-                        # ★変更: デフォルトプロファイルに存在するが、設定ファイル中のプロファイルに存在しないキーをマージする
-                        # options_schema 以外のトップレベルキーもマージ対象とする（例: name, base_uri, flow_type, endpoints）
                         for key, val in default_profile.items():
-                            if key not in cfg_profile: # 設定ファイル側のプロファイルにキーがなければ追加
+                            if key not in cfg_profile:
                                 cfg_profile[key] = json.loads(json.dumps(val))
-                            elif isinstance(val, dict) and isinstance(cfg_profile.get(key), dict): # キーが存在し、かつ両方辞書の場合
-                                if key == "endpoints": # endpoints の場合、中のキーもマージ
-                                    for ep_key, ep_val in val.items():
-                                         if ep_key not in cfg_profile[key]:
-                                            cfg_profile[key][ep_key] = ep_val
-                                elif key == "options_schema": # options_schema の場合、中のキーもマージ
-                                    for opt_key, opt_val_schema in val.items():
-                                        if opt_key not in cfg_profile[key]:
-                                            cfg_profile[key][opt_key] = json.loads(json.dumps(opt_val_schema))
-                                # その他の辞書型キーは、現状ではトップレベルのみ更新（必要に応じて深いマージを検討）
+                            elif key == "endpoints" and isinstance(val, dict):
+                                for ep_key, ep_val in val.items():
+                                     if ep_key not in cfg_profile[key]:
+                                        cfg_profile[key][ep_key] = ep_val
+                            elif key == "options_schema" and isinstance(val, dict):
+                                for opt_key, opt_val_schema in val.items():
+                                    if opt_key not in cfg_profile[key]:
+                                        cfg_profile[key][opt_key] = json.loads(json.dumps(opt_val_schema))
 
 
         config.setdefault("current_api_profile_id", DEFAULT_API_PROFILES[0]["id"] if DEFAULT_API_PROFILES else "")
-
+        
         current_profile_id = config["current_api_profile_id"]
         profile_ids = [p.get("id") for p in config.get("api_profiles", [])]
         if current_profile_id not in profile_ids and profile_ids:
             config["current_api_profile_id"] = profile_ids[0]
 
-        # ★削除: グローバルなapi_keyは削除
-        # config.setdefault("api_key", "")
+        config.setdefault("api_key", "") 
         config.setdefault("api_execution_mode", "demo")
 
         options_values_by_profile = config.setdefault("options_values_by_profile", {})
         for profile in config.get("api_profiles", []):
-            profile_id_val = profile.get("id")
+            profile_id_val = profile.get("id") # 変数名を変更 (current_profile_idとの衝突回避)
             if profile_id_val:
                 profile_options = options_values_by_profile.setdefault(profile_id_val, {})
-                # ★追加: 各プロファイルのオプション値に "api_key" を必ず含める (デフォルトは空文字列)
-                profile_options.setdefault("api_key", "")
                 if "options_schema" in profile:
                     for key, schema in profile["options_schema"].items():
                         profile_options.setdefault(key, schema.get("default"))
-
+        
         file_actions = config.setdefault("file_actions", {})
         file_actions.setdefault("move_on_success_enabled", False)
         file_actions.setdefault("success_folder_name", "OCR成功")
@@ -200,28 +161,28 @@ class ConfigManager:
         file_actions.setdefault("collision_action", "rename")
         file_actions.setdefault("results_folder_name", "OCR結果")
         file_actions.setdefault("output_format", "both")
-
+        
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
-        config.setdefault("current_view", 0)
+        config.setdefault("current_view", 0) 
         config.setdefault("log_visible", True)
         config.setdefault("column_widths", [35, 50, 280, 100, 270, 100, 120, 100])
         config.setdefault("sort_order", {"column": 1, "order": "asc"})
         config.setdefault("splitter_sizes", [])
         config.setdefault("last_target_dir", "")
-
+        
     @staticmethod
-    def save(config: Dict[str, Any]):
+    def save(config: Dict[str, Any]): # ★ 型ヒントを追加
         if not ConfigManager._ensure_config_dir_exists():
             print("エラー: 設定ディレクトリの準備ができないため、設定を保存できません。")
             return
         if not CONFIG_PATH:
             print("エラー: CONFIG_PATH が無効なため、設定を保存できません。")
             return
+        
+        config_to_save = json.loads(json.dumps(config)) 
 
-        config_to_save = json.loads(json.dumps(config))
-
-        current_profile_id_to_save = config_to_save.get("current_api_profile_id")
+        current_profile_id_to_save = config_to_save.get("current_api_profile_id") # 変数名を変更
         available_profile_ids = [p.get("id") for p in config_to_save.get("api_profiles", [])]
         if current_profile_id_to_save not in available_profile_ids and available_profile_ids:
             config_to_save["current_api_profile_id"] = available_profile_ids[0]
@@ -244,7 +205,7 @@ class ConfigManager:
         profile_id = config.get("current_api_profile_id")
         if profile_id:
             return ConfigManager.get_api_profile(config, profile_id)
-        elif config.get("api_profiles"):
+        elif config.get("api_profiles"): 
             return config["api_profiles"][0]
         return None
 
@@ -260,30 +221,4 @@ class ConfigManager:
         active_profile_id = config.get("current_api_profile_id")
         if active_profile_id:
             return config.get("options_values_by_profile", {}).get(active_profile_id)
-        # ★追加: current_api_profile_id がない場合でも、最初のプロファイルのオプション値を返す試み（初期化時など）
-        elif config.get("api_profiles"):
-            first_profile_id = config["api_profiles"][0].get("id")
-            if first_profile_id:
-                return config.get("options_values_by_profile", {}).get(first_profile_id)
-        return None
-
-    # ★追加: 特定プロファイルのAPIキーを取得するヘルパーメソッド (任意)
-    @staticmethod
-    def get_api_key_for_profile(config: dict, profile_id: str) -> Optional[str]:
-        """指定されたプロファイルIDのAPIキーを取得します。"""
-        profile_options = config.get("options_values_by_profile", {}).get(profile_id, {})
-        return profile_options.get("api_key")
-
-    # ★追加: アクティブなプロファイルのAPIキーを取得するヘルパーメソッド (任意)
-    @staticmethod
-    def get_active_api_key(config: dict) -> Optional[str]:
-        """現在アクティブなプロファイルのAPIキーを取得します。"""
-        active_profile_id = config.get("current_api_profile_id")
-        if active_profile_id:
-            return ConfigManager.get_api_key_for_profile(config, active_profile_id)
-        # アクティブIDがない場合、最初のプロファイルのものを試みる (初期化時など)
-        elif config.get("api_profiles"):
-            first_profile_id = config["api_profiles"][0].get("id")
-            if first_profile_id:
-                 return ConfigManager.get_api_key_for_profile(config, first_profile_id)
         return None
