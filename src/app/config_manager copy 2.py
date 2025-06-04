@@ -50,24 +50,20 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
         }
     },
+    # ★追加: 新規プロファイルのプレースホルダー
     {
         "id": "dx_fulltext_v2",
         "name": "DX Suite (全文OCR V2)",
-        "base_uri": "https://{organization_specific_domain}.dx-suite.com/wf/api/fullocr/v2/",
-        "flow_type": "dx_fulltext_v2_flow",
-        "endpoints": {
-            "register_ocr": "/register",
-            "get_ocr_result": "/getOcrResult",
-            # "delete_ocr": "/delete",
-            "register_searchable_pdf": "/searchablepdf/register", # ★サーチャブルPDF用エンドポイント追加
-            "get_searchable_pdf_result": "/searchablepdf/getResult"  # ★サーチャブルPDF用エンドポイント追加
+        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
+        "flow_type": "dx_fulltext_v2_flow", # 仮
+        "endpoints": { # 仮
+            "read_document": "/fulltextOcr",
+            "make_searchable_pdf": "/searchablePdf"
         },
-        "options_schema": {
-            "concatenate": {"type": "bool", "default": 0, "label": "結合オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF. 文字列の間隔が対象の文字幅よりも小さい場合に結合します。"},
-            "characterExtraction": {"type": "bool", "default": 0, "label": "文字抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF. 1文字ずつの検出結果を出力に追加します。"},
-            "tableExtraction": {"type": "bool", "default": 1, "label": "表抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはON. 検出した表データを出力に追加します。"},
-            "highResolutionMode": {"type": "bool", "default": 0, "label": "高解像度オプション (サーチャブルPDF, DX Suite)", "tooltip": "0: OFF (低解像度), 1: ON (高解像度). デフォルトはOFF."}, # ★追加
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite 全文読取APIのファイルサイズ上限 (20MB)。"}
+        "options_schema": { # 仮 (API仕様に応じて後で詳細化)
+            "option_dx_1": {"type": "bool", "default": True, "label": "DX Suiteオプション1"},
+            "upload_max_size_mb": {"type": "int", "default": 50, "min": 1, "max": 100, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite用のファイルサイズ上限。"}
+            # ... 他のDX Suite 全文OCR V2用オプション
         }
     },
     {
