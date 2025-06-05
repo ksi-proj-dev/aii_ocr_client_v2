@@ -7,7 +7,7 @@ import random
 import shutil
 import requests
 from log_manager import LogLevel
-from PyPDF2 import PdfWriter
+from PyPDF2 import PdfWriter # PyPDF2.PdfWriter であることを確認
 import io
 from typing import Optional, Dict, Any, Tuple
 
@@ -45,6 +45,7 @@ class OCRApiClient:
         else:
              self.active_api_profile_schema = {}
              self.log_manager.error("ApiClient: update_configにプロファイルスキーマもIDも渡されませんでした。", context="API_CLIENT_CONFIG_UPDATE_ERROR")
+
 
         self.active_options_values = ConfigManager.get_active_api_options_values(self.config)
         if self.active_options_values is None:
@@ -87,6 +88,8 @@ class OCRApiClient:
 
     def read_document(self, file_path: str, specific_options: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         file_name = os.path.basename(file_path)
+        # effective_options はプロファイル設定値と引数の specific_options をマージ
+        # self.active_options_values が None の可能性も考慮
         base_options = self.active_options_values if self.active_options_values is not None else {}
         effective_options = {**base_options, **(specific_options or {})}
 
@@ -94,7 +97,15 @@ class OCRApiClient:
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
 
         if current_flow_type == "cube_fullocr_single_call":
-            actual_ocr_params = {'adjust_rotation': str(effective_options.get('adjust_rotation', 0)),'character_extraction': str(effective_options.get('character_extraction', 0)),'concatenate': str(effective_options.get('concatenate', 1)),'enable_checkbox': str(effective_options.get('enable_checkbox', 0)),'fulltext': str(effective_options.get('fulltext_output_mode', 0)),'fulltext_line_break': str(effective_options.get('fulltext_linebreak_char', 0)),'horizontal_ocr_model': effective_options.get('ocr_model', 'katsuji')}
+            actual_ocr_params = {
+                'adjust_rotation': str(effective_options.get('adjust_rotation', 0)),
+                'character_extraction': str(effective_options.get('character_extraction', 0)),
+                'concatenate': str(effective_options.get('concatenate', 1)),
+                'enable_checkbox': str(effective_options.get('enable_checkbox', 0)),
+                'fulltext': str(effective_options.get('fulltext_output_mode', 0)),
+                'fulltext_line_break': str(effective_options.get('fulltext_linebreak_char', 0)),
+                'horizontal_ocr_model': effective_options.get('ocr_model', 'katsuji')
+            }
             if self.api_execution_mode == "demo":
                 log_ctx = "API_DUMMY_READ_CUBE"; self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (read_document): {file_name}", context=log_ctx, options=actual_ocr_params); time.sleep(random.uniform(0.1, 0.3))
                 if file_name.startswith("error_"):
@@ -154,6 +165,7 @@ class OCRApiClient:
                     if file_obj and not file_obj.closed:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"DX Suite Register用一時ファイルのクローズに失敗: {e_close}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
+
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR"); return None, {"message": f"未対応のAPIフロータイプ: {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE"}
 
@@ -234,11 +246,10 @@ class OCRApiClient:
                 files_payload = {}; file_obj = None
                 try:
                     file_obj = open(file_path, 'rb')
-                    # API仕様P.7より、パラメータは 'document' のみ
-                    files_payload['document'] = (os.path.basename(file_path), file_obj)
+                    files_payload['document'] = (os.path.basename(file_path), file_obj) # API仕様P.7よりパラメータは document のみ
                     self.log_manager.info(f"  POST to {url} with headers: {{'apikey': '****'}}, file: {file_name}", context=log_ctx)
                     
-                    response = requests.post(url, headers=headers, files=files_payload, timeout=self.timeout_seconds) # data= は不要
+                    response = requests.post(url, headers=headers, files=files_payload, timeout=self.timeout_seconds)
                     response.raise_for_status()
 
                     content_type = response.headers.get('Content-Type', '').lower()
@@ -268,72 +279,18 @@ class OCRApiClient:
                 except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Suite): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
             else: # Live モード
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2): {file_name}", context=f"{log_ctx_prefix}_LIVE")
-                
                 full_ocr_job_id = effective_options.get("fullOcrJobId")
                 if not full_ocr_job_id:
                     return None, {"message": "サーチャブルPDF作成に必要な全文読取ID(fullOcrJobId)が指定されていません。", "code": "DXSUITE_SPDF_MISSING_FULLOCRJOBID"}
-
                 high_res_mode_opt_val = effective_options.get("highResolutionMode", 0)
                 try: high_res_mode = int(high_res_mode_opt_val)
                 except ValueError: self.log_manager.warning(f"highResolutionModeの値 '{high_res_mode_opt_val}' は不正です。デフォルトの0を使用します。", context=log_ctx_prefix); high_res_mode = 0
-                
                 spdf_job_id, error_info_register = self.register_dx_searchable_pdf(full_ocr_job_id, high_res_mode)
-                
                 if error_info_register: return None, error_info_register
                 if not spdf_job_id: return None, {"message": "DX Suite サーチャブルPDFジョブIDの取得に失敗しました。", "code": "DXSUITE_SPDF_JOBID_ACQUISITION_FAIL"}
-
                 self.log_manager.info(f"DX Suite Searchable PDF登録成功。SearchablePdfJobId: {spdf_job_id}。結果取得はWorkerのポーリングに委ねます。", context=log_ctx_prefix)
                 return {"job_id": spdf_job_id, "status": "searchable_pdf_registered", "profile_flow_type": current_flow_type}, None
         
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type} (PDF作成)", context="API_CLIENT_ERROR")
             return None, {"message": f"未対応のAPIフロータイプ (PDF作成): {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE_PDF"}
-
-    # ★★★ 新しいメソッド: DX Suite 全文読取削除API ★★★
-    def delete_dx_ocr_job(self, full_ocr_job_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        """DX Suite 全文読取削除APIを呼び出す。成功時は削除されたジョブID情報、失敗時はエラー情報を返す。"""
-        log_ctx_prefix = "API_DX_FULLTEXT_V2_DELETE"
-        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
-        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Fulltext V2 - Delete): fullOcrJobId={full_ocr_job_id}", context=log_ctx_prefix)
-
-        if self.api_execution_mode == "demo":
-            self.log_manager.info(f"  Demoモード: '{full_ocr_job_id}' の削除をシミュレートします。", context=log_ctx_prefix)
-            if "error" in full_ocr_job_id.lower(): # 簡単なエラーシミュレーション
-                err_detail = {"message": f"Demo: ジョブID '{full_ocr_job_id}' の削除に失敗しました（シミュレートされたエラー）。", "errorCode": "MOCK_DELETE_FAIL"}
-                return None, {"message": "削除APIデモエラー", "code": "DXSUITE_DEMO_DELETE_ERROR", "detail": err_detail}
-            return {"id": full_ocr_job_id, "status": "deleted_successfully"}, None
-
-        # Live Mode
-        url = self._get_full_url("delete_ocr") # config_manager で定義されたエンドポイントキー
-        if not url:
-            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Delete OCR)", "code": "CONFIG_ENDPOINT_URL_FAIL_DX_DELETE"}
-        if "{organization_specific_domain}" in url:
-             self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR")
-             return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
-        if not self.api_key:
-            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_LIVE_DX_DELETE"}
-
-        headers = {"apikey": self.api_key, "Content-Type": "application/json"}
-        request_body = {"fullOcrJobId": full_ocr_job_id}
-
-        try:
-            self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, body: {request_body}", context=log_ctx_prefix)
-            response = requests.post(url, headers=headers, json=request_body, timeout=self.timeout_seconds)
-            response.raise_for_status()
-            response_json = response.json() # 仕様書P.31では成功時 {"id": "削除したID"}
-            self.log_manager.info(f"  DX Suite Delete OCR API success. Response: {response_json}", context=log_ctx_prefix)
-            return response_json, None
-
-        except requests.exceptions.HTTPError as e_http:
-            err_msg = f"DX Suite 削除API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text
-            self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_HTTP_ERROR", exc_info=True)
-            try:
-                err_json = e_http.response.json(); api_err_detail = err_json.get("errors", [{}])[0]
-                # 仕様書P.34エラーコード例: 40001 (IDなし), 40002 (処理中により削除不可)
-                return None, {"message": f"DX Suite APIエラー: {api_err_detail.get('message', detail_text)}", "code": f"DXSUITE_API_{api_err_detail.get('errorCode', 'UNKNOWN_DELETE_ERROR')}", "detail": err_json}
-            except ValueError:
-                return None, {"message": err_msg, "code": "DXSUITE_DELETE_HTTP_ERROR_NON_JSON", "detail": detail_text}
-        except requests.exceptions.RequestException as e_req:
-            return None, {"message": "DX Suite 削除APIリクエスト失敗。", "code": "DXSUITE_DELETE_REQUEST_FAIL", "detail": str(e_req)}
-        except Exception as e_generic:
-            return None, {"message": "DX Suite 削除処理中に予期せぬエラー。", "code": "DXSUITE_DELETE_UNEXPECTED_ERROR", "detail": str(e_generic)}
