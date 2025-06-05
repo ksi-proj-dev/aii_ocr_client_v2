@@ -18,18 +18,18 @@ from app_constants import (
     OCR_STATUS_MERGING, OCR_STATUS_COMPLETED, OCR_STATUS_FAILED
 )
 
-# ★注意: 以下のハードコードされた定数は、設定ファイルから読み込めなかった場合のフォールバック値としてのみ使用されるようになります。
-DEFAULT_POLLING_INTERVAL_SECONDS = 3
-DEFAULT_POLLING_MAX_ATTEMPTS = 60
-# DEFAULT_SPDF_POLLING_INTERVAL_SECONDS = 3 # SPDF用も共通のキーから取得するため、これらは不要になるか、共通のデフォルト値として再定義
-# DEFAULT_SPDF_MAX_POLLING_ATTEMPTS = 20
+# ポーリング設定の定数
+DXSUITE_V2_POLLING_INTERVAL_SECONDS = 3
+DXSUITE_V2_MAX_POLLING_ATTEMPTS = 60
+DXSUITE_V2_SPDF_POLLING_INTERVAL_SECONDS = 3
+DXSUITE_V2_SPDF_MAX_POLLING_ATTEMPTS = 60
 
 
 class OcrWorker(QThread):
-    file_processed = pyqtSignal(int, str, object, object, object)
-    searchable_pdf_processed = pyqtSignal(int, str, object, object)
+    file_processed = pyqtSignal(int, str, object, object, object) # original_idx, path, ocr_result, ocr_error, json_status
+    searchable_pdf_processed = pyqtSignal(int, str, object, object) # original_idx, path, pdf_final_path, pdf_error_info
     all_files_processed = pyqtSignal()
-    original_file_status_update = pyqtSignal(str, str)
+    original_file_status_update = pyqtSignal(str, str) # original_file_path, status_message
 
     def __init__(self, api_client, files_to_process_tuples: List[Tuple[str, int]],
                  input_root_folder: str, log_manager, config: Dict[str, Any],
@@ -68,7 +68,7 @@ class OcrWorker(QThread):
         if self.main_temp_dir_for_splits is None:
             try:
                 app_temp_base = tempfile.gettempdir()
-                worker_temp_dirname = f"OcrClient_SplitWorker_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+                worker_temp_dirname = f"OcrClient_SplitWorker_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}" # AppName in dirname
                 self.main_temp_dir_for_splits = os.path.join(app_temp_base, worker_temp_dirname)
                 os.makedirs(self.main_temp_dir_for_splits, exist_ok=True)
                 self.log_manager.info(f"Main temporary directory for splits created: {self.main_temp_dir_for_splits}", context="WORKER_TEMP_DIR")
@@ -89,7 +89,7 @@ class OcrWorker(QThread):
     def _get_part_filename(self, original_basename: str, part_num: int, total_parts_estimate: int, original_ext: str) -> str:
         base = os.path.splitext(original_basename)[0]
         num_digits = len(str(total_parts_estimate)) if total_parts_estimate > 0 else 2
-        if num_digits < 2: num_digits = 2
+        if num_digits < 2: num_digits = 2 # Ensure at least 2 digits like 01
         if total_parts_estimate >= 1000: num_digits = 4
         elif total_parts_estimate >= 100: num_digits = 3
         return f"{base}.split#{str(part_num).zfill(num_digits)}{original_ext}"
@@ -110,7 +110,7 @@ class OcrWorker(QThread):
 
             original_size_bytes = os.path.getsize(original_filepath)
 
-            if total_pages == 1 and not (split_by_page_count_enabled and 1 >= max_pages_per_part):
+            if total_pages == 1 and not (split_by_page_count_enabled and 1 >= max_pages_per_part): # Only one page and page limit doesn't force split of 1 page
                  self.log_manager.info(f"PDF '{original_basename}' は単一ページであり、ページ数上限による分割も不要なため、このメソッドでは分割しません。", context="WORKER_PDF_SPLIT")
                  return [], None
 
@@ -138,7 +138,7 @@ class OcrWorker(QThread):
                         with io.BytesIO() as temp_buffer_check:
                             current_writer.write(temp_buffer_check)
                             current_writer_size = temp_buffer_check.tell()
-                        if current_writer_size >= chunk_size_bytes * 0.85 :
+                        if current_writer_size >= chunk_size_bytes * 0.85 : # Heuristic: cut if 85% of chunk size is met before adding next page
                             must_cut = True
                             self.log_manager.debug(f"部品 {part_counter} がサイズ上限目安 ({chunk_size_bytes * 0.85} バイト) に達しました (現在 {current_writer_size} バイト)。", context="WORKER_PDF_SPLIT_CHECK")
 
@@ -212,22 +212,23 @@ class OcrWorker(QThread):
             split_triggered_by_pages = False
             if page_split_enabled:
                 try:
-                    reader = PdfReader(original_filepath)
+                    reader = PdfReader(original_filepath) # Read PDF to get page count
                     total_pages = len(reader.pages)
                     if total_pages > max_pages_per_part_for_page_split:
                         split_triggered_by_pages = True
                         self.log_manager.info(f"PDF '{original_basename}' は総ページ数({total_pages})が上限({max_pages_per_part_for_page_split})を超えるため分割対象です。", context="WORKER_FILE_SPLIT")
-                except Exception as e_read_pdf:
+                except Exception as e_read_pdf: # PyPDF2 can raise errors on corrupted PDFs
                     self.log_manager.warning(f"PDF '{original_basename}' の総ページ数取得中にエラー。ページ数による分割トリガーは評価できません。エラー: {e_read_pdf}", context="WORKER_FILE_SPLIT_WARN")
 
             if split_triggered_by_size or split_triggered_by_pages:
                 should_attempt_split = True
-                if split_triggered_by_size and not split_triggered_by_pages:
+                if split_triggered_by_size and not split_triggered_by_pages: # Log only if size was the sole trigger among these two
                     self.log_manager.info(f"PDF '{original_basename}' はファイルサイズ({original_file_size_bytes / (1024*1024):.2f}MB)が上限({upload_max_size_mb_threshold}MB)を超えるため分割対象です。", context="WORKER_FILE_SPLIT")
             else:
                  self.log_manager.info(f"PDF '{original_basename}' はファイルサイズおよびページ数の観点から分割対象外です (split_master_enabled: {split_master_enabled})。", context="WORKER_FILE_SPLIT")
         elif not split_master_enabled:
             self.log_manager.info(f"ファイル分割は無効化されています ('split_large_files_enabled'=False)。'{original_basename}' は分割されません。", context="WORKER_FILE_SPLIT")
+
 
         if should_attempt_split:
             self.original_file_status_update.emit(original_filepath, OCR_STATUS_SPLITTING)
@@ -242,7 +243,7 @@ class OcrWorker(QThread):
                 self._try_cleanup_specific_temp_dirs(file_specific_temp_dir, None)
                 return [], error_info
         
-        if not split_part_paths:
+        if not split_part_paths: # 分割が行われなかった場合 (対象外、または_split_pdf_by_sizeが空を返したなど)
             try:
                 single_part_filename = self._get_part_filename(original_basename, 1, 1, ext)
                 single_part_filepath = os.path.join(file_specific_temp_dir, single_part_filename)
@@ -258,6 +259,7 @@ class OcrWorker(QThread):
         return split_part_paths, None
 
     def _merge_searchable_pdfs(self, pdf_part_paths: List[str], final_merged_pdf_path: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        # (このメソッドは変更なし)
         if not pdf_part_paths:
             msg = "結合対象のPDF部品がありません。"
             self.log_manager.warning(msg, context="WORKER_PDF_MERGE")
@@ -302,13 +304,6 @@ class OcrWorker(QThread):
 
         results_folder_name = self.file_actions_config.get("results_folder_name", "OCR結果")
         active_profile_flow_type = self.active_api_profile.get("flow_type") if self.active_api_profile else None
-        
-        # ★変更: プロファイルからポーリング設定を読み込む (デフォルト値も設定)
-        polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
-        max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
-        # ★変更: PDF用も共通のキーを使用 (必要なら spdf_polling_interval_seconds など別のキーにする)
-        spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS) # DEFAULT_SPDF_POLLING_INTERVAL_SECONDS
-        spdf_max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS) # DEFAULT_SPDF_MAX_POLLING_ATTEMPTS
 
         try:
             for worker_internal_idx, (original_file_path, original_file_global_idx) in enumerate(self.files_to_process_tuples):
@@ -409,14 +404,11 @@ class OcrWorker(QThread):
                             part_ocr_api_error_info = {"message": "OCRジョブIDが取得できませんでした (DX Suite)。", "code": "DXSUITE_NO_JOB_ID"}
                         else:
                             self.log_manager.info(f"  DX Suite OCRジョブ登録成功 (Job ID: {job_id_for_ocr_text})。部品 '{current_part_basename}' の結果取得を開始します。", context="WORKER_DX_POLL")
-                            # ★変更: 設定されたポーリングパラメータを使用
-                            current_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
-                            current_max_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
-                            for attempt in range(current_max_attempts):
+                            for attempt in range(DXSUITE_V2_MAX_POLLING_ATTEMPTS):
                                 if not self.is_running:
                                     part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}
                                     break
-                                self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{current_max_attempts})") # ★参照
+                                self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{DXSUITE_V2_MAX_POLLING_ATTEMPTS})")
                                 poll_result, poll_error = self.api_client.get_dx_fulltext_ocr_result(job_id_for_ocr_text)
                                 if poll_error:
                                     part_ocr_api_error_info = poll_error; break
@@ -430,7 +422,7 @@ class OcrWorker(QThread):
                                         part_ocr_api_error_info = {"message": f"DX Suite OCR APIがエラーを返しました (Job ID: {job_id_for_ocr_text})。", "code": "DXSUITE_OCR_API_ERROR", "detail": dx_error_details}; break
                                     elif api_status == "inprogress":
                                         self.log_manager.debug(f"  DX Suite OCR結果ポーリング中 (Job ID: {job_id_for_ocr_text}, Attempt: {attempt + 1})。ステータス: {api_status}", context="WORKER_DX_POLL")
-                                        if attempt < current_max_attempts - 1: time.sleep(current_polling_interval) # ★参照
+                                        if attempt < DXSUITE_V2_MAX_POLLING_ATTEMPTS - 1: time.sleep(DXSUITE_V2_POLLING_INTERVAL_SECONDS)
                                         else: part_ocr_api_error_info = {"message": "DX Suite OCR結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}; break
                                     else:
                                         part_ocr_api_error_info = {"message": f"DX Suite OCR APIが未知のステータス '{api_status}' を返しました。", "code": "DXSUITE_OCR_UNKNOWN_STATUS"}; break
@@ -462,6 +454,7 @@ class OcrWorker(QThread):
                         if part_ocr_api_error_info:
                             self.log_manager.warning(f"  部品 '{current_part_basename}' のOCRテキスト処理でエラーがあったため、サーチャブルPDF作成はスキップします。", context="WORKER_PART_PDF")
                             if not pdf_error_for_signal: pdf_error_for_signal = {"message": "OCR失敗のためPDF作成スキップ", "code": "PDF_SKIPPED_OCR_FAIL"}
+                            # all_parts_processed_successfully is already False
                         else:
                             self.log_manager.info(f"  部品のサーチャブルPDF作成開始: '{current_part_basename}'", context="WORKER_PART_PDF")
                             options_for_spdf = active_options_for_api.copy()
@@ -473,7 +466,8 @@ class OcrWorker(QThread):
                                     else:
                                         self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成に必要なfullOcrJobIdがありません (DX Suite Live Mode)。スキップします。", context="WORKER_PART_PDF_ERROR")
                                         if not pdf_error_for_signal: pdf_error_for_signal = {"message": "PDF作成内部エラー (fullOcrJobIdなし - Live)", "code": "DXSUITE_SPDF_LIVE_NO_FULLOCRJOBID_INTERNAL"}
-                                        all_parts_processed_successfully = False; can_proceed_with_spdf_api_call = False
+                                        all_parts_processed_successfully = False
+                                        can_proceed_with_spdf_api_call = False
                             
                             if can_proceed_with_spdf_api_call:
                                 spdf_response, spdf_error = self.api_client.make_searchable_pdf(
@@ -491,19 +485,16 @@ class OcrWorker(QThread):
                                         part_pdf_api_error_info_pdf = {"message": "サーチャブルPDFジョブIDが取得できませんでした (DX Suite)。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
                                     else:
                                         self.log_manager.info(f"  DX Suite サーチャブルPDFジョブ登録成功 (Job ID: {searchable_pdf_job_id})。部品 '{current_part_basename}' の結果取得を開始します。", context="WORKER_DX_SPDF_POLL")
-                                        # ★変更: 設定されたポーリングパラメータを使用 (SPDF用)
-                                        current_spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS) # 共通キーを使用
-                                        current_spdf_max_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)       # 共通キーを使用
-                                        for attempt_pdf in range(current_spdf_max_attempts):
+                                        for attempt_pdf in range(DXSUITE_V2_SPDF_MAX_POLLING_ATTEMPTS):
                                             if not self.is_running:
                                                 part_pdf_api_error_info_pdf = {"message": "サーチャブルPDF結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_SPDF_POLL"}; break
-                                            self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{current_spdf_max_attempts})") # ★参照
+                                            self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{DXSUITE_V2_SPDF_MAX_POLLING_ATTEMPTS})")
                                             pdf_content_poll, pdf_poll_error = self.api_client.get_dx_searchable_pdf_content(searchable_pdf_job_id)
                                             if pdf_poll_error:
                                                 error_code_from_api = pdf_poll_error.get("code", "")
                                                 if error_code_from_api and "STATUS_INPROGRESS" in error_code_from_api.upper():
                                                     self.log_manager.debug(f"  DX Suite サーチャブルPDF結果ポーリング中 (Job ID: {searchable_pdf_job_id}, Attempt: {attempt_pdf + 1})。", context="WORKER_DX_SPDF_POLL")
-                                                    if attempt_pdf < current_spdf_max_attempts - 1: time.sleep(current_spdf_polling_interval); continue # ★参照
+                                                    if attempt_pdf < DXSUITE_V2_SPDF_MAX_POLLING_ATTEMPTS - 1: time.sleep(DXSUITE_V2_SPDF_POLLING_INTERVAL_SECONDS); continue
                                                     else: self.log_manager.warning(f"  DX Suite サーチャブルPDF結果取得タイムアウト (Job ID: {searchable_pdf_job_id})。", context="WORKER_DX_SPDF_POLL_TIMEOUT"); part_pdf_api_error_info_pdf = {"message": "DX Suite サーチャブルPDF取得がタイムアウトしました。", "code": "DXSUITE_SPDF_TIMEOUT"}; break
                                                 else: part_pdf_api_error_info_pdf = pdf_poll_error; break
                                             elif pdf_content_poll:
@@ -525,8 +516,7 @@ class OcrWorker(QThread):
                                         msg = f"部品 '{current_part_basename}' のサーチャブルPDF保存に失敗: {e_pdf_save}";
                                         self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True);
                                         all_parts_processed_successfully = False;
-                                        if not pdf_error_for_signal:
-                                            pdf_error_for_signal = {"message": msg, "code": "PART_PDF_SAVE_ERROR", "detail": str(e_pdf_save)}
+                                        if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_SAVE_ERROR", "detail": str(e_pdf_save)}
                                 else:
                                     msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"; self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR"); all_parts_processed_successfully = False
                                     if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
@@ -573,7 +563,8 @@ class OcrWorker(QThread):
                                         pdf_part_filename = os.path.basename(src_pdf_part_path);
                                         dest_pdf_part_path = self._get_unique_filepath(final_pdf_output_dir, pdf_part_filename)
                                         try:
-                                            shutil.copy2(src_pdf_part_path, dest_pdf_part_path); copied_pdf_count +=1
+                                            shutil.copy2(src_pdf_part_path, dest_pdf_part_path);
+                                            copied_pdf_count +=1
                                         except Exception as e_copy_pdf:
                                             self.log_manager.error(f"分割PDF部品 '{src_pdf_part_path}' の最終保存先へのコピー失敗: {e_copy_pdf}", context="WORKER_PART_IO_FINAL_ERROR", exc_info=True)
                                 if expected_pdf_parts == 0 and copied_pdf_count == 0: pdf_error_for_signal = {"message": "対象のPDF部品なし", "code": "NO_PARTS_TO_COPY"}
@@ -583,10 +574,15 @@ class OcrWorker(QThread):
                         elif not is_genuinely_multi_part and part_pdf_paths_agg:
                              final_pdf_output_dir = os.path.join(original_file_parent_dir, results_folder_name); os.makedirs(final_pdf_output_dir, exist_ok=True); src_pdf_part_path = part_pdf_paths_agg[0]
                              if os.path.exists(src_pdf_part_path):
-                                 final_pdf_filename = f"{base_name_for_output_prefix}.pdf"; dest_pdf_path = self._get_unique_filepath(final_pdf_output_dir, final_pdf_filename)
-                                 try: shutil.copy2(src_pdf_part_path, dest_pdf_path); pdf_final_path_for_signal = dest_pdf_path
-                                 except Exception as e_copy_single_pdf: pdf_error_for_signal = {"message": "単一PDFのコピー失敗", "code": "SINGLE_PDF_COPY_ERROR"}
-                             else: pdf_error_for_signal = {"message": "単一PDF部品が見つかりません", "code": "SINGLE_PDF_PART_MISSING"}
+                                 final_pdf_filename = f"{base_name_for_output_prefix}.pdf";
+                                 dest_pdf_path = self._get_unique_filepath(final_pdf_output_dir, final_pdf_filename)
+                                 try:
+                                     shutil.copy2(src_pdf_part_path, dest_pdf_path);
+                                     pdf_final_path_for_signal = dest_pdf_path
+                                 except Exception as e_copy_single_pdf:
+                                     pdf_error_for_signal = {"message": "単一PDFのコピー失敗", "code": "SINGLE_PDF_COPY_ERROR"}
+                             else:
+                                 pdf_error_for_signal = {"message": "単一PDF部品が見つかりません", "code": "SINGLE_PDF_PART_MISSING"}
                         elif not part_pdf_paths_agg and should_create_pdf_globally : pdf_error_for_signal = {"message": "PDF部品が見つかりません (作成対象)", "code": "PDF_PART_MISSING"}
                     else: pdf_error_for_signal = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
                 else: 

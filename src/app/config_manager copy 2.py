@@ -70,42 +70,34 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "tableExtraction": {"type": "bool", "default": 1, "label": "表抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはON."},
             "highResolutionMode": {"type": "bool", "default": 0, "label": "高解像度オプション (サーチャブルPDF, DX Suite)", "tooltip": "0: OFF (低解像度), 1: ON (高解像度). デフォルトはOFF."},
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite 全文読取APIのファイルサイズ上限 (20MB)。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"}, # ★ツールチップ更新
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり, DX Suite):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。"},
-            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時, DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。DX Suite推奨は100ページ以下のためデフォルトON。"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時, DX Suite):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。\nDX Suiteの推奨は100ページ以下です。"},
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。"},
-            # ★★★ ここからポーリング設定オプションを追加 ★★★
-            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒, DX Suite):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数 (DX Suite):", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
-            # ★★★ ここまでポーリング設定オプション ★★★
+            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時, DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。DX Suite推奨は100ページ以下のためデフォルトON。"}, # ★新規追加 (DX SuiteはデフォルトTrue)
+            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時, DX Suite):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。\nDX Suiteの推奨は100ページ以下です。"}, # ★新規追加 (maxを100に)
+            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。"}
         }
     },
     {
-        "id": "dx_atypical_v2",
+        "id": "dx_atypical_v2", # 非定型などの他のプロファイルにも同様に追加
         "name": "DX Suite (非定型OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/",
-        "flow_type": "dx_atypical_v2_flow", # このフロータイプも将来的にポーリングが必要になる可能性
-        "endpoints": {},
+        "base_uri": "http://localhost/dxsuite/api/v2/", 
+        "flow_type": "dx_atypical_v2_flow", 
+        "endpoints": {}, 
         "options_schema": {
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
+            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite APIの一般的なファイルサイズ上限の目安 (20MB)。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
-            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
+            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "推奨ページ数がある場合に有効にします。"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
-            # ★★★ 非定型にもポーリング設定オプションを追加 ★★★
-            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
-            # ★★★ ここまでポーリング設定オプション ★★★
+            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"}
             # ... 他の非定型特有のオプション ...
         }
     },
     {
-        "id": "dx_standard_v2",
+        "id": "dx_standard_v2", # 標準OCRにも同様に追加
         "name": "DX Suite (標準OCR V2)",
         "base_uri": "http://localhost/dxsuite/api/v2/",
-        "flow_type": "dx_standard_v2_flow", # このフロータイプも将来的にポーリングが必要になる可能性
+        "flow_type": "dx_standard_v2_flow",
         "endpoints": {},
         "options_schema": {
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
@@ -113,11 +105,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
-            # ★★★ 標準OCRにもポーリング設定オプションを追加 ★★★
-            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
-            # ★★★ ここまでポーリング設定オプション ★★★
+            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"}
             # ... 他の標準特有のオプション ...
         }
     }
