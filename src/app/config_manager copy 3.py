@@ -30,7 +30,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "cube_fullocr_v1",
         "name": "Cube (全文OCR V1)",
-        "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
+        "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/", # ★ユーザー設定可能にするため、options_values_by_profile にも追加済
         "flow_type": "cube_fullocr_single_call",
         "endpoints": {
             "read_document": "/fullocr-read-document",
@@ -45,10 +45,10 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "fulltext_linebreak_char": {"type": "bool", "default": 0, "label": "全文テキストにグループ区切り文字(\\n)を付加", "tooltip": "0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。"},
             "ocr_model": {"type": "enum", "values": ["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"], "default": "katsuji", "label": "OCRモデル選択:", "tooltip": "OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用"},
             "upload_max_size_mb": {"type": "int", "default": 60, "min": 1, "max": 200, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"}, # ★ツールチップ更新
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":200, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。"},
-            "split_by_page_count_enabled": {"type": "bool", "default": False, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"},
+            "split_by_page_count_enabled": {"type": "bool", "default": False, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。"}, # ★新規追加
+            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"}, # ★新規追加
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
         }
     },
@@ -60,7 +60,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
         "endpoints": {
             "register_ocr": "/register",
             "get_ocr_result": "/getOcrResult",
-            "delete_ocr": "/delete", # ★ 削除API用エンドポイント
+            "delete_ocr": "/delete",
             "register_searchable_pdf": "/searchablepdf/register",
             "get_searchable_pdf_result": "/searchablepdf/getResult"
         },
@@ -75,21 +75,18 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時, DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。DX Suite推奨は100ページ以下のためデフォルトON。"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時, DX Suite):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。\nDX Suiteの推奨は100ページ以下です。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。"},
+            # ★★★ ここからポーリング設定オプションを追加 ★★★
             "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒, DX Suite):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数 (DX Suite):", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"},
-            # ★★★ ここに新しいオプションを追加 ★★★
-            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後 (成功/失敗問わず)、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数 (DX Suite):", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
+            # ★★★ ここまでポーリング設定オプション ★★★
         }
     },
     {
         "id": "dx_atypical_v2",
         "name": "DX Suite (非定型OCR V2)",
         "base_uri": "http://localhost/dxsuite/api/v2/",
-        "flow_type": "dx_atypical_v2_flow",
-        "endpoints": {
-            # 非定型用エンドポイント (現時点では仮、deleteも追加する可能性)
-             "delete_ocr": "/delete" # 仮: 全文読取と同じエンドポイントを想定
-        },
+        "flow_type": "dx_atypical_v2_flow", # このフロータイプも将来的にポーリングが必要になる可能性
+        "endpoints": {},
         "options_schema": {
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
@@ -97,10 +94,10 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
+            # ★★★ 非定型にもポーリング設定オプションを追加 ★★★
             "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"},
-            # ★★★ ここに新しいオプションを追加 ★★★
-            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後 (成功/失敗問わず)、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
+            # ★★★ ここまでポーリング設定オプション ★★★
             # ... 他の非定型特有のオプション ...
         }
     },
@@ -108,11 +105,8 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
         "id": "dx_standard_v2",
         "name": "DX Suite (標準OCR V2)",
         "base_uri": "http://localhost/dxsuite/api/v2/",
-        "flow_type": "dx_standard_v2_flow",
-        "endpoints": {
-            # 標準OCR用エンドポイント (現時点では仮、deleteも追加する可能性)
-            "delete_ocr": "/delete" # 仮: 全文読取と同じエンドポイントを想定
-        },
+        "flow_type": "dx_standard_v2_flow", # このフロータイプも将来的にポーリングが必要になる可能性
+        "endpoints": {},
         "options_schema": {
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
@@ -120,10 +114,10 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
+            # ★★★ 標準OCRにもポーリング設定オプションを追加 ★★★
             "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"},
-            # ★★★ ここに新しいオプションを追加 ★★★
-            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後 (成功/失敗問わず)、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"}
+            # ★★★ ここまでポーリング設定オプション ★★★
             # ... 他の標準特有のオプション ...
         }
     }

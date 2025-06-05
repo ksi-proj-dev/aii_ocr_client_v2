@@ -18,9 +18,11 @@ from app_constants import (
     OCR_STATUS_MERGING, OCR_STATUS_COMPLETED, OCR_STATUS_FAILED
 )
 
-# ポーリング設定のデフォルト値
+# ★注意: 以下のハードコードされた定数は、設定ファイルから読み込めなかった場合のフォールバック値としてのみ使用されるようになります。
 DEFAULT_POLLING_INTERVAL_SECONDS = 3
 DEFAULT_POLLING_MAX_ATTEMPTS = 60
+# DEFAULT_SPDF_POLLING_INTERVAL_SECONDS = 3 # SPDF用も共通のキーから取得するため、これらは不要になるか、共通のデフォルト値として再定義
+# DEFAULT_SPDF_MAX_POLLING_ATTEMPTS = 20
 
 
 class OcrWorker(QThread):
@@ -302,14 +304,11 @@ class OcrWorker(QThread):
         active_profile_flow_type = self.active_api_profile.get("flow_type") if self.active_api_profile else None
         
         # ★変更: プロファイルからポーリング設定を読み込む (デフォルト値も設定)
-        # テキストOCR用
-        ocr_text_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
-        ocr_text_max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
-        # サーチャブルPDF用 (共通のキーを使用するが、将来的に別のキーにすることも可能)
-        spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
-        spdf_max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
-        # ★変更: 処理後削除オプションを読み込む
-        delete_job_after_processing = self.current_api_options_values.get("delete_job_after_processing", True) # デフォルトTrue (削除する)
+        polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
+        max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
+        # ★変更: PDF用も共通のキーを使用 (必要なら spdf_polling_interval_seconds など別のキーにする)
+        spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS) # DEFAULT_SPDF_POLLING_INTERVAL_SECONDS
+        spdf_max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS) # DEFAULT_SPDF_MAX_POLLING_ATTEMPTS
 
         try:
             for worker_internal_idx, (original_file_path, original_file_global_idx) in enumerate(self.files_to_process_tuples):
@@ -410,11 +409,14 @@ class OcrWorker(QThread):
                             part_ocr_api_error_info = {"message": "OCRジョブIDが取得できませんでした (DX Suite)。", "code": "DXSUITE_NO_JOB_ID"}
                         else:
                             self.log_manager.info(f"  DX Suite OCRジョブ登録成功 (Job ID: {job_id_for_ocr_text})。部品 '{current_part_basename}' の結果取得を開始します。", context="WORKER_DX_POLL")
-                            for attempt in range(ocr_text_max_polling_attempts): # ★参照
+                            # ★変更: 設定されたポーリングパラメータを使用
+                            current_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
+                            current_max_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
+                            for attempt in range(current_max_attempts):
                                 if not self.is_running:
                                     part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}
                                     break
-                                self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{ocr_text_max_polling_attempts})") # ★参照
+                                self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{current_max_attempts})") # ★参照
                                 poll_result, poll_error = self.api_client.get_dx_fulltext_ocr_result(job_id_for_ocr_text)
                                 if poll_error:
                                     part_ocr_api_error_info = poll_error; break
@@ -428,7 +430,7 @@ class OcrWorker(QThread):
                                         part_ocr_api_error_info = {"message": f"DX Suite OCR APIがエラーを返しました (Job ID: {job_id_for_ocr_text})。", "code": "DXSUITE_OCR_API_ERROR", "detail": dx_error_details}; break
                                     elif api_status == "inprogress":
                                         self.log_manager.debug(f"  DX Suite OCR結果ポーリング中 (Job ID: {job_id_for_ocr_text}, Attempt: {attempt + 1})。ステータス: {api_status}", context="WORKER_DX_POLL")
-                                        if attempt < ocr_text_max_polling_attempts - 1: time.sleep(ocr_text_polling_interval) # ★参照
+                                        if attempt < current_max_attempts - 1: time.sleep(current_polling_interval) # ★参照
                                         else: part_ocr_api_error_info = {"message": "DX Suite OCR結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}; break
                                     else:
                                         part_ocr_api_error_info = {"message": f"DX Suite OCR APIが未知のステータス '{api_status}' を返しました。", "code": "DXSUITE_OCR_UNKNOWN_STATUS"}; break
@@ -489,16 +491,19 @@ class OcrWorker(QThread):
                                         part_pdf_api_error_info_pdf = {"message": "サーチャブルPDFジョブIDが取得できませんでした (DX Suite)。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
                                     else:
                                         self.log_manager.info(f"  DX Suite サーチャブルPDFジョブ登録成功 (Job ID: {searchable_pdf_job_id})。部品 '{current_part_basename}' の結果取得を開始します。", context="WORKER_DX_SPDF_POLL")
-                                        for attempt_pdf in range(spdf_max_polling_attempts): # ★参照
+                                        # ★変更: 設定されたポーリングパラメータを使用 (SPDF用)
+                                        current_spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS) # 共通キーを使用
+                                        current_spdf_max_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)       # 共通キーを使用
+                                        for attempt_pdf in range(current_spdf_max_attempts):
                                             if not self.is_running:
                                                 part_pdf_api_error_info_pdf = {"message": "サーチャブルPDF結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_SPDF_POLL"}; break
-                                            self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{spdf_max_polling_attempts})") # ★参照
+                                            self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{current_spdf_max_attempts})") # ★参照
                                             pdf_content_poll, pdf_poll_error = self.api_client.get_dx_searchable_pdf_content(searchable_pdf_job_id)
                                             if pdf_poll_error:
                                                 error_code_from_api = pdf_poll_error.get("code", "")
                                                 if error_code_from_api and "STATUS_INPROGRESS" in error_code_from_api.upper():
                                                     self.log_manager.debug(f"  DX Suite サーチャブルPDF結果ポーリング中 (Job ID: {searchable_pdf_job_id}, Attempt: {attempt_pdf + 1})。", context="WORKER_DX_SPDF_POLL")
-                                                    if attempt_pdf < spdf_max_polling_attempts - 1: time.sleep(spdf_polling_interval); continue # ★参照
+                                                    if attempt_pdf < current_spdf_max_attempts - 1: time.sleep(current_spdf_polling_interval); continue # ★参照
                                                     else: self.log_manager.warning(f"  DX Suite サーチャブルPDF結果取得タイムアウト (Job ID: {searchable_pdf_job_id})。", context="WORKER_DX_SPDF_POLL_TIMEOUT"); part_pdf_api_error_info_pdf = {"message": "DX Suite サーチャブルPDF取得がタイムアウトしました。", "code": "DXSUITE_SPDF_TIMEOUT"}; break
                                                 else: part_pdf_api_error_info_pdf = pdf_poll_error; break
                                             elif pdf_content_poll:
@@ -525,25 +530,7 @@ class OcrWorker(QThread):
                                 else:
                                     msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"; self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR"); all_parts_processed_successfully = False
                                     if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
-                    
-                    # ★★★ 追加: 処理後削除オプションに基づき、削除APIを呼び出す ★★★
-                    if active_profile_flow_type == "dx_fulltext_v2_flow" and \
-                       delete_job_after_processing and \
-                       current_part_full_ocr_job_id: # OCRテキスト処理のジョブIDがある場合のみ
-                        
-                        self.log_manager.info(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")
-                        # エラーの有無に関わらず削除を試みる
-                        deleted_info, delete_error = self.api_client.delete_dx_ocr_job(current_part_full_ocr_job_id)
-                        if delete_error:
-                            self.log_manager.error(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の削除API呼び出し中にエラーが発生しました: {delete_error.get('message')}", context="WORKER_DX_DELETE_ERROR", detail=delete_error)
-                            # 削除エラーは処理全体の成否には影響させない（ログのみ）
-                        elif deleted_info and deleted_info.get("id") == current_part_full_ocr_job_id:
-                            self.log_manager.info(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) のサーバー上の情報は正常に削除されました。", context="WORKER_DX_DELETE_SUCCESS")
-                        else:
-                            self.log_manager.warning(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の削除APIが予期しない応答を返しました: {deleted_info}", context="WORKER_DX_DELETE_WARN")
-                    # ★★★ 追加ここまで ★★★
-
-                # --- 部品ループ終了後の処理 ---
+                
                 if not self.is_running and not all_parts_processed_successfully:
                      stop_reason_code = "USER_INTERRUPT" if self.user_stopped else (self.fatal_error_info.get("code", "FATAL_ERROR_STOP") if self.fatal_error_info else "FATAL_ERROR_STOP"); stop_reason_msg = "ユーザーにより中止" if self.user_stopped else (self.fatal_error_info.get("message", "致命的エラー") if self.fatal_error_info else "エラーにより停止"); self.log_manager.info(f"'{original_file_basename}' の処理が「{stop_reason_msg}」のため中断/停止されました。", context="WORKER_LIFECYCLE")
                      if not final_ocr_error_for_main: final_ocr_error_for_main = {"message": stop_reason_msg, "code": stop_reason_code}
