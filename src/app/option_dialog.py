@@ -179,24 +179,45 @@ class OptionDialog(QDialog):
 
         self.setLayout(main_layout)
 
-    def toggle_dynamic_split_options_enabled_state(self):
-        split_is_enabled = False
+    def toggle_dynamic_split_options_enabled_state(self): # メソッド名をより汎用的に変更も検討
+        # ファイルサイズによる分割設定の有効/無効状態を取得
+        size_split_is_enabled = False
         if "split_large_files_enabled" in self.widgets_map:
-            chk_box = self.widgets_map.get("split_large_files_enabled") # .get() を使用
+            chk_box = self.widgets_map.get("split_large_files_enabled")
             if isinstance(chk_box, QCheckBox):
-                split_is_enabled = chk_box.isChecked()
+                size_split_is_enabled = chk_box.isChecked()
         
-        # 関連ウィジェットの有効/無効状態を設定
-        for key, related_widget_key in [
-            ("split_chunk_size_mb", "split_large_files_enabled"), 
-            ("merge_split_pdf_parts", "split_large_files_enabled")
-        ]:
-            widget = self.widgets_map.get(key)
-            if widget and isinstance(widget, (QSpinBox, QCheckBox)): # 型チェックを追加
-                 # split_large_files_enabled が存在しない場合も考慮
-                enable_flag = split_is_enabled if "split_large_files_enabled" in self.widgets_map else False
-                widget.setEnabled(enable_flag)
+        # ページ数による分割設定の有効/無効状態を取得
+        page_split_is_enabled = False
+        if "split_by_page_count_enabled" in self.widgets_map: # ★ 新しいオプションのキーを確認
+            chk_box_page = self.widgets_map.get("split_by_page_count_enabled")
+            if isinstance(chk_box_page, QCheckBox):
+                page_split_is_enabled = chk_box_page.isChecked()
 
+        # 関連ウィジェットの有効/無効状態を設定
+        # 「大きなファイルを自動分割する」が有効な場合のみ、詳細設定（サイズやページ数）が意味を持つ
+        
+        # 分割サイズ目安 (split_chunk_size_mb)
+        widget_chunk_size = self.widgets_map.get("split_chunk_size_mb")
+        if widget_chunk_size and isinstance(widget_chunk_size, QSpinBox):
+            widget_chunk_size.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
+
+        # ページ数上限で分割する (split_by_page_count_enabled) - これは常に編集可能
+        # (ただし、これがチェックされていなければ、下の split_max_pages_per_part は無効化する)
+        widget_page_split_enable = self.widgets_map.get("split_by_page_count_enabled")
+        if widget_page_split_enable and isinstance(widget_page_split_enable, QCheckBox):
+             widget_page_split_enable.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
+
+        # 部品あたりの最大ページ数 (split_max_pages_per_part)
+        widget_max_pages = self.widgets_map.get("split_max_pages_per_part")
+        if widget_max_pages and isinstance(widget_max_pages, QSpinBox):
+            # 「大きなファイル～」が有効 かつ 「ページ数上限で分割する」も有効な場合にのみ、この入力欄を有効化
+            widget_max_pages.setEnabled(size_split_is_enabled and page_split_is_enabled)
+
+        # 分割PDF部品の結合 (merge_split_pdf_parts)
+        widget_merge_parts = self.widgets_map.get("merge_split_pdf_parts")
+        if widget_merge_parts and isinstance(widget_merge_parts, QCheckBox):
+            widget_merge_parts.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
 
     def is_valid_folder_name(self, folder_name, field_label):
         if not folder_name:

@@ -30,7 +30,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "cube_fullocr_v1",
         "name": "Cube (全文OCR V1)",
-        "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/", # ★ユーザー設定可能にするため、options_values_by_profile にも追加済
+        "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
         "flow_type": "cube_fullocr_single_call",
         "endpoints": {
             "read_document": "/fullocr-read-document",
@@ -45,10 +45,8 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "fulltext_linebreak_char": {"type": "bool", "default": 0, "label": "全文テキストにグループ区切り文字(\\n)を付加", "tooltip": "0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。"},
             "ocr_model": {"type": "enum", "values": ["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"], "default": "katsuji", "label": "OCRモデル選択:", "tooltip": "OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用"},
             "upload_max_size_mb": {"type": "int", "default": 60, "min": 1, "max": 200, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"}, # ★ツールチップ更新
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":200, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。"},
-            "split_by_page_count_enabled": {"type": "bool", "default": False, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。"}, # ★新規追加
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"}, # ★新規追加
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "上記「アップロード可能な最大ファイルサイズ」以下のPDFファイルで、\nさらに「分割サイズ」を超える場合に、ファイルをページ単位で分割してからOCR処理を行います。"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":100, "suffix": " MB", "label": "分割サイズ (1ファイルあたり):", "tooltip": "自動分割を有効にした場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
         }
     },
@@ -60,54 +58,39 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
         "endpoints": {
             "register_ocr": "/register",
             "get_ocr_result": "/getOcrResult",
-            "delete_ocr": "/delete",
+            "delete_ocr": "/delete", # 仕様書に基づき追加
             "register_searchable_pdf": "/searchablepdf/register",
             "get_searchable_pdf_result": "/searchablepdf/getResult"
         },
         "options_schema": {
-            "concatenate": {"type": "bool", "default": 0, "label": "結合オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF."},
-            "characterExtraction": {"type": "bool", "default": 0, "label": "文字抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF."},
-            "tableExtraction": {"type": "bool", "default": 1, "label": "表抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはON."},
+            "concatenate": {"type": "bool", "default": 0, "label": "結合オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF. 文字列の間隔が対象の文字幅よりも小さい場合に結合します。"},
+            "characterExtraction": {"type": "bool", "default": 0, "label": "文字抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF. 1文字ずつの検出結果を出力に追加します。"},
+            "tableExtraction": {"type": "bool", "default": 1, "label": "表抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはON. 検出した表データを出力に追加します。"},
             "highResolutionMode": {"type": "bool", "default": 0, "label": "高解像度オプション (サーチャブルPDF, DX Suite)", "tooltip": "0: OFF (低解像度), 1: ON (高解像度). デフォルトはOFF."},
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite 全文読取APIのファイルサイズ上限 (20MB)。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"}, # ★ツールチップ更新
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり, DX Suite):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。"},
-            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時, DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。DX Suite推奨は100ページ以下のためデフォルトON。"}, # ★新規追加 (DX SuiteはデフォルトTrue)
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時, DX Suite):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。\nDX Suiteの推奨は100ページ以下です。"}, # ★新規追加 (maxを100に)
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。"}
+            # "departmentId": {"type": "string", "default": "", "label": "部署ID (DX Suite, 任意)", "tooltip": "DX Suiteの部署IDを数字で指定します。"},
+            # ★ここからファイル分割オプションを追加
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "「アップロード可能な最大ファイルサイズ」(現在20MB) を超過するPDFファイルを、\n「分割サイズ」を目安にページ単位で分割してからOCR処理を行います。"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1ファイルあたり, DX Suite):", "tooltip": "自動分割を有効にした場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」(現在20MB) を超えない値を指定してください。"},
+            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
+            # ★ここまでファイル分割オプション
         }
     },
     {
-        "id": "dx_atypical_v2", # 非定型などの他のプロファイルにも同様に追加
+        "id": "dx_atypical_v2",
         "name": "DX Suite (非定型OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/", 
-        "flow_type": "dx_atypical_v2_flow", 
-        "endpoints": {}, 
-        "options_schema": {
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite APIの一般的なファイルサイズ上限の目安 (20MB)。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
-            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "推奨ページ数がある場合に有効にします。"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"}
-            # ... 他の非定型特有のオプション ...
-        }
+        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
+        "flow_type": "dx_atypical_v2_flow", # 仮
+        "endpoints": {}, # 仮
+        "options_schema": {} # 仮
     },
     {
-        "id": "dx_standard_v2", # 標準OCRにも同様に追加
+        "id": "dx_standard_v2",
         "name": "DX Suite (標準OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/",
-        "flow_type": "dx_standard_v2_flow",
-        "endpoints": {},
-        "options_schema": {
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
-            "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
-            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"}
-            # ... 他の標準特有のオプション ...
-        }
+        "base_uri": "http://localhost/dxsuite/api/v2/", # 仮
+        "flow_type": "dx_standard_v2_flow", # 仮
+        "endpoints": {}, # 仮
+        "options_schema": {} # 仮
     }
 ]
 
