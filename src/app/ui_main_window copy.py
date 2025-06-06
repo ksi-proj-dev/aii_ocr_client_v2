@@ -919,15 +919,11 @@ class MainWindow(QMainWindow):
 
     def confirm_start_ocr(self):
         if hasattr(self, 'ocr_orchestrator'):
-            # ★変更: self.processed_files_info の代わりに、ソート済みのリストを取得して渡す
-            sorted_list_to_process = self.list_view.get_sorted_file_info_list()
-            self.ocr_orchestrator.confirm_and_start_ocr(sorted_list_to_process, self.input_folder_path, self)
+            self.ocr_orchestrator.confirm_and_start_ocr(self.processed_files_info, self.input_folder_path, self)
 
     def confirm_resume_ocr(self):
         if hasattr(self, 'ocr_orchestrator'):
-            # ★変更: self.processed_files_info の代わりに、ソート済みのリストを取得して渡す
-            sorted_list_to_process = self.list_view.get_sorted_file_info_list()
-            self.ocr_orchestrator.confirm_and_resume_ocr(sorted_list_to_process, self.input_folder_path, self)
+            self.ocr_orchestrator.confirm_and_resume_ocr(self.processed_files_info, self.input_folder_path, self)
 
     def confirm_stop_ocr(self):
         if hasattr(self, 'ocr_orchestrator'):
