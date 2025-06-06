@@ -401,24 +401,7 @@ class MainWindow(QMainWindow):
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
         self.api_mode_toggle_button = QPushButton(); self.api_mode_toggle_button.setCheckable(False); self.api_mode_toggle_button.clicked.connect(self._toggle_api_mode); self.api_mode_toggle_button.setMinimumWidth(120)
-
-        # ★★★ ここを変更 ★★★
-        # paddingを元に戻し、margin を上下に 2px ずつ追加します
-        self.api_mode_toggle_button.setStyleSheet("""
-            QPushButton { 
-                padding: 4px 8px; 
-                margin-top: 2px;
-                margin-bottom: 2px;
-                border: 1px solid #8f8f8f; 
-                border-radius: 4px; 
-                font-weight: bold; 
-            }
-            QPushButton[apiMode="live"] { background-color: #e6fff2; color: #006400; }
-            QPushButton[apiMode="demo"] { background-color: #e6f7ff; color: #005f9e; }
-            QPushButton:disabled { background-color: #f0f0f0; color: #a0a0a0; }
-        """)
-        # ★★★ ここまで変更 ★★★
-
+        self.api_mode_toggle_button.setStyleSheet("QPushButton { padding: 4px 8px; border: 1px solid #8f8f8f; border-radius: 4px; font-weight: bold; } QPushButton[apiMode=\"live\"] { background-color: #e6fff2; color: #006400; } QPushButton[apiMode=\"demo\"] { background-color: #e6f7ff; color: #005f9e; } QPushButton:disabled { background-color: #f0f0f0; color: #a0a0a0; }")
         toolbar.addWidget(self.api_mode_toggle_button)
         right_spacer = QWidget(); right_spacer.setFixedWidth(10); toolbar.addWidget(right_spacer)
         folder_label_toolbar = QToolBar("Folder Paths Toolbar"); folder_label_toolbar.setMovable(False); folder_label_widget = QWidget(); folder_label_layout = QFormLayout(folder_label_widget); folder_label_layout.setContentsMargins(5,5,5,5); folder_label_layout.setSpacing(3)
