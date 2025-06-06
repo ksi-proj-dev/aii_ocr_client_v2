@@ -33,7 +33,7 @@ from app_constants import (
     LISTVIEW_UPDATE_INTERVAL_MS
 )
 
-APP_VERSION = "0.0.15" # ★ バージョン更新
+APP_VERSION = "0.0.16" # ★ バージョン更新
 
 class ApiSelectionDialog(QDialog):
     def __init__(self, api_profiles: list[dict], current_profile_id: Optional[str], parent=None, initial_selection_filter: Optional[List[str]] = None):
