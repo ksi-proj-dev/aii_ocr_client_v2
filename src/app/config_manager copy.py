@@ -84,51 +84,24 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "dx_atypical_v2",
         "name": "DX Suite (非定型OCR V2)",
-        "base_uri": "https://{組織固有}.dx-suite.com/wf/api/atypical/v2/", # ★仕様書P.6より 
-        "flow_type": "dx_atypical_v2_flow", # ★このAPIも非同期ポーリング型
-        "endpoints": { # ★仕様書P.8, P.10, P.16, P.19より 
-            "register_ocr": "/read",
-            "get_ocr_result": "/result",
-            "get_receptions": "/receptions",
-            "delete_ocr": "/delete"
+        "base_uri": "http://localhost/dxsuite/api/v2/",
+        "flow_type": "dx_atypical_v2_flow",
+        "endpoints": {
+            # 非定型用エンドポイント (現時点では仮、deleteも追加する可能性)
+             "delete_ocr": "/delete" # 仮: 全文読取と同じエンドポイントを想定
         },
         "options_schema": {
-            # ★★★ ここから非定型API固有のオプション ★★★
-            "model": {
-                "type": "enum",
-                "default": "invoice",
-                "values": [
-                    "invoice", "receipt", "purchase_order", "resident_card", "salary_r3",
-                    "automobile_tax", "medical_receipt", "lease_contract", "health_certificate",
-                    "life_insurance", "resume", "payment", "thai_invoice", "idcard"
-                ],
-                "label": "帳票モデル (DX Suite 非定型):",
-                "tooltip": "読み取り対象の帳票モデルを選択します。（必須）"
-            },
-            "classes": {
-                "type": "string",
-                "default": "",
-                "label": "読取クラス名 (カンマ区切り, 任意):",
-                "placeholder": "例: title,issue_date,billing_company",
-                "tooltip": "指定したクラス（項目）のみを読み取る場合に指定します。\n指定なしの場合は全クラスが対象です。"
-            },
-            "departmentId": { # departmentIdは数字だが、文字列として入力させる
-                "type": "string",
-                "default": "",
-                "label": "部署ID (任意):",
-                "placeholder": "例: 123",
-                "tooltip": "DX Suiteの部署IDを数字で指定します。"
-            },
-            # ★★★ ここまで非定型API固有のオプション ★★★
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite APIの一般的なファイルサイズ上限の目安 (20MB)。"},
+            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "DX Suiteの推奨は500ページ以下です。"}, # ★仕様書P.5より 
+            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
-            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "suffix": " 回"},
-            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "tooltip": "非同期APIの結果を取得する際の問い合わせ間隔（秒）です。", "suffix": " 秒"},
+            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "tooltip": "非同期APIの結果取得を試みる最大回数です。", "suffix": " 回"},
+            # ★★★ ここに新しいオプションを追加 ★★★
+            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後 (成功/失敗問わず)、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            # ... 他の非定型特有のオプション ...
         }
     },
     {

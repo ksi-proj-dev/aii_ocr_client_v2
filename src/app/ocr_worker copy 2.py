@@ -301,11 +301,13 @@ class OcrWorker(QThread):
         results_folder_name = self.file_actions_config.get("results_folder_name", "OCR結果")
         active_profile_flow_type = self.active_api_profile.get("flow_type") if self.active_api_profile else None
         
-        # ★変更: プロファイルからポーリング設定と削除設定を読み込む
+        # ★ プロファイルからポーリング設定を読み込む (デフォルト値も設定)
         polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
         max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
+        # ★ PDF用も共通のキーを使用 (必要なら spdf_polling_interval_seconds など別のキーにする)
         spdf_polling_interval = self.current_api_options_values.get("polling_interval_seconds", DEFAULT_POLLING_INTERVAL_SECONDS)
         spdf_max_polling_attempts = self.current_api_options_values.get("polling_max_attempts", DEFAULT_POLLING_MAX_ATTEMPTS)
+        # ★ 処理後削除オプションを読み込む
         delete_job_after_processing = self.current_api_options_values.get("delete_job_after_processing", True)
 
         try:
@@ -392,27 +394,6 @@ class OcrWorker(QThread):
                         specific_options=active_options_for_api
                     )
 
-
-
-
-
-                    # ★★★ ここからデバッグ用のコードを追加 ★★★
-                    print("--- OCR_WORKER DEBUG ---")
-                    print(f"Flow Type: {active_profile_flow_type}")
-                    print(f"Mode: {self.api_client.api_execution_mode}")
-                    print(f"Type of initial_ocr_response: {type(initial_ocr_response)}")
-                    if isinstance(initial_ocr_response, bytes):
-                        print(f"Content of initial_ocr_response (first 100 bytes): {initial_ocr_response[:100]}")
-                    else:
-                        print(f"Content of initial_ocr_response: {initial_ocr_response}")
-                    print("--- END OCR_WORKER DEBUG ---")
-                    # ★★★ ここまで追加 ★★★
-
-
-
-
-
-
                     current_part_full_ocr_job_id = None 
 
                     if initial_ocr_error:
@@ -461,18 +442,22 @@ class OcrWorker(QThread):
                         if not final_ocr_error_for_main: final_ocr_error_for_main = part_ocr_api_error_info
                         if part_ocr_api_error_info.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API", "API_KEY_MISSING_LIVE", "DXSUITE_BASE_URI_NOT_CONFIGURED", "DXSUITE_API_120000", "DXSUITE_API_120001", "DXSUITE_API_120003"]:
                             self.encountered_fatal_error = True; self.fatal_error_info = part_ocr_api_error_info; self.is_running = False
-                        # Do not break here if only OCR text failed, to allow PDF creation and subsequent deletion call
-                        # break 
+                        break
 
                     part_ocr_results_agg.append({"path": current_processing_path, "result": part_ocr_result_json})
                     
                     should_create_json = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
                     if should_create_json and parts_results_temp_dir and part_ocr_result_json is not None:
-                        part_json_filename = os.path.splitext(current_part_basename)[0] + ".json"; part_json_filepath = os.path.join(parts_results_temp_dir, part_json_filename)
+                        part_json_filename = os.path.splitext(current_part_basename)[0] + ".json";
+                        part_json_filepath = os.path.join(parts_results_temp_dir, part_json_filename)
                         try:
                             with open(part_json_filepath, 'w', encoding='utf-8') as f_json: json.dump(part_ocr_result_json, f_json, ensure_ascii=False, indent=2)
                             self.log_manager.info(f"  部品用JSON保存完了: '{part_json_filepath}'", context="WORKER_PART_IO")
-                        except IOError as e_json_save: msg = f"部品 '{current_part_basename}' のJSON保存に失敗: {e_json_save}"; self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True); all_parts_processed_successfully = False; final_ocr_error_for_main = {"message": msg, "code": "PART_JSON_SAVE_ERROR", "detail": str(e_json_save)}
+                        except IOError as e_json_save:
+                            msg = f"部品 '{current_part_basename}' のJSON保存に失敗: {e_json_save}";
+                            self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True);
+                            all_parts_processed_successfully = False;
+                            final_ocr_error_for_main = {"message": msg, "code": "PART_JSON_SAVE_ERROR", "detail": str(e_json_save)}
                             
                     should_create_pdf = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                     if should_create_pdf and parts_results_temp_dir:
@@ -544,7 +529,7 @@ class OcrWorker(QThread):
                                 else:
                                     msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"; self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR"); all_parts_processed_successfully = False
                                     if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
-
+                    
                     # ★★★ 追加: 処理後削除オプションに基づき、削除APIを呼び出す ★★★
                     if active_profile_flow_type == "dx_fulltext_v2_flow" and \
                        delete_job_after_processing and \
@@ -561,9 +546,8 @@ class OcrWorker(QThread):
                         else:
                             self.log_manager.warning(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の削除APIが予期しない応答を返しました: {deleted_info}", context="WORKER_DX_DELETE_WARN")
                     # ★★★ 追加ここまで ★★★
-                
-                # --- 部品ループ終了後の処理 (変更なし) ---
-                # (final_ocr_result_for_main, json_status_for_original_file, pdf_final_path_for_signal, pdf_error_for_signal の最終決定とシグナル送信)
+
+                # --- 部品ループ終了後の処理 ---
                 if not self.is_running and not all_parts_processed_successfully:
                      stop_reason_code = "USER_INTERRUPT" if self.user_stopped else (self.fatal_error_info.get("code", "FATAL_ERROR_STOP") if self.fatal_error_info else "FATAL_ERROR_STOP"); stop_reason_msg = "ユーザーにより中止" if self.user_stopped else (self.fatal_error_info.get("message", "致命的エラー") if self.fatal_error_info else "エラーにより停止"); self.log_manager.info(f"'{original_file_basename}' の処理が「{stop_reason_msg}」のため中断/停止されました。", context="WORKER_LIFECYCLE")
                      if not final_ocr_error_for_main: final_ocr_error_for_main = {"message": stop_reason_msg, "code": stop_reason_code}
@@ -621,7 +605,8 @@ class OcrWorker(QThread):
                                  except Exception as e_copy_single_pdf: pdf_error_for_signal = {"message": "単一PDFのコピー失敗", "code": "SINGLE_PDF_COPY_ERROR"}
                              else: pdf_error_for_signal = {"message": "単一PDF部品が見つかりません", "code": "SINGLE_PDF_PART_MISSING"}
                         elif not part_pdf_paths_agg and should_create_pdf_globally : pdf_error_for_signal = {"message": "PDF部品が見つかりません (作成対象)", "code": "PDF_PART_MISSING"}
-                    else: pdf_error_for_signal = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
+                    else:
+                        pdf_error_for_signal = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
                 else: 
                     if not final_ocr_error_for_main and not self.user_stopped and not self.encountered_fatal_error: final_ocr_error_for_main = {"message": f"'{original_file_basename}' の部品処理中にエラー発生", "code": "PART_PROCESSING_ERROR"}
                     elif self.user_stopped and not final_ocr_error_for_main: final_ocr_error_for_main = {"message": "処理がユーザーにより中止されました", "code": "USER_INTERRUPT"}
@@ -637,30 +622,45 @@ class OcrWorker(QThread):
 
                 move_original_file_succeeded_final = all_parts_processed_successfully
                 if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
-                     if not (("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file) and "エラー" not in json_status_for_original_file and "中断" not in json_status_for_original_file): move_original_file_succeeded_final = False
+                     if not (("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file) and "エラー" not in json_status_for_original_file and "中断" not in json_status_for_original_file):
+                          move_original_file_succeeded_final = False
                 if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                    if pdf_error_for_signal and not (pdf_error_for_signal.get("code") and ("SUCCESS" in pdf_error_for_signal.get("code").upper() or "PARTS_COPIED_SUCCESS" == pdf_error_for_signal.get("code").upper() )): move_original_file_succeeded_final = False
-                    elif not pdf_final_path_for_signal and not (pdf_error_for_signal and ("作成しない" in pdf_error_for_signal.get("message", "") or "対象外" in pdf_error_for_signal.get("message", ""))): move_original_file_succeeded_final = False
-                if self.user_stopped or self.encountered_fatal_error: move_original_file_succeeded_final = False
+                    if pdf_error_for_signal and not (pdf_error_for_signal.get("code") and ("SUCCESS" in pdf_error_for_signal.get("code").upper() or "PARTS_COPIED_SUCCESS" == pdf_error_for_signal.get("code").upper() )):
+                        move_original_file_succeeded_final = False
+                    elif not pdf_final_path_for_signal and not (pdf_error_for_signal and ("作成しない" in pdf_error_for_signal.get("message", "") or "対象外" in pdf_error_for_signal.get("message", ""))):
+                         move_original_file_succeeded_final = False
+                if self.user_stopped or self.encountered_fatal_error:
+                    move_original_file_succeeded_final = False
 
-                current_source_file_to_move = original_file_path 
-                if os.path.exists(current_source_file_to_move): 
+                current_source_file_to_move = original_file_path
+                if os.path.exists(current_source_file_to_move):
                     destination_subfolder_for_move: Optional[str] = None
-                    success_folder_name_cfg = self.file_actions_config.get("success_folder_name", "OCR成功"); failure_folder_name_cfg = self.file_actions_config.get("failure_folder_name", "OCR失敗"); move_on_success_enabled_cfg = self.file_actions_config.get("move_on_success_enabled", False); move_on_failure_enabled_cfg = self.file_actions_config.get("move_on_failure_enabled", False); collision_action_cfg = self.file_actions_config.get("collision_action", "rename")
-                    if move_original_file_succeeded_final and move_on_success_enabled_cfg: destination_subfolder_for_move = success_folder_name_cfg
-                    elif not move_original_file_succeeded_final and move_on_failure_enabled_cfg: destination_subfolder_for_move = failure_folder_name_cfg
-                    if destination_subfolder_for_move and (self.is_running or not self.encountered_fatal_error): self._move_file_with_collision_handling(current_source_file_to_move, original_file_parent_dir, destination_subfolder_for_move, collision_action_cfg)
-                    elif destination_subfolder_for_move: self.log_manager.info(f"'{original_file_basename}' のファイル移動は処理中断/停止のためスキップされました。", context="WORKER_FILE_MOVE")
+                    success_folder_name_cfg = self.file_actions_config.get("success_folder_name", "OCR成功")
+                    failure_folder_name_cfg = self.file_actions_config.get("failure_folder_name", "OCR失敗")
+                    move_on_success_enabled_cfg = self.file_actions_config.get("move_on_success_enabled", False)
+                    move_on_failure_enabled_cfg = self.file_actions_config.get("move_on_failure_enabled", False)
+                    collision_action_cfg = self.file_actions_config.get("collision_action", "rename")
+
+                    if move_original_file_succeeded_final and move_on_success_enabled_cfg:
+                        destination_subfolder_for_move = success_folder_name_cfg
+                    elif not move_original_file_succeeded_final and move_on_failure_enabled_cfg:
+                        destination_subfolder_for_move = failure_folder_name_cfg
+                    
+                    if destination_subfolder_for_move and (self.is_running or not self.encountered_fatal_error):
+                        self._move_file_with_collision_handling(current_source_file_to_move, original_file_parent_dir, destination_subfolder_for_move, collision_action_cfg)
+                    elif destination_subfolder_for_move:
+                         self.log_manager.info(f"'{original_file_basename}' のファイル移動は処理中断/停止のためスキップされました。", context="WORKER_FILE_MOVE")
 
                 self._try_cleanup_specific_temp_dirs(current_file_parts_source_dir, parts_results_temp_dir)
-                time.sleep(0.01) 
+                time.sleep(0.01)
         finally:
             self._cleanup_main_temp_dir()
-            self.all_files_processed.emit() 
-            final_log_message = "OcrWorkerの処理が完了しました。";
+            self.all_files_processed.emit()
+            final_log_message = "OcrWorkerの処理が完了しました。"
             if self.user_stopped: final_log_message = "OcrWorkerの処理がユーザーにより停止されました。"
             elif self.encountered_fatal_error: final_log_message = f"OcrWorkerの処理が致命的なエラー ({self.fatal_error_info.get('code') if self.fatal_error_info else 'N/A'}) により停止しました。"
-            elif not self.is_running: final_log_message = "OcrWorkerの処理が中断されました (is_runningがFalse)。"
+            elif not self.is_running:
+                final_log_message = "OcrWorkerの処理が中断されました (is_runningがFalse)。"
             self.log_manager.info(final_log_message, context="WORKER_LIFECYCLE")
             self.log_manager.debug(f"OcrWorkerスレッドが終了しました。", context="WORKER_LIFECYCLE", thread_id=thread_id)
 
@@ -670,28 +670,52 @@ class OcrWorker(QThread):
             return
         self.log_manager.info("OcrWorker停止リクエスト受信 (オーケストレータ/ユーザーから)。", context="WORKER_LIFECYCLE_STOP")
         self.is_running = False
-        self.user_stopped = True 
+        self.user_stopped = True
 
     def _move_file_with_collision_handling(self, source_path: str, root_dest_dir: str, subfolder_name: str, collision_action: str):
-        source_filename = os.path.basename(source_path); destination_folder = os.path.join(root_dest_dir, subfolder_name)
-        try: os.makedirs(destination_folder, exist_ok=True)
-        except OSError as e: self.log_manager.error(f"移動先フォルダ '{destination_folder}' の作成失敗: {e}", context="WORKER_FILE_MOVE_ERROR", exc_info=True); return
+        source_filename = os.path.basename(source_path)
+        destination_folder = os.path.join(root_dest_dir, subfolder_name)
+        try:
+            os.makedirs(destination_folder, exist_ok=True)
+        except OSError as e:
+            self.log_manager.error(f"移動先フォルダ '{destination_folder}' の作成失敗: {e}", context="WORKER_FILE_MOVE_ERROR", exc_info=True)
+            return
         destination_path = os.path.join(destination_folder, source_filename)
         if os.path.exists(destination_path):
             if collision_action == "overwrite":
                 self.log_manager.info(f"'{destination_path}' の既存ファイルを '{source_path}' で上書きします。", context="WORKER_FILE_MOVE")
                 try: os.remove(destination_path)
-                except OSError as e_remove: self.log_manager.error(f"上書きのための既存ファイル '{destination_path}' の削除失敗: {e_remove}", context="WORKER_FILE_MOVE_ERROR", exc_info=True); return
-            elif collision_action == "rename": destination_path = self._get_unique_filepath(destination_folder, source_filename); self.log_manager.info(f"'{destination_folder}' での衝突のため、新しいファイルを '{os.path.basename(destination_path)}' にリネームします。", context="WORKER_FILE_MOVE")
-            elif collision_action == "skip": self.log_manager.info(f"既存ファイルがあり 'skip' ポリシーのため、'{source_path}' から '{destination_folder}' への移動をスキップします。", context="WORKER_FILE_MOVE"); return
-            else: destination_path = self._get_unique_filepath(destination_folder, source_filename); self.log_manager.warning(f"不明な衝突処理アクション '{collision_action}'。デフォルトのリネーム処理を行います: '{os.path.basename(destination_path)}'。", context="WORKER_FILE_MOVE")
-        try: shutil.move(source_path, destination_path); self.log_manager.info(f"'{source_path}' から '{destination_path}' へ正常に移動しました。", context="WORKER_FILE_MOVE")
-        except Exception as e: self.log_manager.error(f"'{source_path}' から '{destination_path}' への移動失敗。エラー: {e}", context="WORKER_FILE_MOVE_ERROR", exc_info=True)
+                except OSError as e_remove:
+                    self.log_manager.error(f"上書きのための既存ファイル '{destination_path}' の削除失敗: {e_remove}", context="WORKER_FILE_MOVE_ERROR", exc_info=True)
+                    return
+            elif collision_action == "rename":
+                destination_path = self._get_unique_filepath(destination_folder, source_filename)
+                self.log_manager.info(f"'{destination_folder}' での衝突のため、新しいファイルを '{os.path.basename(destination_path)}' にリネームします。", context="WORKER_FILE_MOVE")
+            elif collision_action == "skip":
+                self.log_manager.info(f"既存ファイルがあり 'skip' ポリシーのため、'{source_path}' から '{destination_folder}' への移動をスキップします。", context="WORKER_FILE_MOVE")
+                return
+            else: 
+                destination_path = self._get_unique_filepath(destination_folder, source_filename)
+                self.log_manager.warning(f"不明な衝突処理アクション '{collision_action}'。デフォルトのリネーム処理を行います: '{os.path.basename(destination_path)}'。", context="WORKER_FILE_MOVE")
+        try:
+            shutil.move(source_path, destination_path)
+            self.log_manager.info(f"'{source_path}' から '{destination_path}' へ正常に移動しました。", context="WORKER_FILE_MOVE")
+        except Exception as e:
+            self.log_manager.error(f"'{source_path}' から '{destination_path}' への移動失敗。エラー: {e}", context="WORKER_FILE_MOVE_ERROR", exc_info=True)
 
     def _try_cleanup_specific_temp_dirs(self, source_parts_dir: Optional[str], results_parts_dir: Optional[str]):
-        if source_parts_dir and os.path.isdir(source_parts_dir) and self.main_temp_dir_for_splits and self.main_temp_dir_for_splits in source_parts_dir :
-            try: shutil.rmtree(source_parts_dir); self.log_manager.debug(f"一時ソース部品ディレクトリをクリーンアップしました: {source_parts_dir}", context="WORKER_TEMP_CLEANUP")
-            except Exception as e: self.log_manager.warning(f"一時ソース部品ディレクトリのクリーンアップ失敗: {source_parts_dir}, Error: {e}", context="WORKER_TEMP_CLEANUP_ERROR", exc_info=True)
-        if results_parts_dir and os.path.isdir(results_parts_dir) and self.main_temp_dir_for_splits and self.main_temp_dir_for_splits in results_parts_dir:
-            try: shutil.rmtree(results_parts_dir); self.log_manager.debug(f"一時結果部品ディレクトリをクリーンアップしました: {results_parts_dir}", context="WORKER_TEMP_CLEANUP")
-            except Exception as e: self.log_manager.warning(f"一時結果部品ディレクトリのクリーンアップ失敗: {results_parts_dir}, Error: {e}", context="WORKER_TEMP_CLEANUP_ERROR", exc_info=True)
+        if source_parts_dir and os.path.isdir(source_parts_dir) and \
+           self.main_temp_dir_for_splits and self.main_temp_dir_for_splits in source_parts_dir :
+            try:
+                shutil.rmtree(source_parts_dir)
+                self.log_manager.debug(f"一時ソース部品ディレクトリをクリーンアップしました: {source_parts_dir}", context="WORKER_TEMP_CLEANUP")
+            except Exception as e:
+                self.log_manager.warning(f"一時ソース部品ディレクトリのクリーンアップ失敗: {source_parts_dir}, Error: {e}", context="WORKER_TEMP_CLEANUP_ERROR", exc_info=True)
+        
+        if results_parts_dir and os.path.isdir(results_parts_dir) and \
+           self.main_temp_dir_for_splits and self.main_temp_dir_for_splits in results_parts_dir:
+            try:
+                shutil.rmtree(results_parts_dir)
+                self.log_manager.debug(f"一時結果部品ディレクトリをクリーンアップしました: {results_parts_dir}", context="WORKER_TEMP_CLEANUP")
+            except Exception as e:
+                self.log_manager.warning(f"一時結果部品ディレクトリのクリーンアップ失敗: {results_parts_dir}, Error: {e}", context="WORKER_TEMP_CLEANUP_ERROR", exc_info=True)

@@ -392,27 +392,6 @@ class OcrWorker(QThread):
                         specific_options=active_options_for_api
                     )
 
-
-
-
-
-                    # ★★★ ここからデバッグ用のコードを追加 ★★★
-                    print("--- OCR_WORKER DEBUG ---")
-                    print(f"Flow Type: {active_profile_flow_type}")
-                    print(f"Mode: {self.api_client.api_execution_mode}")
-                    print(f"Type of initial_ocr_response: {type(initial_ocr_response)}")
-                    if isinstance(initial_ocr_response, bytes):
-                        print(f"Content of initial_ocr_response (first 100 bytes): {initial_ocr_response[:100]}")
-                    else:
-                        print(f"Content of initial_ocr_response: {initial_ocr_response}")
-                    print("--- END OCR_WORKER DEBUG ---")
-                    # ★★★ ここまで追加 ★★★
-
-
-
-
-
-
                     current_part_full_ocr_job_id = None 
 
                     if initial_ocr_error:
