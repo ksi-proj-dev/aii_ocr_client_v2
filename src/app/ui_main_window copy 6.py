@@ -514,32 +514,12 @@ class MainWindow(QMainWindow):
         self.update_all_status_displays(); self.update_ocr_controls()    
 
     def append_log_message_to_widget(self, level, message):
-        # ★★★ ここから変更 ★★★
         if hasattr(self, 'log_widget') and self.log_widget:
-            # 設定から現在のログ表示レベルを取得
-            log_settings = self.config.get("log_settings", {})
-            
-            # 設定に基づいて表示するかどうかを判断
-            if level == LogLevel.INFO and not log_settings.get("log_level_info_enabled", True):
-                return # INFO非表示設定なら、ここで処理を終了
-            if level == LogLevel.WARNING and not log_settings.get("log_level_warning_enabled", True):
-                return # WARNING非表示設定なら、ここで処理を終了
-            if level == LogLevel.DEBUG and not log_settings.get("log_level_debug_enabled", False):
-                return # DEBUG非表示設定なら、ここで処理を終了
-            # ERRORは常に表示するため、フィルタリングしない
-
-            # 色付けと表示処理
-            color_map = {
-                LogLevel.ERROR: "red",
-                LogLevel.WARNING: "orange",
-                LogLevel.DEBUG: "gray",
-                LogLevel.INFO: "black"
-            }
-            color = color_map.get(level, "black") # 未知のレベルは黒で表示
-
+            color_map = {LogLevel.ERROR: "red", LogLevel.WARNING: "orange", LogLevel.DEBUG: "gray", LogLevel.INFO: "black"}
+            color = color_map.get(level, "black")
             self.log_widget.append(f'<font color="{color}">{message}</font>')
             self.log_widget.ensureCursorVisible()
-        # ★★★ ここまで変更 ★★★
+
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
         if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")

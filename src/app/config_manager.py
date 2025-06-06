@@ -240,7 +240,14 @@ class ConfigManager:
         file_actions.setdefault("collision_action", "rename")
         file_actions.setdefault("results_folder_name", "OCR結果")
         file_actions.setdefault("output_format", "both")
-        
+
+        # ★★★ ここから新しい設定項目を追加 ★★★
+        log_settings = config.setdefault("log_settings", {})
+        log_settings.setdefault("log_level_info_enabled", True)    # INFOレベルはデフォルトで表示
+        log_settings.setdefault("log_level_warning_enabled", True) # WARNINGレベルはデフォルトで表示
+        log_settings.setdefault("log_level_debug_enabled", False)  # DEBUGレベルはデフォルトで非表示
+        # ★★★ ここまで追加 ★★★
+
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
         config.setdefault("current_view", 0) 

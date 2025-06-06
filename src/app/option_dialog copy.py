@@ -16,15 +16,15 @@ class OptionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("オプション設定")
 
-        self.options_schema = options_schema
+        self.options_schema = options_schema 
         self.current_option_values = current_option_values if current_option_values else {}
-        self.global_config = global_config
+        self.global_config = global_config 
 
         self.widgets_map = {}
-        self.saved_settings = (None, None)
+        self.saved_settings = (None, None) 
 
         self.init_ui()
-        self.resize(550, 900)
+        self.resize(550, 900) 
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -47,12 +47,12 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         main_layout.addWidget(api_connection_group)
 
-        if self.options_schema:
+        if self.options_schema: # options_schema が空 {} の場合はこのグループは表示されない
             dynamic_options_group = QGroupBox("API別 OCRオプション")
             dynamic_form_layout = QFormLayout()
             
             for key, schema_item in self.options_schema.items():
-                if key in ["api_key", "base_uri"]:
+                if key in ["api_key", "base_uri"]: # これらは専用の入力欄で扱う
                     continue
 
                 label_text = schema_item.get("label", key) + ":"
@@ -61,10 +61,10 @@ class OptionDialog(QDialog):
                 tooltip = schema_item.get("tooltip", "")
 
                 if schema_item.get("type") == "bool":
-                    widget = QCheckBox(schema_item.get("label", key))
-                    widget.setChecked(bool(current_value))
+                    widget = QCheckBox(schema_item.get("label", key)) 
+                    widget.setChecked(bool(current_value)) # 0 or 1 or True/False
                     if tooltip: widget.setToolTip(tooltip)
-                    dynamic_form_layout.addRow(widget)
+                    dynamic_form_layout.addRow(widget) 
                     self.widgets_map[key] = widget
                 
                 elif schema_item.get("type") == "int":
@@ -89,17 +89,18 @@ class OptionDialog(QDialog):
                     if "values" in schema_item and isinstance(schema_item["values"], list):
                         widget.addItems(schema_item["values"])
                     
+                    # 値の設定ロジックを改善
                     if isinstance(current_value, int) and 0 <= current_value < widget.count():
                         widget.setCurrentIndex(current_value)
-                    elif isinstance(current_value, str):
+                    elif isinstance(current_value, str): # 文字列で値が保存されている場合
                         index = widget.findText(current_value)
-                        if index != -1:
+                        if index != -1: # 完全一致で見つかれば設定
                             widget.setCurrentIndex(index)
-                        else:
+                        else: # current_value が "katsuji (印刷活字)" のような形式の場合も考慮
                             short_val_index = widget.findText(current_value.split(" ")[0])
                             if short_val_index != -1:
                                 widget.setCurrentIndex(short_val_index)
-                            else:
+                            else: # デフォルト値でフォールバック
                                 default_val = schema_item.get("default")
                                 if isinstance(default_val, int) and 0 <= default_val < widget.count():
                                     widget.setCurrentIndex(default_val)
@@ -111,16 +112,14 @@ class OptionDialog(QDialog):
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
                 
-                if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
-                    if isinstance(widget, QCheckBox):
-                        widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
+                if key == "split_large_files_enabled" and isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
 
-            if dynamic_form_layout.rowCount() > 0:
+            if dynamic_form_layout.rowCount() > 0: # 実際に項目が追加された場合のみグループを表示
                 dynamic_options_group.setLayout(dynamic_form_layout)
                 main_layout.addWidget(dynamic_options_group)
-                # ウィジェットが作成された後に状態を更新
                 self.toggle_dynamic_split_options_enabled_state()
-            else:
+            else: # 表示するOCRオプションがない場合はグループボックス自体を隠す
                 dynamic_options_group.setVisible(False)
 
 
@@ -170,49 +169,6 @@ class OptionDialog(QDialog):
         file_process_form_layout.addRow(collision_label, collision_layout_v)
         file_process_group.setLayout(file_process_form_layout)
         main_layout.addWidget(file_process_group)
-        
-        # ★★★ ここからログ設定グループのレイアウトを変更 ★★★
-        log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
-        log_settings_config = self.global_config.get("log_settings", {})
-        
-        # 水平レイアウトを使用してチェックボックスを横に並べる
-        log_checkbox_layout = QHBoxLayout()
-
-        # チェックボックスのラベルをシンプルに変更
-        self.log_level_info_chk = QCheckBox("INFO")
-        self.log_level_info_chk.setChecked(log_settings_config.get("log_level_info_enabled", True))
-        self.log_level_info_chk.setToolTip("アプリケーションの通常動作に関する情報ログを表示します。")
-        log_checkbox_layout.addWidget(self.log_level_info_chk)
-
-        self.log_level_warning_chk = QCheckBox("WARNING")
-        self.log_level_warning_chk.setChecked(log_settings_config.get("log_level_warning_enabled", True))
-        self.log_level_warning_chk.setToolTip("軽微な問題や注意喚起に関する警告ログを表示します。")
-        log_checkbox_layout.addWidget(self.log_level_warning_chk)
-
-        self.log_level_debug_chk = QCheckBox("DEBUG")
-        self.log_level_debug_chk.setChecked(log_settings_config.get("log_level_debug_enabled", False))
-        self.log_level_debug_chk.setToolTip("開発者向けの詳細なデバッグ情報を表示します。")
-        log_checkbox_layout.addWidget(self.log_level_debug_chk)
-
-
-        error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
-        error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        log_checkbox_layout.addWidget(error_label)
-
-
-        log_checkbox_layout.addStretch(1) # チェックボックスを左に寄せるためのスペーサー
-        log_settings_group.setLayout(log_checkbox_layout)
-        
-        # グループボックスと注釈ラベルを縦に並べるためのコンテナレイアウト
-        log_section_layout = QVBoxLayout()
-        log_section_layout.addWidget(log_settings_group)
-
-        # error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
-        # error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        # log_section_layout.addWidget(error_label)
-        
-        main_layout.addLayout(log_section_layout)
-        # ★★★ ここまで変更 ★★★
 
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存"); self.cancel_btn = QPushButton("キャンセル")
@@ -223,34 +179,45 @@ class OptionDialog(QDialog):
 
         self.setLayout(main_layout)
 
-    def toggle_dynamic_split_options_enabled_state(self):
+    def toggle_dynamic_split_options_enabled_state(self): # メソッド名をより汎用的に変更も検討
+        # ファイルサイズによる分割設定の有効/無効状態を取得
         size_split_is_enabled = False
         if "split_large_files_enabled" in self.widgets_map:
             chk_box = self.widgets_map.get("split_large_files_enabled")
             if isinstance(chk_box, QCheckBox):
                 size_split_is_enabled = chk_box.isChecked()
         
+        # ページ数による分割設定の有効/無効状態を取得
         page_split_is_enabled = False
-        if "split_by_page_count_enabled" in self.widgets_map:
+        if "split_by_page_count_enabled" in self.widgets_map: # ★ 新しいオプションのキーを確認
             chk_box_page = self.widgets_map.get("split_by_page_count_enabled")
             if isinstance(chk_box_page, QCheckBox):
                 page_split_is_enabled = chk_box_page.isChecked()
 
+        # 関連ウィジェットの有効/無効状態を設定
+        # 「大きなファイルを自動分割する」が有効な場合のみ、詳細設定（サイズやページ数）が意味を持つ
+        
+        # 分割サイズ目安 (split_chunk_size_mb)
         widget_chunk_size = self.widgets_map.get("split_chunk_size_mb")
         if widget_chunk_size and isinstance(widget_chunk_size, QSpinBox):
-            widget_chunk_size.setEnabled(size_split_is_enabled)
+            widget_chunk_size.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
 
+        # ページ数上限で分割する (split_by_page_count_enabled) - これは常に編集可能
+        # (ただし、これがチェックされていなければ、下の split_max_pages_per_part は無効化する)
         widget_page_split_enable = self.widgets_map.get("split_by_page_count_enabled")
         if widget_page_split_enable and isinstance(widget_page_split_enable, QCheckBox):
-             widget_page_split_enable.setEnabled(size_split_is_enabled)
+             widget_page_split_enable.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
 
+        # 部品あたりの最大ページ数 (split_max_pages_per_part)
         widget_max_pages = self.widgets_map.get("split_max_pages_per_part")
         if widget_max_pages and isinstance(widget_max_pages, QSpinBox):
+            # 「大きなファイル～」が有効 かつ 「ページ数上限で分割する」も有効な場合にのみ、この入力欄を有効化
             widget_max_pages.setEnabled(size_split_is_enabled and page_split_is_enabled)
 
+        # 分割PDF部品の結合 (merge_split_pdf_parts)
         widget_merge_parts = self.widgets_map.get("merge_split_pdf_parts")
         if widget_merge_parts and isinstance(widget_merge_parts, QCheckBox):
-            widget_merge_parts.setEnabled(size_split_is_enabled)
+            widget_merge_parts.setEnabled(size_split_is_enabled) # 「大きなファイル～」が有効ならこれも有効
 
     def is_valid_folder_name(self, folder_name, field_label):
         if not folder_name:
@@ -265,7 +232,7 @@ class OptionDialog(QDialog):
         return True
 
     def on_save_settings(self):
-        updated_profile_options = {}
+        updated_profile_options = {} # アクティブプロファイル用の設定値
 
         updated_profile_options["api_key"] = self.profile_api_key_edit.text().strip()
         updated_profile_options["base_uri"] = self.profile_base_uri_edit.text().strip()
@@ -289,10 +256,12 @@ class OptionDialog(QDialog):
                         else: 
                              updated_profile_options[key] = widget.currentText().split(" ")[0] 
         
+        # プロファイル固有オプションのバリデーション (例: upload_max_size_mb vs split_chunk_size_mb)
         upload_max_size = updated_profile_options.get("upload_max_size_mb")
-        split_enabled = updated_profile_options.get("split_large_files_enabled")
-        split_chunk_size = updated_profile_options.get("split_chunk_size_mb")
+        split_enabled = updated_profile_options.get("split_large_files_enabled") # これは options_schema にある想定
+        split_chunk_size = updated_profile_options.get("split_chunk_size_mb")   # これも options_schema にある想定
 
+        # upload_max_size_mb が数値型であることを確認してから比較
         if isinstance(upload_max_size, (int, float)) and \
            split_enabled and \
            isinstance(split_chunk_size, (int, float)) and \
@@ -302,8 +271,11 @@ class OptionDialog(QDialog):
             if "split_chunk_size_mb" in self.widgets_map: self.widgets_map["split_chunk_size_mb"].setFocus()
             return
 
-        updated_global_config = json.loads(json.dumps(self.global_config))
+        # グローバル設定 (プロファイルに依存しない設定)
+        updated_global_config = json.loads(json.dumps(self.global_config)) # ディープコピー
         
+        # グローバルな api_key はもうないので、その削除処理も不要
+
         results_folder = self.results_folder_name_edit.text().strip()
         success_folder = self.success_folder_name_edit.text().strip()
         failure_folder = self.failure_folder_name_edit.text().strip()
@@ -331,13 +303,6 @@ class OptionDialog(QDialog):
         if self.collision_overwrite_radio.isChecked(): file_actions["collision_action"] = "overwrite"
         elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
         else: file_actions["collision_action"] = "rename"
-
-        # ★★★ 新しいログ設定を保存 ★★★
-        log_settings = updated_global_config.setdefault("log_settings", {})
-        log_settings["log_level_info_enabled"] = self.log_level_info_chk.isChecked()
-        log_settings["log_level_warning_enabled"] = self.log_level_warning_chk.isChecked()
-        log_settings["log_level_debug_enabled"] = self.log_level_debug_chk.isChecked()
-        # ★★★ ここまで ★★★
 
         self.saved_settings = (updated_profile_options, updated_global_config)
         self.accept()
