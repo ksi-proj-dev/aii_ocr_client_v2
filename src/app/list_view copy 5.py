@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QApplication, QCheckBox, QHBoxLayout
+    QAbstractItemView, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QFont, QPalette
@@ -22,7 +22,7 @@ class NumericTableWidgetItem(QTableWidgetItem):
         return super().__lt__(other)
 
 class ListView(QWidget):
-    item_check_state_changed = pyqtSignal(int, bool)
+    item_check_state_changed = pyqtSignal(int, bool) # row_index, is_checked
 
     def __init__(self, initial_file_list_data: list[FileInfo] = None):
         super().__init__()
@@ -43,8 +43,7 @@ class ListView(QWidget):
         base_color = current_palette.color(QPalette.ColorRole.Base).name()
         alternate_base_color = current_palette.color(QPalette.ColorRole.AlternateBase).name()
         highlight_color = current_palette.color(QPalette.ColorRole.Highlight).name()
-        highlighted_text_color = current_palette.color(QPalette.ColorRole.HighlightedText).name()
-        
+
         self.table.setStyleSheet(f"""
             QHeaderView::section {{ 
                 background-color: #f0f0f0; 
@@ -54,20 +53,24 @@ class ListView(QWidget):
             QTableWidget {{ 
                 gridline-color: #e0e0e0; 
                 alternate-background-color: {alternate_base_color}; 
-                background-color: {base_color};
-                outline: 0;
+                background-color: {base_color}; 
             }}
             QTableWidget::item {{ 
                 padding: 3px; 
                 border: 1px solid transparent;
             }}
             QTableWidget::item:focus {{
-                border: 1px solid transparent;
-                outline: 0;
+                border: 1px solid {base_color}; 
+                outline: none;
             }}
             QTableWidget::item:selected {{
                 background-color: {highlight_color};
-                color: {highlighted_text_color};
+                color: {current_palette.color(QPalette.ColorRole.HighlightedText).name()};
+                border: 1px solid {highlight_color};
+            }}
+            QTableWidget::item:selected:focus {{
+                border: 1px solid {highlight_color};
+                outline: none;
             }}
         """)
 
@@ -90,7 +93,6 @@ class ListView(QWidget):
         self.table.horizontalHeader().sortIndicatorChanged.connect(self.handle_sort_indicator_changed)
 
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        # itemChanged はもうチェックボックスには使わないが、他のセルで使う可能性を考慮して残す
         self.table.itemChanged.connect(self.on_item_changed)
 
         layout.addWidget(self.table)
@@ -101,46 +103,62 @@ class ListView(QWidget):
         self.apply_sort_order(default_to_skip_col0=True)
 
     def get_sorted_file_info_list(self) -> list[FileInfo]:
+        """
+        現在テーブルに表示されている順番（ソート後）でFileInfoオブジェクトのリストを返します。
+        
+        Returns:
+            list[FileInfo]: 現在の表示順にソートされたFileInfoオブジェクトのリスト。
+        """
         sorted_list = []
         if not (hasattr(self, 'table') and self.table):
-            return self.file_list_data
+            return self.file_list_data # テーブルがなければ元のリストを返す
 
         for visual_row_index in range(self.table.rowCount()):
-            no_item = self.table.item(visual_row_index, 1)
+            # 'No'列のアイテムから、対応する元のファイルNoを取得
+            no_item = self.table.item(visual_row_index, 1) # 'No' は2列目(インデックス1)
             if no_item:
                 try:
                     file_no = int(no_item.text())
+                    # 元のデータリストから、該当するNoを持つFileInfoオブジェクトを検索
                     found_file_info = next((f for f in self.file_list_data if f.no == file_no), None)
                     if found_file_info:
                         sorted_list.append(found_file_info)
                 except (ValueError, StopIteration):
+                    # Noが数値でない、または対応するFileInfoが見つからない場合はスキップ
                     continue
         
+        # もし何らかの理由でソート済みリストが作成できなかった場合は、安全のために元のリストを返す
         if len(sorted_list) != len(self.file_list_data):
             return self.file_list_data
             
         return sorted_list
         
     def set_checkboxes_enabled(self, is_enabled: bool):
+        """リストビュー内の全てのチェックボックスの有効/無効を切り替える。"""
+        self._suspend_item_changed_signal = True # 状態変更時にシグナルが発行されないように
         for row in range(self.table.rowCount()):
-            cell_widget = self.table.cellWidget(row, 0)
-            if cell_widget:
-                checkbox = cell_widget.findChild(QCheckBox)
-                if checkbox:
-                    no_item = self.table.item(row, 1)
-                    if not no_item: continue
-                    try:
-                        file_no = int(no_item.text())
-                        file_info = next((f for f in self.file_list_data if f.no == file_no), None)
-                        if not file_info: continue
-                        
-                        original_is_disabled_by_logic = (file_info.ocr_engine_status == "対象外(サイズ上限)")
-                        if is_enabled and not original_is_disabled_by_logic:
-                            checkbox.setEnabled(True)
-                        elif not is_enabled:
-                            checkbox.setEnabled(False)
-                    except (ValueError, StopIteration):
-                        continue
+            check_item = self.table.item(row, 0)
+            if check_item:
+                current_flags = check_item.flags()
+                
+                # 'No'列から対応するfile_infoを検索
+                no_item = self.table.item(row, 1)
+                if not no_item: continue
+                try:
+                    file_no = int(no_item.text())
+                    file_info = next((f for f in self.file_list_data if f.no == file_no), None)
+                    if not file_info: continue
+
+                    # サイズ上限などで元々無効化されているチェックボックスは、有効化しない
+                    original_is_disabled_by_logic = (file_info.ocr_engine_status == "対象外(サイズ上限)")
+
+                    if is_enabled and not original_is_disabled_by_logic:
+                        check_item.setFlags(current_flags | Qt.ItemFlag.ItemIsEnabled)
+                    elif not is_enabled:
+                        check_item.setFlags(current_flags & ~Qt.ItemFlag.ItemIsEnabled)
+                except (ValueError, StopIteration):
+                    continue
+        self._suspend_item_changed_signal = False
 
     def handle_sort_indicator_changed(self, logical_index, order):
         if logical_index == 0:
@@ -154,46 +172,57 @@ class ListView(QWidget):
         is_currently_all_checked = True
         found_editable_checkbox = False
         for row in range(self.table.rowCount()):
-            cell_widget = self.table.cellWidget(row, 0)
-            if cell_widget:
-                checkbox = cell_widget.findChild(QCheckBox)
-                if checkbox and checkbox.isEnabled():
-                    found_editable_checkbox = True
-                    if not checkbox.isChecked():
-                        is_currently_all_checked = False
-                        break
+            item = self.table.item(row, 0)
+            if item and item.flags() & Qt.ItemFlag.ItemIsUserCheckable and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                found_editable_checkbox = True
+                if item.checkState() == Qt.CheckState.Unchecked:
+                    is_currently_all_checked = False
+                    break
         
         if not found_editable_checkbox:
             return
 
-        new_check_state = not is_currently_all_checked
+        new_check_state = Qt.CheckState.Unchecked if is_currently_all_checked else Qt.CheckState.Checked
         
+        self._suspend_item_changed_signal = True
         for row in range(self.table.rowCount()):
-            cell_widget = self.table.cellWidget(row, 0)
-            if cell_widget:
-                checkbox = cell_widget.findChild(QCheckBox)
-                if checkbox and checkbox.isEnabled():
-                    checkbox.setChecked(new_check_state)
-
-    # ★★★ チェックボックスの状態変化をハンドルする新しいスロット ★★★
-    def on_checkbox_state_changed(self, file_no: int, state: int):
-        is_checked = (state == Qt.CheckState.Checked.value)
-        
-        target_file_info = next((f for f in self.file_list_data if f.no == file_no), None)
-        if target_file_info:
-            target_file_info.is_checked = is_checked
-            try:
-                original_idx = self.file_list_data.index(target_file_info)
-                self.item_check_state_changed.emit(original_idx, is_checked)
-            except ValueError:
-                pass # リストにない場合は何もしない
+            item = self.table.item(row, 0)
+            if item and item.flags() & Qt.ItemFlag.ItemIsUserCheckable and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                no_item = self.table.item(row, 1)
+                if no_item:
+                    try:
+                        file_no = int(no_item.text())
+                        file_info = next((f for f in self.file_list_data if f.no == file_no), None)
+                        if file_info:
+                            file_info.is_checked = (new_check_state == Qt.CheckState.Checked)
+                            item.setCheckState(new_check_state)
+                            self.item_check_state_changed.emit(file_info.no - 1, file_info.is_checked) # 元のリストのインデックスを想定
+                    except (ValueError, StopIteration):
+                        continue
+        self._suspend_item_changed_signal = False
 
     def on_item_changed(self, item: QTableWidgetItem):
-        # このメソッドはもうチェックボックスには使用されませんが、
-        # 将来的に他のセルを編集可能にする可能性を考慮して残しておきます。
         if self._suspend_item_changed_signal:
             return
-        # print(f"Item changed: row {item.row()}, col {item.column()}")
+        if item.column() == 0:
+            row = item.row()
+            no_item = self.table.item(row, 1)
+            if not no_item: return
+            
+            try:
+                file_no = int(no_item.text())
+                target_file_info_idx = -1
+                for i, f_info in enumerate(self.file_list_data):
+                    if f_info.no == file_no:
+                        target_file_info_idx = i
+                        break
+
+                if target_file_info_idx != -1:
+                    is_checked = item.checkState() == Qt.CheckState.Checked
+                    self.file_list_data[target_file_info_idx].is_checked = is_checked
+                    self.item_check_state_changed.emit(target_file_info_idx, is_checked)
+            except (ValueError, IndexError):
+                pass
 
     def populate_table(self, files_data: list[FileInfo], is_running: bool = False):
         self._suspend_item_changed_signal = True
@@ -208,29 +237,22 @@ class ListView(QWidget):
             error_color = QColor("red")
 
             for idx, file_info in enumerate(self.file_list_data):
-                # ★★★ チェックボックス列の作成方法を変更 ★★★
-                cell_widget = QWidget()
-                layout = QHBoxLayout(cell_widget)
-                layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout.setContentsMargins(0, 0, 0, 0)
+                check_item = QTableWidgetItem()
+                flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
                 
-                checkbox = QCheckBox()
-                checkbox.setChecked(file_info.is_checked)
-                
-                # stateChangedシグナルに、ファイル番号(no)と新しい状態を渡すラムダを接続
-                checkbox.stateChanged.connect(
-                    lambda state, fn=file_info.no: self.on_checkbox_state_changed(fn, state)
-                )
-
                 is_disabled_by_logic = (file_info.ocr_engine_status == "対象外(サイズ上限)")
                 if is_running or is_disabled_by_logic:
-                    checkbox.setEnabled(False)
-                if is_disabled_by_logic:
-                    checkbox.setToolTip("サイズ上限のため処理対象外です")
+                    flags &= ~Qt.ItemFlag.ItemIsEnabled
 
-                layout.addWidget(checkbox)
-                self.table.setCellWidget(idx, 0, cell_widget)
-                # ★★★ ここまで ★★★
+                check_item.setFlags(flags)
+                
+                if is_disabled_by_logic:
+                    check_item.setToolTip("サイズ上限のため処理対象外です")
+
+                is_checked_val = file_info.is_checked 
+                check_item.setCheckState(Qt.CheckState.Checked if is_checked_val else Qt.CheckState.Unchecked)
+                check_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.table.setItem(idx, 0, check_item)
 
                 no_value = file_info.no
                 no_item = NumericTableWidgetItem(str(no_value), no_value)
