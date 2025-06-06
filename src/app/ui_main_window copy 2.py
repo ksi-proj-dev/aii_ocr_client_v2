@@ -326,8 +326,6 @@ class MainWindow(QMainWindow):
         self.summary_view.log_manager = self.log_manager
         self.list_view = ListView(self.processed_files_info)
         self.list_view.item_check_state_changed.connect(self.on_list_item_check_state_changed)
-
-
         self.stack.addWidget(self.summary_view)
         self.stack.addWidget(self.list_view)
         self.splitter.addWidget(self.stack)
@@ -338,33 +336,24 @@ class MainWindow(QMainWindow):
         self.log_header = QLabel("ログ：")
         self.log_header.setStyleSheet("margin-left: 6px; padding-bottom: 0px; font-weight: bold;")
         log_layout_inner.addWidget(self.log_header)
-
         self.log_widget.setStyleSheet("""
-            QTextEdit { 
-                font-family: Consolas, Meiryo, monospace; 
-                font-size: 9pt; 
-                border: 1px solid #D0D0D0; 
-                margin: 0px; 
-            }
+            QTextEdit { font-family: Consolas, Meiryo, monospace; font-size: 9pt; border: 1px solid #D0D0D0; margin: 0px; }
+            /* ... (スクロールバーのスタイルは変更なし) ... */
         """)
-
         self.log_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.log_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         log_layout_inner.addWidget(self.log_widget)
-
-        # ★★★ この行をコメントアウトまたは削除します ★★★
-        # self.log_container.setStyleSheet("margin: 0px 6px 6px 6px;")
-
+        self.log_container.setStyleSheet("margin: 0px 6px 6px 6px;")
         self.splitter.addWidget(self.log_container)
         self.splitter.setStyleSheet("QSplitter::handle { background-color: #CCCCCC; height: 2px; }")
         splitter_sizes = self.config.get("splitter_sizes")
         if splitter_sizes and len(splitter_sizes) == 2 and sum(splitter_sizes) > 0:
             self.splitter.setSizes(splitter_sizes)
         else:
-            default_height = self.height() if self.height() > 100 else 700
+            default_height = self.height() if self.height() > 100 else 700 # Default height for calculation
             initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]
-            if sum(initial_splitter_sizes) == 0 and default_height > 0 :
-                 initial_splitter_sizes = [200,100]
+            if sum(initial_splitter_sizes) == 0 and default_height > 0 : # Avoid sum being 0 if default_height was too small
+                 initial_splitter_sizes = [200,100] # Fallback sizes
             self.splitter.setSizes(initial_splitter_sizes)
         self.main_layout.addWidget(self.splitter)
 
