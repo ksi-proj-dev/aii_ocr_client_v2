@@ -22,7 +22,7 @@ class NumericTableWidgetItem(QTableWidgetItem):
         return super().__lt__(other)
 
 class ListView(QWidget):
-    item_check_state_changed = pyqtSignal(int, bool) # row_index, is_checked
+    item_check_state_changed = pyqtSignal(int, bool)
 
     def __init__(self, initial_file_list_data: list[FileInfo] = None):
         super().__init__()
@@ -34,6 +34,7 @@ class ListView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
+        # ★★★ 列数を9に変更し、ヘッダーラベルに「ページ数」を追加 ★★★
         self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
         self.table.verticalHeader().setVisible(False)
@@ -132,7 +133,8 @@ class ListView(QWidget):
             return self.file_list_data
             
         return sorted_list
-        
+
+    # ★★★ ここから新しいメソッドを追加 ★★★
     def set_checkboxes_enabled(self, is_enabled: bool):
         """リストビュー内の全てのチェックボックスの有効/無効を切り替える。"""
         self._suspend_item_changed_signal = True # 状態変更時にシグナルが発行されないように
@@ -140,25 +142,16 @@ class ListView(QWidget):
             check_item = self.table.item(row, 0)
             if check_item:
                 current_flags = check_item.flags()
-                
-                # 'No'列から対応するfile_infoを検索
-                no_item = self.table.item(row, 1)
-                if not no_item: continue
-                try:
-                    file_no = int(no_item.text())
-                    file_info = next((f for f in self.file_list_data if f.no == file_no), None)
-                    if not file_info: continue
+                # サイズ上限などで元々無効化されているチェックボックスは、有効化しない
+                # is_checked は変更しない
+                original_is_disabled_by_logic = not (self.file_list_data[row].ocr_engine_status != "対象外(サイズ上限)")
 
-                    # サイズ上限などで元々無効化されているチェックボックスは、有効化しない
-                    original_is_disabled_by_logic = (file_info.ocr_engine_status == "対象外(サイズ上限)")
-
-                    if is_enabled and not original_is_disabled_by_logic:
-                        check_item.setFlags(current_flags | Qt.ItemFlag.ItemIsEnabled)
-                    elif not is_enabled:
-                        check_item.setFlags(current_flags & ~Qt.ItemFlag.ItemIsEnabled)
-                except (ValueError, StopIteration):
-                    continue
+                if is_enabled and not original_is_disabled_by_logic:
+                    check_item.setFlags(current_flags | Qt.ItemFlag.ItemIsEnabled)
+                elif not is_enabled:
+                    check_item.setFlags(current_flags & ~Qt.ItemFlag.ItemIsEnabled)
         self._suspend_item_changed_signal = False
+    # ★★★ ここまで新しいメソッドを追加 ★★★
 
     def handle_sort_indicator_changed(self, logical_index, order):
         if logical_index == 0:
@@ -188,18 +181,14 @@ class ListView(QWidget):
         for row in range(self.table.rowCount()):
             item = self.table.item(row, 0)
             if item and item.flags() & Qt.ItemFlag.ItemIsUserCheckable and item.flags() & Qt.ItemFlag.ItemIsEnabled:
-                no_item = self.table.item(row, 1)
-                if no_item:
-                    try:
-                        file_no = int(no_item.text())
-                        file_info = next((f for f in self.file_list_data if f.no == file_no), None)
-                        if file_info:
-                            file_info.is_checked = (new_check_state == Qt.CheckState.Checked)
-                            item.setCheckState(new_check_state)
-                            self.item_check_state_changed.emit(file_info.no - 1, file_info.is_checked) # 元のリストのインデックスを想定
-                    except (ValueError, StopIteration):
-                        continue
+                if 0 <= row < len(self.file_list_data):
+                    self.file_list_data[row].is_checked = (new_check_state == Qt.CheckState.Checked)
+                item.setCheckState(new_check_state)
         self._suspend_item_changed_signal = False
+
+        if self.table.rowCount() > 0:
+            self.item_check_state_changed.emit(0, new_check_state == Qt.CheckState.Checked)
+
 
     def on_item_changed(self, item: QTableWidgetItem):
         if self._suspend_item_changed_signal:
@@ -220,11 +209,12 @@ class ListView(QWidget):
                 if target_file_info_idx != -1:
                     is_checked = item.checkState() == Qt.CheckState.Checked
                     self.file_list_data[target_file_info_idx].is_checked = is_checked
-                    self.item_check_state_changed.emit(target_file_info_idx, is_checked)
+                    self.item_check_state_changed.emit(target_file_info_idx, is_checked) # ここで渡すのは元のリストのインデックス
             except (ValueError, IndexError):
                 pass
 
-    def populate_table(self, files_data: list[FileInfo], is_running: bool = False):
+
+    def populate_table(self, files_data: list[FileInfo]):
         self._suspend_item_changed_signal = True
         self.table.setUpdatesEnabled(False)
         current_sorting_enabled_state = self.table.isSortingEnabled() 
@@ -237,28 +227,26 @@ class ListView(QWidget):
             error_color = QColor("red")
 
             for idx, file_info in enumerate(self.file_list_data):
+                # ... (チェックボックス、No、ファイル名、ステータスなどの列の処理は変更なし) ...
+                # 0. チェックボックス列
                 check_item = QTableWidgetItem()
                 flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
-                
-                is_disabled_by_logic = (file_info.ocr_engine_status == "対象外(サイズ上限)")
-                if is_running or is_disabled_by_logic:
-                    flags &= ~Qt.ItemFlag.ItemIsEnabled
-
                 check_item.setFlags(flags)
-                
-                if is_disabled_by_logic:
-                    check_item.setToolTip("サイズ上限のため処理対象外です")
-
                 is_checked_val = file_info.is_checked 
                 check_item.setCheckState(Qt.CheckState.Checked if is_checked_val else Qt.CheckState.Unchecked)
                 check_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if file_info.ocr_engine_status == "対象外(サイズ上限)":
+                    check_item.setFlags(check_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+                    check_item.setToolTip("サイズ上限のため処理対象外です")
                 self.table.setItem(idx, 0, check_item)
 
+                # 1. No 列
                 no_value = file_info.no
                 no_item = NumericTableWidgetItem(str(no_value), no_value)
                 no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(idx, 1, no_item)
 
+                # 2-6. 他の列
                 self.table.setItem(idx, 2, QTableWidgetItem(file_info.name))
                 status_item = QTableWidgetItem(file_info.status)
                 if "失敗" in file_info.status or "エラー" in file_info.status or "中断" in file_info.status: status_item.setForeground(error_color)
@@ -268,36 +256,41 @@ class ListView(QWidget):
                 if "失敗" in file_info.json_status or "エラー" in file_info.json_status or "中断" in file_info.json_status: json_status_item.setForeground(error_color)
                 self.table.setItem(idx, 5, json_status_item)
                 pdf_status_item = QTableWidgetItem(file_info.searchable_pdf_status)
-                if ("失敗" in file_info.searchable_pdf_status or "エラー" in file_info.searchable_pdf_status or "中断" in file_info.searchable_pdf_status) and "部品PDFは結合されません(設定)" not in file_info.searchable_pdf_status and "個の部品PDF出力成功" not in file_info.searchable_pdf_status : 
+                if ("失敗" in file_info.searchable_pdf_status or "エラー" in file_info.searchable_pdf_status or "中断" in file_info.searchable_pdf_status) and \
+                   "部品PDFは結合されません(設定)" not in file_info.searchable_pdf_status and \
+                   "個の部品PDF出力成功" not in file_info.searchable_pdf_status : 
                     pdf_status_item.setForeground(error_color)
                 self.table.setItem(idx, 6, pdf_status_item)
 
+                # ★★★ ここから新しい「ページ数」列の処理を追加 ★★★
                 page_count_value = file_info.page_count
                 if page_count_value is not None:
                     page_count_item = NumericTableWidgetItem(str(page_count_value), page_count_value)
                     page_count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                else:
+                else: # ページ数がない場合 (PDFでないファイルなど)
                     page_count_item = QTableWidgetItem("-")
                     page_count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(idx, 7, page_count_item)
-                
+                # ★★★ ここまで追加 ★★★
+
+                # 8. サイズ(MB) 列 (インデックスが7から8に変わる)
                 size_bytes = file_info.size
                 size_mb = size_bytes / (1024 * 1024)
                 size_mb_display_text = f"{size_mb:,.3f} MB"
                 size_item = NumericTableWidgetItem(size_mb_display_text, size_bytes)
                 size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(idx, 8, size_item)
+                self.table.setItem(idx, 8, size_item) # ★インデックスを8に変更
 
         finally:
             self.table.setSortingEnabled(current_sorting_enabled_state) 
             self.table.setUpdatesEnabled(True)
             self._suspend_item_changed_signal = False
 
-    def update_files(self, files_data: list[FileInfo], is_running: bool = False):
-        self.populate_table(files_data, is_running)
+    def update_files(self, files_data: list[FileInfo]):
+        self.populate_table(files_data)
 
     def restore_column_widths(self):
-        default_widths = [35, 50, 280, 100, 270, 100, 120, 60, 100]
+        default_widths = [35, 50, 280, 100, 270, 100, 120, 100]
         widths = self.config.get("column_widths", default_widths)
         if len(widths) != self.table.columnCount():
             widths = default_widths
@@ -337,7 +330,7 @@ class ListView(QWidget):
     def get_column_widths(self):
         if hasattr(self, 'table') and self.table and self.table.columnCount() > 0:
             return [self.table.columnWidth(i) for i in range(self.table.columnCount())]
-        return self.config.get("column_widths", [35, 50, 280, 100, 270, 100, 120, 60, 100])
+        return self.config.get("column_widths", [35, 50, 280, 100, 270, 100, 120, 100])
 
     def get_sort_order(self):
         if hasattr(self, 'table') and self.table and self.table.horizontalHeader().isSortIndicatorShown():
