@@ -34,9 +34,8 @@ class ListView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
-        # ★★★ 列数を9に変更し、ヘッダーラベルに「ページ数」を追加 ★★★
-        self.table.setColumnCount(9)
-        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
+        self.table.setColumnCount(8)
+        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "サーチャブルPDF", "サイズ(MB)"])
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         
@@ -216,8 +215,6 @@ class ListView(QWidget):
             error_color = QColor("red")
 
             for idx, file_info in enumerate(self.file_list_data):
-                # ... (チェックボックス、No、ファイル名、ステータスなどの列の処理は変更なし) ...
-                # 0. チェックボックス列
                 check_item = QTableWidgetItem()
                 flags = Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled
                 check_item.setFlags(flags)
@@ -229,46 +226,40 @@ class ListView(QWidget):
                     check_item.setToolTip("サイズ上限のため処理対象外です")
                 self.table.setItem(idx, 0, check_item)
 
-                # 1. No 列
                 no_value = file_info.no
                 no_item = NumericTableWidgetItem(str(no_value), no_value)
                 no_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(idx, 1, no_item)
 
-                # 2-6. 他の列
                 self.table.setItem(idx, 2, QTableWidgetItem(file_info.name))
-                status_item = QTableWidgetItem(file_info.status)
-                if "失敗" in file_info.status or "エラー" in file_info.status or "中断" in file_info.status: status_item.setForeground(error_color)
+                status_text = file_info.status
+                status_item = QTableWidgetItem(status_text)
+                if "失敗" in status_text or "エラー" in status_text or "中断" in status_text:
+                    status_item.setForeground(error_color)
                 self.table.setItem(idx, 3, status_item)
+                
                 self.table.setItem(idx, 4, QTableWidgetItem(file_info.ocr_result_summary))
-                json_status_item = QTableWidgetItem(file_info.json_status)
-                if "失敗" in file_info.json_status or "エラー" in file_info.json_status or "中断" in file_info.json_status: json_status_item.setForeground(error_color)
+                
+                json_status_text = file_info.json_status
+                json_status_item = QTableWidgetItem(json_status_text)
+                if "失敗" in json_status_text or "エラー" in json_status_text or "中断" in json_status_text:
+                    json_status_item.setForeground(error_color)
                 self.table.setItem(idx, 5, json_status_item)
-                pdf_status_item = QTableWidgetItem(file_info.searchable_pdf_status)
-                if ("失敗" in file_info.searchable_pdf_status or "エラー" in file_info.searchable_pdf_status or "中断" in file_info.searchable_pdf_status) and \
-                   "部品PDFは結合されません(設定)" not in file_info.searchable_pdf_status and \
-                   "個の部品PDF出力成功" not in file_info.searchable_pdf_status : 
+                
+                pdf_status_text = file_info.searchable_pdf_status
+                pdf_status_item = QTableWidgetItem(pdf_status_text)
+                if ("失敗" in pdf_status_text or "エラー" in pdf_status_text or "中断" in pdf_status_text) and \
+                   "部品PDFは結合されません(設定)" not in pdf_status_text and \
+                   "個の部品PDF出力成功" not in pdf_status_text : 
                     pdf_status_item.setForeground(error_color)
                 self.table.setItem(idx, 6, pdf_status_item)
-
-                # ★★★ ここから新しい「ページ数」列の処理を追加 ★★★
-                page_count_value = file_info.page_count
-                if page_count_value is not None:
-                    page_count_item = NumericTableWidgetItem(str(page_count_value), page_count_value)
-                    page_count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                else: # ページ数がない場合 (PDFでないファイルなど)
-                    page_count_item = QTableWidgetItem("-")
-                    page_count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(idx, 7, page_count_item)
-                # ★★★ ここまで追加 ★★★
-
-                # 8. サイズ(MB) 列 (インデックスが7から8に変わる)
+                
                 size_bytes = file_info.size
                 size_mb = size_bytes / (1024 * 1024)
                 size_mb_display_text = f"{size_mb:,.3f} MB"
                 size_item = NumericTableWidgetItem(size_mb_display_text, size_bytes)
                 size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(idx, 8, size_item) # ★インデックスを8に変更
+                self.table.setItem(idx, 7, size_item)
 
         finally:
             self.table.setSortingEnabled(current_sorting_enabled_state) 

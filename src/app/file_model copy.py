@@ -1,7 +1,6 @@
 # file_model.py
 
 from dataclasses import dataclass, field
-from typing import Optional # ★ Optionalをインポート
 
 @dataclass
 class FileInfo:
@@ -14,5 +13,7 @@ class FileInfo:
     ocr_result_summary: str = ""
     json_status: str = "-"
     searchable_pdf_status: str = "-"
-    page_count: Optional[int] = None # ★★★ ページ数フィールドを追加 ★★★
     is_checked: bool = True
+    # 必要に応じて他のフィールドも追加できます
+    # 例えば、エラーメッセージ専用のフィールドなど
+    # error_message: Optional[str] = None # Python 3.9+ なら typing.Optional

@@ -3,10 +3,10 @@
 import os
 from log_manager import LogManager
 from file_model import FileInfo
-from PyPDF2 import PdfReader, errors # ★ PyPDF2 の PdfReader と errors をインポート
+# from config_manager import ConfigManager # 型ヒントや構造参照以外では不要になる
 
 class FileScanner:
-    def __init__(self, log_manager: LogManager, config: dict):
+    def __init__(self, log_manager: LogManager, config: dict): # ★ config を引数に追加
         """
         FileScannerのコンストラクタ。
 
@@ -15,9 +15,9 @@ class FileScanner:
             config: アプリケーションの設定情報を含む辞書。
         """
         self.log_manager = log_manager
-        self.config = config
+        self.config = config # ★ 受け取ったconfigを保持
 
-    def scan_folder(self, input_folder_path: str):
+    def scan_folder(self, input_folder_path: str): # ★ 引数から設定値を削除
         """
         指定された入力フォルダからサポート対象のファイルを再帰的に収集します。
         設定は self.config から取得します。
@@ -28,13 +28,13 @@ class FileScanner:
         Returns:
             tuple: (収集されたファイルパスのリスト, 最大ファイル数到達情報 or None, 深さ制限でスキップされたフォルダのリスト)
         """
-        # (このメソッドは変更なし)
         if not input_folder_path or not os.path.isdir(input_folder_path):
             self.log_manager.warning(f"File collection skipped: Input folder invalid or not a directory. Path: '{input_folder_path}'", context="FILE_SCANNER")
             return [], None, []
 
-        options_cfg = self.config.get("options", {}).get(self.config.get("api_type"), {}) # これは古い構造かもしれません
+        # ★ self.config から設定値を取得
         file_actions_config = self.config.get("file_actions", {})
+        options_cfg = self.config.get("options", {}).get(self.config.get("api_type"), {})
 
         max_files = options_cfg.get("max_files_to_process", 100)
         recursion_depth_limit = options_cfg.get("recursion_depth", 5)
@@ -95,28 +95,27 @@ class FileScanner:
         self.log_manager.info(f"FileScanner: Collection finished. Found {len(unique_sorted_files)} files.", context="FILE_SCANNER", count=len(unique_sorted_files))
         return unique_sorted_files, max_files_reached_info, list(depth_limited_folders)
 
-    # ★★★ create_initial_file_list メソッドの修正 ★★★
-    def create_initial_file_list(self, file_paths: list, ocr_status_skipped_size_limit: str, ocr_status_not_processed: str) -> list[FileInfo]:
+    def create_initial_file_list(self, file_paths: list, ocr_status_skipped_size_limit: str, ocr_status_not_processed: str) -> list[FileInfo]: # ★ 引数から設定値を削除
         """
         収集されたファイルパスのリストから、処理用の初期ファイル情報リストを生成します。
-        PDFファイルの場合はページ数も読み取ります。
+        FileInfoオブジェクトのリストを返します。設定は self.config から取得します。
         """
         processed_files_info: list[FileInfo] = []
         
-        # self.config からアクティブプロファイルのオプション値を取得
-        from config_manager import ConfigManager # ローカルインポート
-        active_profile_options = ConfigManager.get_active_api_options_values(self.config)
-        if active_profile_options is None:
-            active_profile_options = {}
-
+        # ★ self.config から設定値を取得
+        options_cfg = self.config.get("options", {}).get(self.config.get("api_type"), {})
         file_actions_config = self.config.get("file_actions", {})
-        upload_max_size_mb = active_profile_options.get("upload_max_size_mb", 50)
+        upload_max_size_mb = options_cfg.get("upload_max_size_mb", 50)
         output_format = file_actions_config.get("output_format", "both")
         
         upload_max_bytes = upload_max_size_mb * 1024 * 1024
 
-        initial_json_status_default = "-" if output_format in ["json_only", "both"] else "作成しない(設定)"
-        initial_pdf_status_default = "-" if output_format in ["pdf_only", "both"] else "作成しない(設定)"
+        initial_json_status_default = "作成しない(設定)"
+        if output_format == "json_only" or output_format == "both":
+            initial_json_status_default = "-"
+        initial_pdf_status_default = "作成しない(設定)"
+        if output_format == "pdf_only" or output_format == "both":
+            initial_pdf_status_default = "-"
 
         if file_paths:
             for i, f_path in enumerate(file_paths):
@@ -124,18 +123,6 @@ class FileScanner:
                     f_size = os.path.getsize(f_path)
                     is_skipped_by_size = f_size > upload_max_bytes
                     
-                    page_count = None
-                    if os.path.splitext(f_path)[1].lower() == ".pdf":
-                        try:
-                            with open(f_path, 'rb') as f:
-                                reader = PdfReader(f)
-                                page_count = len(reader.pages)
-                        except errors.PdfReadError as e_pdf:
-                            self.log_manager.warning(f"FileScanner: PDFファイル '{os.path.basename(f_path)}' のページ数読み取りに失敗しました (ファイル破損の可能性)。エラー: {e_pdf}", context="FILE_SCANNER_PDF_ERROR")
-                        except Exception as e_generic:
-                             self.log_manager.error(f"FileScanner: PDFファイル '{os.path.basename(f_path)}' の読み取り中に予期せぬエラーが発生しました。エラー: {e_generic}", context="FILE_SCANNER_PDF_ERROR", exc_info=True)
-
-
                     file_info_item = FileInfo(
                         no=i + 1,
                         path=f_path,
@@ -146,7 +133,6 @@ class FileScanner:
                         ocr_result_summary=f"ファイルサイズが上限 ({upload_max_size_mb}MB) を超過" if is_skipped_by_size else "",
                         json_status="スキップ" if is_skipped_by_size else initial_json_status_default,
                         searchable_pdf_status="スキップ" if is_skipped_by_size else initial_pdf_status_default,
-                        page_count=page_count, # ★ 読み取ったページ数を設定
                         is_checked=not is_skipped_by_size
                     )
                     if is_skipped_by_size:
