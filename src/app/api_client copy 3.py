@@ -77,7 +77,7 @@ class OCRApiClient:
             self.log_manager.error(err_msg, context="API_CLIENT_CONFIG")
             return None
         if ("{組織固有}" in base_uri or "{organization_specific_domain}" in base_uri) and self.api_execution_mode == "live":
-             self.log_manager.warning(f"ベースURIにプレースホルダーが含まれています: {base_uri}。Liveモードでは正しいドメインに置き換える必要があります。", context="API_CLIENT_CONFIG")
+            self.log_manager.warning(f"ベースURIにプレースホルダーが含まれています: {base_uri}。Liveモードでは正しいドメインに置き換える必要があります。", context="API_CLIENT_CONFIG")
         endpoints = self.active_api_profile_schema.get("endpoints", {})
         endpoint_path = endpoints.get(endpoint_key)
         if not endpoint_path:
