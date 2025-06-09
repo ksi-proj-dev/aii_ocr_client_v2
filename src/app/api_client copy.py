@@ -21,7 +21,7 @@ class OCRApiClient:
         self.active_options_values: Optional[Dict[str, Any]] = {}
         self.api_execution_mode: str = "demo"
         self.api_key: Optional[str] = ""
-        self.timeout_seconds: int = 180
+        self.timeout_seconds: int = 60
 
         self.update_config(config, api_profile_schema)
 
@@ -76,7 +76,7 @@ class OCRApiClient:
             err_msg = f"ベースURIがプロファイル '{self.active_api_profile_schema.get('id')}' に設定されていません。"
             self.log_manager.error(err_msg, context="API_CLIENT_CONFIG")
             return None
-        if ("{組織固有}" in base_uri or "{organization_specific_domain}" in base_uri) and self.api_execution_mode == "live":
+        if "{組織固有}" in base_uri and self.api_execution_mode == "live":
              self.log_manager.warning(f"ベースURIにプレースホルダーが含まれています: {base_uri}。Liveモードでは正しいドメインに置き換える必要があります。", context="API_CLIENT_CONFIG")
         endpoints = self.active_api_profile_schema.get("endpoints", {})
         endpoint_path = endpoints.get(endpoint_key)
@@ -106,8 +106,9 @@ class OCRApiClient:
             else: # Live モード
                 log_ctx = "API_LIVE_READ_CUBE"; self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (read_document): {file_name}", context=log_ctx); url = self._get_full_url("read_document")
                 if not url: return None, {"message": "エンドポイントURL取得失敗 (Cube read_document)", "code": "CONFIG_ENDPOINT_URL_FAIL"}
+                if "{organization_specific_domain}" in url: self.log_manager.error(f"Cube のベースURIにプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR"); return None, {"message": "Cube ベースURI未設定エラー。", "code": "CUBE_BASE_URI_NOT_CONFIGURED"}
                 if not self.api_key: err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"; self.log_manager.error(err_msg, context=log_ctx, error_code="API_KEY_MISSING_LIVE"); return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
-                headers = {"apikey": self.api_key}; files_payload = {}; data_payload = {k: v for k, v in actual_ocr_params.items() if v is not None}; file_obj = None
+                headers = {"apikey": self.api_key}; files_payload = {}; data_payload = actual_ocr_params.copy(); file_obj = None
                 try:
                     file_obj = open(file_path, 'rb'); files_payload['document'] = (os.path.basename(file_path), file_obj)
                     self.log_manager.info(f"  URL: {url}", context=log_ctx); self.log_manager.info(f"  Headers: {{'apikey': '****'}}", context=log_ctx); self.log_manager.info(f"  Data Payload: {data_payload}", context=log_ctx); self.log_manager.info(f"  File Payload: document='{file_name}'", context=log_ctx)
@@ -122,7 +123,6 @@ class OCRApiClient:
                     if file_obj and not file_obj.closed:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"read_document用一時ファイルのクローズに失敗: {e_close}", context=log_ctx)
-        
         elif current_flow_type == "dx_fulltext_v2_flow":
             log_ctx_prefix = "API_DX_FULLTEXT_V2"
             if self.api_execution_mode == "demo":
@@ -168,34 +168,12 @@ class OCRApiClient:
                 demo_ocr_result = {"pageNum": 1, "deskewAngle": 0, "parts": [demo_part], "status": 2}
                 demo_file_result = {"fileName": file_name, "ocrResults": [demo_ocr_result], "status": 2}
                 final_json_response = {"status": 2, "files": [demo_file_result]}
-                self.log_manager.info(f"'{profile_name}' Demoモード呼び出し完了 (DX Suite Atypical V2): {file_name}", context=f"{log_ctx_prefix}_DEMO_GETRESULT"); return final_json_response, None
+                self.log_manager.info(f"'{profile_name}' Demoモード呼び出し完了 (DX Suite Atypical V2): {file_name}", context=f"{log_ctx_prefix}_DEMO_GETRESULT")
+                return final_json_response, None
             else: # Live モード
-                self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Atypical V2 - Read): {file_name}", context=f"{log_ctx_prefix}_LIVE_READ"); url = self._get_full_url("register_ocr")
-                if not url: return None, {"message": "エンドポイントURL取得失敗 (DX Suite Atypical Read)", "code": "CONFIG_ENDPOINT_URL_FAIL_ATYPICAL"}
-                if "{組織固有}" in url: self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR"); return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
-                if not self.api_key: err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_READ", error_code="API_KEY_MISSING_LIVE"); return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
-                headers = {"apikey": self.api_key}; data_payload = {}; model_to_send = effective_options.get("model")
-                if not model_to_send: return None, {"message": "必須パラメータ '帳票モデル' が設定されていません。", "code": "DX_ATYPICAL_MODEL_MISSING"}
-                data_payload['model'] = model_to_send
-                if effective_options.get("classes"): data_payload['classes'] = effective_options.get("classes")
-                if effective_options.get("departmentId"): data_payload['departmentId'] = effective_options.get("departmentId")
-                file_obj = None
-                try:
-                    file_obj = open(file_path, 'rb'); files_payload = {'files': (os.path.basename(file_path), file_obj)}
-                    self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, form-data: {data_payload}, file: {file_name}", context=f"{log_ctx_prefix}_LIVE_READ"); response = requests.post(url, headers=headers, data=data_payload, files=files_payload, timeout=self.timeout_seconds); response.raise_for_status(); response_json = response.json(); self.log_manager.info(f"  DX Suite Atypical Read API success. Response: {response_json}", context=f"{log_ctx_prefix}_LIVE_READ")
-                    reception_id = response_json.get("receptionId")
-                    if not reception_id: return None, {"message": "DX Suite 非定型 読取登録APIレスポンスにreceptionIdが含まれていません。", "code": "DXSUITE_ATYPICAL_NO_RECEPTIONID", "detail": response_json}
-                    return {"receptionId": reception_id, "status": "registered", "profile_flow_type": current_flow_type}, None
-                except requests.exceptions.HTTPError as e_http:
-                    err_msg = f"DX Suite 非定型API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text; self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_LIVE_READ_HTTP_ERROR", exc_info=True)
-                    try: err_json = e_http.response.json(); api_err_detail = err_json.get("errors", [{}])[0]; return None, {"message": f"DX Suite APIエラー: {api_err_detail.get('message', detail_text)}", "code": f"DXSUITE_API_{api_err_detail.get('errorCode', 'UNKNOWN')}", "detail": err_json}
-                    except ValueError: return None, {"message": err_msg, "code": "DXSUITE_ATYPICAL_HTTP_ERROR_NON_JSON", "detail": detail_text}
-                except requests.exceptions.RequestException as e_req: return None, {"message": "DX Suite 非定型APIリクエスト失敗。", "code": "DXSUITE_ATYPICAL_REQUEST_FAIL", "detail": str(e_req)}
-                except Exception as e_generic: return None, {"message": "DX Suite 非定型読取登録処理中に予期せぬエラー。", "code": "DXSUITE_ATYPICAL_UNEXPECTED_ERROR", "detail": str(e_generic)}
-                finally:
-                    if file_obj and not file_obj.closed:
-                        try: file_obj.close()
-                        except Exception as e_close: self.log_manager.warning(f"非定型API用一時ファイルのクローズに失敗: {e_close}", context=log_ctx_prefix)
+                self.log_manager.warning(f"LiveモードAPIコールは実装されていません ({profile_name} - read_document)。", context=f"{log_ctx_prefix}_LIVE")
+                return None, {"message": f"LiveモードAPIコール未実装 ({profile_name} - read_document)。", "code": f"NOT_IMPLEMENTED_{current_flow_type}"}
+        
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR"); return None, {"message": f"未対応のAPIフロータイプ: {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE"}
 
@@ -213,42 +191,6 @@ class OCRApiClient:
             except ValueError: return None, {"message": f"DX Suite 結果取得API HTTPエラー (非JSON応答): {e_http.response.status_code}", "code": "DXSUITE_GETRESULT_HTTP_ERROR_NON_JSON", "detail": detail_text}
         except requests.exceptions.RequestException as e_req: err_msg = f"DX Suite 結果取得APIリクエストエラー: {e_req}"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_GETRESULT_REQUEST_ERROR", exc_info=True); return None, {"message": "DX Suite 結果取得APIリクエスト失敗。", "code": "DXSUITE_GETRESULT_REQUEST_FAIL", "detail": str(e_req)}
         except Exception as e_generic: err_msg = f"DX Suite 結果取得API処理中に予期せぬエラー: {e_generic}"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_GETRESULT_UNEXPECTED_ERROR", exc_info=True); return None, {"message": "DX Suite 結果取得処理中に予期せぬエラー。", "code": "DXSUITE_GETRESULT_UNEXPECTED_ERROR", "detail": str(e_generic)}
-
-    # ★★★ ここに新しいメソッドを追加 ★★★
-    def get_dx_atypical_ocr_result(self, reception_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
-        """DX Suite 非定型APIの読取結果を取得する。"""
-        log_ctx_prefix = "API_DX_ATYPICAL_V2"
-        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
-        self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Atypical V2 - GetResult): receptionId={reception_id}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
-        
-        # このメソッドはLiveモードでのみ呼び出される想定
-        if self.api_execution_mode != "live":
-            return None, {"message": "get_dx_atypical_ocr_resultはLiveモード専用です。", "code": "METHOD_LIVE_ONLY_ERROR"}
-
-        url = self._get_full_url("get_ocr_result")
-        if not url: return None, {"message": "エンドポイントURL取得失敗 (DX Suite Atypical GetResult)", "code": "CONFIG_ENDPOINT_URL_FAIL_ATYPICAL_GET"}
-        if "{組織固有}" in url: return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
-        if not self.api_key: return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_LIVE"}
-
-        headers = {"apikey": self.api_key}
-        params = {"receptionId": reception_id} # パラメータ名は receptionId
-        
-        try:
-            self.log_manager.debug(f"  GET from {url} with headers: {list(headers.keys())}, params: {params}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
-            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
-            response.raise_for_status()
-            response_json = response.json()
-            self.log_manager.info(f"  DX Suite Atypical GetResult API success. Status: {response_json.get('status')}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
-            return response_json, None
-        except requests.exceptions.HTTPError as e_http:
-            err_msg = f"DX Suite 非定型 結果取得API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text; self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_LIVE_GETRESULT_HTTP_ERROR", exc_info=True)
-            try:
-                err_json = e_http.response.json(); api_err_detail = err_json.get("errors", [{}])[0]; return None, {"message": f"DX Suite APIエラー: {api_err_detail.get('message', detail_text)}", "code": f"DXSUITE_API_{api_err_detail.get('errorCode', 'UNKNOWN')}", "detail": err_json}
-            except ValueError: return None, {"message": err_msg, "code": "DXSUITE_ATYPICAL_GET_HTTP_ERROR_NON_JSON", "detail": detail_text}
-        except requests.exceptions.RequestException as e_req:
-            return None, {"message": "DX Suite 非定型 結果取得APIリクエスト失敗。", "code": "DXSUITE_ATYPICAL_GET_REQUEST_FAIL", "detail": str(e_req)}
-        except Exception as e_generic:
-            return None, {"message": "DX Suite 非定型 結果取得処理中に予期せぬエラー。", "code": "DXSUITE_ATYPICAL_GET_UNEXPECTED_ERROR", "detail": str(e_generic)}
 
     def register_dx_searchable_pdf(self, full_ocr_job_id: str, high_resolution_mode: int) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         log_ctx_prefix = "API_DX_FULLTEXT_V2_PDF_REGISTER"; profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"; self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF - Register): fullOcrJobId={full_ocr_job_id}", context=log_ctx_prefix); url = self._get_full_url("register_searchable_pdf")
@@ -302,9 +244,10 @@ class OCRApiClient:
                 if file_name.startswith("pdf_error_"): return None, {"message": f"Demo PDF作成エラー: {file_name}", "code": "DUMMY_PDF_ERROR", "detail": "DemoモードでのPDF作成エラーです。"}
                 try: writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
                 except Exception as e: self.log_manager.error(f"Demo PDF生成エラー: {e}", exc_info=True); return None, {"message": f"Demo PDF生成エラー: {e}", "code": "DUMMY_PDF_GEN_ERROR"}
-            else:
+            else: # Live モード
                 log_ctx = "API_LIVE_PDF_CUBE"; self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (make_searchable_pdf): {file_name}", context=log_ctx); url = self._get_full_url("make_searchable_pdf")
                 if not url: return None, {"message": "エンドポイントURL取得失敗 (Cube make_searchable_pdf)", "code": "CONFIG_ENDPOINT_URL_FAIL_PDF"}
+                if "{organization_specific_domain}" in url: self.log_manager.error(f"Cube のベースURIにプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR"); return None, {"message": "Cube ベースURI未設定エラー。", "code": "CUBE_BASE_URI_NOT_CONFIGURED_PDF"}
                 if not self.api_key: return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_PDF_LIVE"}
                 headers = {"apikey": self.api_key}; files_payload = {}; file_obj = None
                 try:
@@ -334,7 +277,7 @@ class OCRApiClient:
                 except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Suite): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
             else: # Live モード
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2): {file_name}", context=f"{log_ctx_prefix}_LIVE")
-                full_ocr_job_id = effective_options.get("fullOcrJobId");
+                full_ocr_job_id = effective_options.get("fullOcrJobId")
                 if not full_ocr_job_id: return None, {"message": "サーチャブルPDF作成に必要な全文読取ID(fullOcrJobId)が指定されていません。", "code": "DXSUITE_SPDF_MISSING_FULLOCRJOBID"}
                 high_res_mode_opt_val = effective_options.get("highResolutionMode", 0)
                 try: high_res_mode = int(high_res_mode_opt_val)
@@ -349,40 +292,60 @@ class OCRApiClient:
             log_ctx_prefix = "API_DX_ATYPICAL_V2_PDF"
             if self.api_execution_mode == "demo":
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Atypical V2 - Searchable PDF): {file_name}", context=f"{log_ctx_prefix}_DEMO")
-                try: writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
+                try:
+                    writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
                 except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Atypical): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite 非定型PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_ATYPICAL_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
             else: # Live モード
-                self.log_manager.warning(f"非定型APIにはサーチャブルPDF作成機能がありません。'{profile_name}' - make_searchable_pdf", context=f"{log_ctx_prefix}_LIVE")
-                return None, {"message": f"非定型APIにはサーチャブルPDF作成機能がありません。", "code": f"NOT_SUPPORTED_{current_flow_type}_PDF"}
+                self.log_manager.warning(f"LiveモードAPIコールは実装されていません ({profile_name} - make_searchable_pdf)。", context=f"{log_ctx_prefix}_LIVE")
+                return None, {"message": f"LiveモードAPIコール未実装 ({profile_name} - make_searchable_pdf)。", "code": f"NOT_IMPLEMENTED_{current_flow_type}_PDF"}
         
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type} (PDF作成)", context="API_CLIENT_ERROR")
             return None, {"message": f"未対応のAPIフロータイプ (PDF作成): {current_flow_type}", "code": "UNSUPPORTED_FLOW_TYPE_PDF"}
 
     def delete_dx_ocr_job(self, full_ocr_job_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        log_ctx_prefix = "API_DX_FULLTEXT_V2_DELETE"; profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"; self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Fulltext V2 - Delete): fullOcrJobId={full_ocr_job_id}", context=log_ctx_prefix)
-        current_flow_type = self.active_api_profile_schema.get("flow_type") if self.active_api_profile_schema else None
-        if current_flow_type not in ["dx_fulltext_v2_flow"]:
-             return None, {"message": f"削除APIはこのプロファイルタイプ({current_flow_type})ではサポートされていません。", "code": "DELETE_NOT_SUPPORTED"}
-        
+        log_ctx_prefix = "API_DX_FULLTEXT_V2_DELETE"
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Fulltext V2 - Delete): fullOcrJobId={full_ocr_job_id}", context=log_ctx_prefix)
+
         if self.api_execution_mode == "demo":
             self.log_manager.info(f"  Demoモード: '{full_ocr_job_id}' の削除をシミュレートします。", context=log_ctx_prefix)
             if "error" in full_ocr_job_id.lower():
                 err_detail = {"message": f"Demo: ジョブID '{full_ocr_job_id}' の削除に失敗しました（シミュレートされたエラー）。", "errorCode": "MOCK_DELETE_FAIL"}
                 return None, {"message": "削除APIデモエラー", "code": "DXSUITE_DEMO_DELETE_ERROR", "detail": err_detail}
             return {"id": full_ocr_job_id, "status": "deleted_successfully"}, None
-        
+
+        # Live Mode
         url = self._get_full_url("delete_ocr")
-        if not url: return None, {"message": "エンドポイントURL取得失敗 (DX Suite Delete OCR)", "code": "CONFIG_ENDPOINT_URL_FAIL_DX_DELETE"}
-        if "{organization_specific_domain}" in url: self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR"); return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
-        if not self.api_key: return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_LIVE_DX_DELETE"}
-        headers = {"apikey": self.api_key, "Content-Type": "application/json"}; request_body = {"fullOcrJobId": full_ocr_job_id}
-        
+        if not url:
+            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Delete OCR)", "code": "CONFIG_ENDPOINT_URL_FAIL_DX_DELETE"}
+        if "{organization_specific_domain}" in url:
+             self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {url}", context="API_CLIENT_CONFIG_ERROR")
+             return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_LIVE_DX_DELETE"}
+
+        headers = {"apikey": self.api_key, "Content-Type": "application/json"}
+        request_body = {"fullOcrJobId": full_ocr_job_id}
+
         try:
-            self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, body: {request_body}", context=log_ctx_prefix); response = requests.post(url, headers=headers, json=request_body, timeout=self.timeout_seconds); response.raise_for_status(); response_json = response.json(); self.log_manager.info(f"  DX Suite Delete OCR API success. Response: {response_json}", context=log_ctx_prefix); return response_json, None
+            self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, body: {request_body}", context=log_ctx_prefix)
+            response = requests.post(url, headers=headers, json=request_body, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json()
+            self.log_manager.info(f"  DX Suite Delete OCR API success. Response: {response_json}", context=log_ctx_prefix)
+            return response_json, None
+
         except requests.exceptions.HTTPError as e_http:
-            err_msg = f"DX Suite 削除API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text; self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_HTTP_ERROR", exc_info=True)
-            try: err_json = e_http.response.json(); api_err_detail = err_json.get("errors", [{}])[0]; return None, {"message": f"DX Suite APIエラー: {api_err_detail.get('message', detail_text)}", "code": f"DXSUITE_API_{api_err_detail.get('errorCode', 'UNKNOWN_DELETE_ERROR')}", "detail": err_json}
-            except ValueError: return None, {"message": err_msg, "code": "DXSUITE_DELETE_HTTP_ERROR_NON_JSON", "detail": detail_text}
-        except requests.exceptions.RequestException as e_req: return None, {"message": "DX Suite 削除APIリクエスト失敗。", "code": "DXSUITE_DELETE_REQUEST_FAIL", "detail": str(e_req)}
-        except Exception as e_generic: return None, {"message": "DX Suite 削除処理中に予期せぬエラー。", "code": "DXSUITE_DELETE_UNEXPECTED_ERROR", "detail": str(e_generic)}
+            err_msg = f"DX Suite 削除API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text
+            self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_HTTP_ERROR", exc_info=True)
+            try:
+                err_json = e_http.response.json(); api_err_detail = err_json.get("errors", [{}])[0]
+                return None, {"message": f"DX Suite APIエラー: {api_err_detail.get('message', detail_text)}", "code": f"DXSUITE_API_{api_err_detail.get('errorCode', 'UNKNOWN_DELETE_ERROR')}", "detail": err_json}
+            except ValueError:
+                return None, {"message": err_msg, "code": "DXSUITE_DELETE_HTTP_ERROR_NON_JSON", "detail": detail_text}
+        except requests.exceptions.RequestException as e_req:
+            return None, {"message": "DX Suite 削除APIリクエスト失敗。", "code": "DXSUITE_DELETE_REQUEST_FAIL", "detail": str(e_req)}
+        except Exception as e_generic:
+            return None, {"message": "DX Suite 削除処理中に予期せぬエラー。", "code": "DXSUITE_DELETE_UNEXPECTED_ERROR", "detail": str(e_generic)}
+        
