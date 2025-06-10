@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QLabel,
     QWidget
 )
-from config_manager import ConfigManager
-from ui_dialogs import ClassSelectionDialog # ★ 新しいダイアログをインポート
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -54,7 +52,8 @@ class OptionDialog(QDialog):
             dynamic_form_layout = QFormLayout()
             
             for key, schema_item in self.options_schema.items():
-                if key in ["api_key", "base_uri"]: continue
+                if key in ["api_key", "base_uri"]:
+                    continue
 
                 label_text = schema_item.get("label", key) + ":"
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
@@ -78,20 +77,6 @@ class OptionDialog(QDialog):
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
 
-                elif key == "classes":
-                    h_layout = QHBoxLayout()
-                    line_edit = QLineEdit(str(current_value) if current_value is not None else "")
-                    line_edit.setReadOnly(True)
-                    line_edit.setToolTip(tooltip)
-                    select_button = QPushButton("クラスを選択...")
-                    select_button.clicked.connect(self.open_class_selection_dialog)
-
-                    h_layout.addWidget(line_edit)
-                    h_layout.addWidget(select_button)
-                    
-                    dynamic_form_layout.addRow(label_text, h_layout)
-                    self.widgets_map[key] = line_edit
-
                 elif schema_item.get("type") == "string":
                     widget = QLineEdit(str(current_value) if current_value is not None else "")
                     if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
@@ -106,14 +91,17 @@ class OptionDialog(QDialog):
                             for item_dict in schema_item["values"]:
                                 widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
                             index = widget.findData(current_value)
-                            if index != -1: widget.setCurrentIndex(index)
+                            if index != -1:
+                                widget.setCurrentIndex(index)
                             else:
                                 default_val = schema_item.get("default")
                                 default_idx = widget.findData(default_val)
-                                if default_idx != -1: widget.setCurrentIndex(default_idx)
+                                if default_idx != -1:
+                                    widget.setCurrentIndex(default_idx)
                         else:
                             widget.addItems(schema_item["values"])
-                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count():
+                                widget.setCurrentIndex(current_value)
                             elif isinstance(current_value, str):
                                 index = widget.findText(current_value)
                                 if index != -1: widget.setCurrentIndex(index)
@@ -126,19 +114,14 @@ class OptionDialog(QDialog):
                                         elif isinstance(default_val, str):
                                             default_idx = widget.findText(str(default_val));
                                             if default_idx != -1: widget.setCurrentIndex(default_idx)
-                    
                     if tooltip: widget.setToolTip(tooltip)
-
-                    if key == "model":
-                        widget.currentIndexChanged.connect(self.on_model_changed)
-
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
                 
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox):
                         widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
-            
+
             if dynamic_form_layout.rowCount() > 0:
                 dynamic_options_group.setLayout(dynamic_form_layout)
                 main_layout.addWidget(dynamic_options_group)
@@ -146,8 +129,6 @@ class OptionDialog(QDialog):
             else:
                 dynamic_options_group.setVisible(False)
 
-        # (共通設定のUI部分は変更なし)
-        # ...
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
         file_process_form_layout = QFormLayout()
         file_actions_config = self.global_config.get("file_actions", {})
@@ -228,50 +209,125 @@ class OptionDialog(QDialog):
 
         self.setLayout(main_layout)
 
-    def on_model_changed(self):
-        """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
-        if "classes" in self.widgets_map:
-            classes_widget = self.widgets_map["classes"]
-            if isinstance(classes_widget, QLineEdit):
-                classes_widget.setText("")
-
-    def open_class_selection_dialog(self):
-        """「クラスを選択...」ボタンが押されたときに呼び出される。"""
-        model_widget = self.widgets_map.get("model")
-        classes_widget = self.widgets_map.get("classes")
-
-        if not isinstance(model_widget, QComboBox) or not isinstance(classes_widget, QLineEdit):
-            return
-
-        selected_model_id = model_widget.currentData()
-        if not selected_model_id:
-            QMessageBox.warning(self, "モデル未選択", "先に帳票モデルを選択してください。")
-            return
-
-        available_classes = ConfigManager.get_class_definitions_for_model(selected_model_id)
-        if not available_classes:
-            QMessageBox.information(self, "クラス定義なし", f"モデル '{selected_model_id}' には、選択可能なクラス定義がありません。")
-            return
-
-        current_classes = [c.strip() for c in classes_widget.text().split(',') if c.strip()]
-        
-        dialog = ClassSelectionDialog(available_classes, current_classes, self)
-        if dialog.exec():
-            new_classes_str = dialog.get_selected_classes_str()
-            classes_widget.setText(new_classes_str)
-
     def toggle_dynamic_split_options_enabled_state(self):
-        # (このメソッドは前回から変更ありません)
-        pass
+        size_split_is_enabled = False
+        if "split_large_files_enabled" in self.widgets_map:
+            chk_box = self.widgets_map.get("split_large_files_enabled")
+            if isinstance(chk_box, QCheckBox):
+                size_split_is_enabled = chk_box.isChecked()
+        
+        page_split_is_enabled = False
+        if "split_by_page_count_enabled" in self.widgets_map:
+            chk_box_page = self.widgets_map.get("split_by_page_count_enabled")
+            if isinstance(chk_box_page, QCheckBox):
+                page_split_is_enabled = chk_box_page.isChecked()
+
+        widget_chunk_size = self.widgets_map.get("split_chunk_size_mb")
+        if widget_chunk_size and isinstance(widget_chunk_size, QSpinBox):
+            widget_chunk_size.setEnabled(size_split_is_enabled)
+
+        widget_page_split_enable = self.widgets_map.get("split_by_page_count_enabled")
+        if widget_page_split_enable and isinstance(widget_page_split_enable, QCheckBox):
+            widget_page_split_enable.setEnabled(size_split_is_enabled)
+
+        widget_max_pages = self.widgets_map.get("split_max_pages_per_part")
+        if widget_max_pages and isinstance(widget_max_pages, QSpinBox):
+            widget_max_pages.setEnabled(size_split_is_enabled and page_split_is_enabled)
+
+        widget_merge_parts = self.widgets_map.get("merge_split_pdf_parts")
+        if widget_merge_parts and isinstance(widget_merge_parts, QCheckBox):
+            widget_merge_parts.setEnabled(size_split_is_enabled)
 
     def is_valid_folder_name(self, folder_name, field_label):
-        # (このメソッドは前回から変更ありません)
-        pass
+        if not folder_name:
+            QMessageBox.warning(self, "入力エラー", f"{field_label}は必須入力です。")
+            return False
+        if re.search(INVALID_FOLDER_NAME_CHARS_PATTERN, folder_name):
+            QMessageBox.warning(self, "入力エラー", f"{field_label}に使用できない文字が含まれています。\n(使用不可: {INVALID_FOLDER_NAME_CHARS_PATTERN})")
+            return False
+        if folder_name == "." or folder_name == "..":
+            QMessageBox.warning(self, "入力エラー", f"{field_label}に '.' や '..' は使用できません。")
+            return False
+        return True
 
     def on_save_settings(self):
-        # (このメソッドは前回から変更ありません)
-        pass
+        updated_profile_options = {}
+
+        updated_profile_options["api_key"] = self.profile_api_key_edit.text().strip()
+        updated_profile_options["base_uri"] = self.profile_base_uri_edit.text().strip()
+        
+        if self.options_schema:
+            for key, schema_item in self.options_schema.items():
+                if key in ["api_key", "base_uri"]: 
+                    continue
+
+                widget = self.widgets_map.get(key)
+                if widget:
+                    if schema_item.get("type") == "bool" and isinstance(widget, QCheckBox):
+                        updated_profile_options[key] = 1 if widget.isChecked() else 0
+                    elif schema_item.get("type") == "int" and isinstance(widget, QSpinBox):
+                        updated_profile_options[key] = widget.value()
+                    elif schema_item.get("type") == "string" and isinstance(widget, QLineEdit):
+                        updated_profile_options[key] = widget.text().strip()
+                    elif schema_item.get("type") == "enum" and isinstance(widget, QComboBox):
+                        if schema_item.get("values") and isinstance(schema_item["values"][0], dict):
+                            updated_profile_options[key] = widget.currentData()
+                        else:
+                            if key == "fulltext_output_mode": 
+                                updated_profile_options[key] = widget.currentIndex()
+                            else: 
+                                updated_profile_options[key] = widget.currentText().split(" ")[0] 
+        
+        upload_max_size = updated_profile_options.get("upload_max_size_mb")
+        split_enabled = updated_profile_options.get("split_large_files_enabled")
+        split_chunk_size = updated_profile_options.get("split_chunk_size_mb")
+
+        if isinstance(upload_max_size, (int, float)) and \
+            split_enabled and \
+            isinstance(split_chunk_size, (int, float)) and \
+            split_chunk_size > upload_max_size:
+            QMessageBox.warning(self, "入力エラー", 
+                                "「分割サイズ」は、「アップロード可能な最大ファイルサイズ」以下の値に設定してください。")
+            if "split_chunk_size_mb" in self.widgets_map: self.widgets_map["split_chunk_size_mb"].setFocus()
+            return
+
+        updated_global_config = json.loads(json.dumps(self.global_config))
+        
+        results_folder = self.results_folder_name_edit.text().strip()
+        success_folder = self.success_folder_name_edit.text().strip()
+        failure_folder = self.failure_folder_name_edit.text().strip()
+
+        if not self.is_valid_folder_name(results_folder, "OCR結果サブフォルダ名"): return
+        if not self.is_valid_folder_name(success_folder, "成功ファイル移動先サブフォルダ名"): return
+        if not self.is_valid_folder_name(failure_folder, "失敗ファイル移動先サブフォルダ名"): return
+        
+        if self.move_on_success_chk.isChecked() and self.move_on_failure_chk.isChecked() and success_folder == failure_folder:
+            QMessageBox.warning(self, "入力エラー", "「成功ファイル移動先」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください。"); return
+        if self.move_on_success_chk.isChecked() and results_folder == success_folder:
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「成功ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+        if self.move_on_failure_chk.isChecked() and results_folder == failure_folder:
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+
+        file_actions = updated_global_config.setdefault("file_actions", {})
+        if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
+        elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
+        else: file_actions["output_format"] = "both"
+        file_actions["results_folder_name"] = results_folder
+        file_actions["move_on_success_enabled"] = self.move_on_success_chk.isChecked()
+        file_actions["success_folder_name"] = success_folder
+        file_actions["move_on_failure_enabled"] = self.move_on_failure_chk.isChecked()
+        file_actions["failure_folder_name"] = failure_folder
+        if self.collision_overwrite_radio.isChecked(): file_actions["collision_action"] = "overwrite"
+        elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
+        else: file_actions["collision_action"] = "rename"
+
+        log_settings = updated_global_config.setdefault("log_settings", {})
+        log_settings["log_level_info_enabled"] = self.log_level_info_chk.isChecked()
+        log_settings["log_level_warning_enabled"] = self.log_level_warning_chk.isChecked()
+        log_settings["log_level_debug_enabled"] = self.log_level_debug_chk.isChecked()
+
+        self.saved_settings = (updated_profile_options, updated_global_config)
+        self.accept()
 
     def get_saved_settings(self):
-        # (このメソッドは前回から変更ありません)
-        pass
+        return self.saved_settings

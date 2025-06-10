@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QLabel,
     QWidget
 )
+from config_manager import ConfigManager
+from ui_dialogs import ClassSelectionDialog # ★ 新しいダイアログをインポート
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -52,8 +54,7 @@ class OptionDialog(QDialog):
             dynamic_form_layout = QFormLayout()
             
             for key, schema_item in self.options_schema.items():
-                if key in ["api_key", "base_uri"]:
-                    continue
+                if key in ["api_key", "base_uri"]: continue
 
                 label_text = schema_item.get("label", key) + ":"
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
@@ -77,6 +78,20 @@ class OptionDialog(QDialog):
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
 
+                elif key == "classes":
+                    h_layout = QHBoxLayout()
+                    line_edit = QLineEdit(str(current_value) if current_value is not None else "")
+                    line_edit.setReadOnly(True)
+                    line_edit.setToolTip(tooltip)
+                    select_button = QPushButton("クラスを選択...")
+                    select_button.clicked.connect(self.open_class_selection_dialog)
+
+                    h_layout.addWidget(line_edit)
+                    h_layout.addWidget(select_button)
+                    
+                    dynamic_form_layout.addRow(label_text, h_layout)
+                    self.widgets_map[key] = line_edit
+
                 elif schema_item.get("type") == "string":
                     widget = QLineEdit(str(current_value) if current_value is not None else "")
                     if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
@@ -91,17 +106,14 @@ class OptionDialog(QDialog):
                             for item_dict in schema_item["values"]:
                                 widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
                             index = widget.findData(current_value)
-                            if index != -1:
-                                widget.setCurrentIndex(index)
+                            if index != -1: widget.setCurrentIndex(index)
                             else:
                                 default_val = schema_item.get("default")
                                 default_idx = widget.findData(default_val)
-                                if default_idx != -1:
-                                    widget.setCurrentIndex(default_idx)
+                                if default_idx != -1: widget.setCurrentIndex(default_idx)
                         else:
                             widget.addItems(schema_item["values"])
-                            if isinstance(current_value, int) and 0 <= current_value < widget.count():
-                                widget.setCurrentIndex(current_value)
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
                             elif isinstance(current_value, str):
                                 index = widget.findText(current_value)
                                 if index != -1: widget.setCurrentIndex(index)
@@ -114,14 +126,19 @@ class OptionDialog(QDialog):
                                         elif isinstance(default_val, str):
                                             default_idx = widget.findText(str(default_val));
                                             if default_idx != -1: widget.setCurrentIndex(default_idx)
+                    
                     if tooltip: widget.setToolTip(tooltip)
+
+                    if key == "model":
+                        widget.currentIndexChanged.connect(self.on_model_changed)
+
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
                 
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox):
                         widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
-
+            
             if dynamic_form_layout.rowCount() > 0:
                 dynamic_options_group.setLayout(dynamic_form_layout)
                 main_layout.addWidget(dynamic_options_group)
@@ -129,6 +146,8 @@ class OptionDialog(QDialog):
             else:
                 dynamic_options_group.setVisible(False)
 
+        # (共通設定のUI部分は変更なし)
+        # ...
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
         file_process_form_layout = QFormLayout()
         file_actions_config = self.global_config.get("file_actions", {})
@@ -208,6 +227,38 @@ class OptionDialog(QDialog):
         main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
+
+    def on_model_changed(self):
+        """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
+        if "classes" in self.widgets_map:
+            classes_widget = self.widgets_map["classes"]
+            if isinstance(classes_widget, QLineEdit):
+                classes_widget.setText("")
+
+    def open_class_selection_dialog(self):
+        """「クラスを選択...」ボタンが押されたときに呼び出される。"""
+        model_widget = self.widgets_map.get("model")
+        classes_widget = self.widgets_map.get("classes")
+
+        if not isinstance(model_widget, QComboBox) or not isinstance(classes_widget, QLineEdit):
+            return
+
+        selected_model_id = model_widget.currentData()
+        if not selected_model_id:
+            QMessageBox.warning(self, "モデル未選択", "先に帳票モデルを選択してください。")
+            return
+
+        available_classes = ConfigManager.get_class_definitions_for_model(selected_model_id)
+        if not available_classes:
+            QMessageBox.information(self, "クラス定義なし", f"モデル '{selected_model_id}' には、選択可能なクラス定義がありません。")
+            return
+
+        current_classes = [c.strip() for c in classes_widget.text().split(',') if c.strip()]
+        
+        dialog = ClassSelectionDialog(available_classes, current_classes, self)
+        if dialog.exec():
+            new_classes_str = dialog.get_selected_classes_str()
+            classes_widget.setText(new_classes_str)
 
     def toggle_dynamic_split_options_enabled_state(self):
         size_split_is_enabled = False

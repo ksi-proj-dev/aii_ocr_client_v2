@@ -6,15 +6,11 @@ import json
 import datetime
 import shutil
 from typing import Optional, Dict, Any, List
-
 from appdirs import user_config_dir
 
 CONFIG_FILE_NAME = "config.json"
 APP_NAME = "AI inside OCR Client"
 APP_AUTHOR = "KSI"
-
-MODEL_DEFINITIONS_FILE_NAME = "model_definitions.json"
-MODEL_DEFINITIONS = {} # ★ クラス定義を保持するグローバル変数
 
 try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
@@ -167,33 +163,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
 
 class ConfigManager:
     @staticmethod
-    def _load_model_definitions():
-        """model_definitions.json を読み込み、グローバル変数に格納する。"""
-        global MODEL_DEFINITIONS
-        if MODEL_DEFINITIONS: # 既に読み込み済みの場合は何もしない
-            return
-
-        try:
-            # スクリプト(または実行可能ファイル)からの相対パスでファイルを見つける
-            if getattr(sys, 'frozen', False):
-                base_path = os.path.dirname(sys.executable)
-            else:
-                base_path = os.path.dirname(os.path.abspath(__file__))
-            
-            definitions_path = os.path.join(base_path, MODEL_DEFINITIONS_FILE_NAME)
-            
-            if os.path.exists(definitions_path):
-                with open(definitions_path, 'r', encoding='utf-8') as f:
-                    MODEL_DEFINITIONS = json.load(f)
-                    print(f"モデル定義ファイルを読み込みました: {definitions_path}") # デバッグ用
-            else:
-                print(f"警告: モデル定義ファイルが見つかりません: {definitions_path}")
-                MODEL_DEFINITIONS = {}
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"エラー: モデル定義ファイルの読み込みに失敗しました。エラー: {e}")
-            MODEL_DEFINITIONS = {}
-
-    @staticmethod
     def _ensure_config_dir_exists():
         if not CONFIG_PATH:
             #print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。") # LogManagerが使える前なのでprint
@@ -209,9 +178,8 @@ class ConfigManager:
 
     @staticmethod
     def load() -> Dict[str, Any]:
-        ConfigManager._load_model_definitions() # ★ 設定読み込み時にモデル定義も読み込む
-
         if not ConfigManager._ensure_config_dir_exists():
+            #print("エラー: 設定ディレクトリの準備ができないため、デフォルト設定でロードします。")
             return ConfigManager._get_default_config_structure()
 
         user_config = {}
@@ -219,20 +187,19 @@ class ConfigManager:
             try:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     user_config = json.load(f)
-            except (json.JSONDecodeError, Exception) as e:
-                print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
+            except json.JSONDecodeError:
+                #print(f"警告: {CONFIG_PATH} の読み込みに失敗しました。JSON形式が無効です。デフォルト設定でバックアップを作成し、デフォルト設定で続行します。")
+                ConfigManager._backup_corrupted_config()
+                user_config = ConfigManager._get_default_config_structure()
+            except Exception as e:
+                #print(f"警告: {CONFIG_PATH} の読み込み中に予期せぬエラーが発生しました: {e}。デフォルト設定でバックアップを作成し、デフォルト設定で続行します。")
                 ConfigManager._backup_corrupted_config()
                 user_config = ConfigManager._get_default_config_structure()
         else:
-            user_config = ConfigManager._get_default_config_structure()
+             user_config = ConfigManager._get_default_config_structure()
 
         ConfigManager._apply_and_migrate_default_values(user_config)
         return user_config
-
-    @staticmethod
-    def get_class_definitions_for_model(model_id: str) -> List[Dict[str, str]]:
-        """指定されたモデルIDに対応するクラス定義のリストを返す。"""
-        return MODEL_DEFINITIONS.get(model_id, [])
 
     @staticmethod
     def _backup_corrupted_config():
@@ -269,7 +236,7 @@ class ConfigManager:
                             elif isinstance(val_schema, dict) and isinstance(cfg_profile_schema.get(key), dict):
                                 if key == "endpoints":
                                     for ep_key, ep_val in val_schema.items():
-                                        if ep_key not in cfg_profile_schema[key]:
+                                         if ep_key not in cfg_profile_schema[key]:
                                             cfg_profile_schema[key][ep_key] = ep_val
                                 elif key == "options_schema":
                                     for opt_key, opt_val_item_schema in val_schema.items(): # opt_val_schema -> opt_val_item_schema
