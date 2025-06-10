@@ -87,26 +87,33 @@ class OptionDialog(QDialog):
                 elif schema_item.get("type") == "enum":
                     widget = QComboBox()
                     if "values" in schema_item and isinstance(schema_item["values"], list):
-                        widget.addItems(schema_item["values"])
-                    
-                    if isinstance(current_value, int) and 0 <= current_value < widget.count():
-                        widget.setCurrentIndex(current_value)
-                    elif isinstance(current_value, str):
-                        index = widget.findText(current_value)
-                        if index != -1:
-                            widget.setCurrentIndex(index)
-                        else:
-                            short_val_index = widget.findText(current_value.split(" ")[0])
-                            if short_val_index != -1:
-                                widget.setCurrentIndex(short_val_index)
+                        if schema_item["values"] and isinstance(schema_item["values"][0], dict):
+                            for item_dict in schema_item["values"]:
+                                widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
+                            index = widget.findData(current_value)
+                            if index != -1:
+                                widget.setCurrentIndex(index)
                             else:
                                 default_val = schema_item.get("default")
-                                if isinstance(default_val, int) and 0 <= default_val < widget.count():
-                                    widget.setCurrentIndex(default_val)
-                                elif isinstance(default_val, str):
-                                    default_idx = widget.findText(str(default_val))
-                                    if default_idx != -1: widget.setCurrentIndex(default_idx)
-
+                                default_idx = widget.findData(default_val)
+                                if default_idx != -1:
+                                    widget.setCurrentIndex(default_idx)
+                        else:
+                            widget.addItems(schema_item["values"])
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count():
+                                widget.setCurrentIndex(current_value)
+                            elif isinstance(current_value, str):
+                                index = widget.findText(current_value)
+                                if index != -1: widget.setCurrentIndex(index)
+                                else:
+                                    short_val_index = widget.findText(current_value.split(" ")[0])
+                                    if short_val_index != -1: widget.setCurrentIndex(short_val_index)
+                                    else:
+                                        default_val = schema_item.get("default")
+                                        if isinstance(default_val, int) and 0 <= default_val < widget.count(): widget.setCurrentIndex(default_val)
+                                        elif isinstance(default_val, str):
+                                            default_idx = widget.findText(str(default_val));
+                                            if default_idx != -1: widget.setCurrentIndex(default_idx)
                     if tooltip: widget.setToolTip(tooltip)
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
@@ -118,11 +125,9 @@ class OptionDialog(QDialog):
             if dynamic_form_layout.rowCount() > 0:
                 dynamic_options_group.setLayout(dynamic_form_layout)
                 main_layout.addWidget(dynamic_options_group)
-                # ウィジェットが作成された後に状態を更新
                 self.toggle_dynamic_split_options_enabled_state()
             else:
                 dynamic_options_group.setVisible(False)
-
 
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
         file_process_form_layout = QFormLayout()
@@ -171,48 +176,29 @@ class OptionDialog(QDialog):
         file_process_group.setLayout(file_process_form_layout)
         main_layout.addWidget(file_process_group)
         
-        # ★★★ ここからログ設定グループのレイアウトを変更 ★★★
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
         log_settings_config = self.global_config.get("log_settings", {})
-        
-        # 水平レイアウトを使用してチェックボックスを横に並べる
         log_checkbox_layout = QHBoxLayout()
-
-        # チェックボックスのラベルをシンプルに変更
         self.log_level_info_chk = QCheckBox("INFO")
         self.log_level_info_chk.setChecked(log_settings_config.get("log_level_info_enabled", True))
         self.log_level_info_chk.setToolTip("アプリケーションの通常動作に関する情報ログを表示します。")
         log_checkbox_layout.addWidget(self.log_level_info_chk)
-
         self.log_level_warning_chk = QCheckBox("WARNING")
         self.log_level_warning_chk.setChecked(log_settings_config.get("log_level_warning_enabled", True))
         self.log_level_warning_chk.setToolTip("軽微な問題や注意喚起に関する警告ログを表示します。")
         log_checkbox_layout.addWidget(self.log_level_warning_chk)
-
         self.log_level_debug_chk = QCheckBox("DEBUG")
         self.log_level_debug_chk.setChecked(log_settings_config.get("log_level_debug_enabled", False))
         self.log_level_debug_chk.setToolTip("開発者向けの詳細なデバッグ情報を表示します。")
         log_checkbox_layout.addWidget(self.log_level_debug_chk)
-
-
-        error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
-        error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        log_checkbox_layout.addWidget(error_label)
-
-
-        log_checkbox_layout.addStretch(1) # チェックボックスを左に寄せるためのスペーサー
+        log_checkbox_layout.addStretch(1)
         log_settings_group.setLayout(log_checkbox_layout)
-        
-        # グループボックスと注釈ラベルを縦に並べるためのコンテナレイアウト
         log_section_layout = QVBoxLayout()
         log_section_layout.addWidget(log_settings_group)
-
-        # error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
-        # error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        # log_section_layout.addWidget(error_label)
-        
+        error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
+        error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
+        log_section_layout.addWidget(error_label)
         main_layout.addLayout(log_section_layout)
-        # ★★★ ここまで変更 ★★★
 
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存"); self.cancel_btn = QPushButton("キャンセル")
@@ -242,7 +228,7 @@ class OptionDialog(QDialog):
 
         widget_page_split_enable = self.widgets_map.get("split_by_page_count_enabled")
         if widget_page_split_enable and isinstance(widget_page_split_enable, QCheckBox):
-             widget_page_split_enable.setEnabled(size_split_is_enabled)
+            widget_page_split_enable.setEnabled(size_split_is_enabled)
 
         widget_max_pages = self.widgets_map.get("split_max_pages_per_part")
         if widget_max_pages and isinstance(widget_max_pages, QSpinBox):
@@ -284,19 +270,22 @@ class OptionDialog(QDialog):
                     elif schema_item.get("type") == "string" and isinstance(widget, QLineEdit):
                         updated_profile_options[key] = widget.text().strip()
                     elif schema_item.get("type") == "enum" and isinstance(widget, QComboBox):
-                        if key == "fulltext_output_mode": 
-                             updated_profile_options[key] = widget.currentIndex()
-                        else: 
-                             updated_profile_options[key] = widget.currentText().split(" ")[0] 
+                        if schema_item.get("values") and isinstance(schema_item["values"][0], dict):
+                            updated_profile_options[key] = widget.currentData()
+                        else:
+                            if key == "fulltext_output_mode": 
+                                updated_profile_options[key] = widget.currentIndex()
+                            else: 
+                                updated_profile_options[key] = widget.currentText().split(" ")[0] 
         
         upload_max_size = updated_profile_options.get("upload_max_size_mb")
         split_enabled = updated_profile_options.get("split_large_files_enabled")
         split_chunk_size = updated_profile_options.get("split_chunk_size_mb")
 
         if isinstance(upload_max_size, (int, float)) and \
-           split_enabled and \
-           isinstance(split_chunk_size, (int, float)) and \
-           split_chunk_size > upload_max_size:
+            split_enabled and \
+            isinstance(split_chunk_size, (int, float)) and \
+            split_chunk_size > upload_max_size:
             QMessageBox.warning(self, "入力エラー", 
                                 "「分割サイズ」は、「アップロード可能な最大ファイルサイズ」以下の値に設定してください。")
             if "split_chunk_size_mb" in self.widgets_map: self.widgets_map["split_chunk_size_mb"].setFocus()
@@ -315,9 +304,9 @@ class OptionDialog(QDialog):
         if self.move_on_success_chk.isChecked() and self.move_on_failure_chk.isChecked() and success_folder == failure_folder:
             QMessageBox.warning(self, "入力エラー", "「成功ファイル移動先」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください。"); return
         if self.move_on_success_chk.isChecked() and results_folder == success_folder:
-             QMessageBox.warning(self, "入力エラー", "「OCR結果」と「成功ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「成功ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
         if self.move_on_failure_chk.isChecked() and results_folder == failure_folder:
-             QMessageBox.warning(self, "入力エラー", "「OCR結果」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
 
         file_actions = updated_global_config.setdefault("file_actions", {})
         if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
@@ -332,12 +321,10 @@ class OptionDialog(QDialog):
         elif self.collision_skip_radio.isChecked(): file_actions["collision_action"] = "skip"
         else: file_actions["collision_action"] = "rename"
 
-        # ★★★ 新しいログ設定を保存 ★★★
         log_settings = updated_global_config.setdefault("log_settings", {})
         log_settings["log_level_info_enabled"] = self.log_level_info_chk.isChecked()
         log_settings["log_level_warning_enabled"] = self.log_level_warning_chk.isChecked()
         log_settings["log_level_debug_enabled"] = self.log_level_debug_chk.isChecked()
-        # ★★★ ここまで ★★★
 
         self.saved_settings = (updated_profile_options, updated_global_config)
         self.accept()
