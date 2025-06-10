@@ -488,17 +488,6 @@ class MainWindow(QMainWindow):
         self.perform_batch_list_view_update()
         if hasattr(self, 'list_view'): self.list_view.set_checkboxes_enabled(True)
         self.update_ocr_controls()
-
-        # ★★★ ここからCSVエクスポートの呼び出し処理を追加 ★★★
-        if not was_interrupted and not fatal_error_info:
-            # 正常終了した場合のみCSVエクスポートを試みる
-            try:
-                self.ocr_orchestrator.export_results_to_csv(self.processed_files_info, self.input_folder_path)
-            except Exception as e:
-                self.log_manager.error(f"CSVエクスポート処理中に予期せぬエラーが発生しました: {e}", context="CSV_EXPORT_ERROR", exc_info=True)
-                QMessageBox.critical(self, "CSVエクスポートエラー", f"CSVファイルのエクスポートに失敗しました。\n詳細はログを確認してください。\n\nエラー: {e}")
-        # ★★★ ここまで追加 ★★★
-
         final_message = "全てのファイルのOCR処理が完了しました。"
         if fatal_error_info and isinstance(fatal_error_info, dict):
             final_message = f"OCR処理がエラーにより停止しました。\n理由: {fatal_error_info.get('message', '不明なエラー')}"
@@ -600,13 +589,7 @@ class MainWindow(QMainWindow):
         self.log_manager.debug("Opening options dialog.", context="UI_ACTION"); active_profile_id = self.config.get("current_api_profile_id"); options_schema = ConfigManager.get_active_api_options_schema(self.config); current_option_values = ConfigManager.get_active_api_options_values(self.config)
         if options_schema is None: QMessageBox.warning(self, "設定エラー", f"現在アクティブなAPIプロファイル '{active_profile_id}' のオプション定義の取得に失敗しました。\n設定ファイルが破損しているか、プロファイル定義に問題がある可能性があります。"); self.log_manager.error(f"オプションスキーマの取得に失敗 (None)。Profile ID: {active_profile_id}", context="CONFIG_ERROR"); return
         if current_option_values is None: self.log_manager.warning(f"アクティブプロファイル '{active_profile_id}' のオプション値(current_option_values)が取得できませんでした。空のオプションでダイアログを開きます。", context="CONFIG_WARN"); current_option_values = {}
-        dialog = OptionDialog(
-            options_schema=options_schema,
-            current_option_values=current_option_values,
-            global_config=self.config,
-            api_profile=self.active_api_profile, # ★★★ この引数を追加 ★★★
-            parent=self
-        )
+        dialog = OptionDialog(options_schema=options_schema, current_option_values=current_option_values, global_config=self.config, parent=self)
         if dialog.exec():
             updated_profile_specific_options, updated_global_config = dialog.get_saved_settings()
             if active_profile_id and updated_profile_specific_options is not None: self.config["options_values_by_profile"][active_profile_id] = updated_profile_specific_options
@@ -783,3 +766,4 @@ class MainWindow(QMainWindow):
     def clear_log_display(self):
         if hasattr(self, 'log_widget'): self.log_widget.clear()
         self.log_manager.info("画面ログをクリアしました（ファイル記録は継続）。", context="UI_ACTION_CLEAR_LOG", emit_to_ui=False)
+

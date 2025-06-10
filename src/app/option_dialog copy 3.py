@@ -80,20 +80,6 @@ class OptionDialog(QDialog):
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
 
-                elif key == "classes":
-                    h_layout = QHBoxLayout()
-                    line_edit = QLineEdit(str(current_value) if current_value is not None else "")
-                    line_edit.setReadOnly(True)
-                    line_edit.setToolTip(tooltip)
-                    select_button = QPushButton("クラスを選択...")
-                    select_button.clicked.connect(self.open_class_selection_dialog)
-
-                    h_layout.addWidget(line_edit)
-                    h_layout.addWidget(select_button)
-                    
-                    dynamic_form_layout.addRow(label_text, h_layout)
-                    self.widgets_map[key] = line_edit
-
                 elif schema_item.get("type") == "string":
                     widget = QLineEdit(str(current_value) if current_value is not None else "")
                     if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
@@ -108,14 +94,17 @@ class OptionDialog(QDialog):
                             for item_dict in schema_item["values"]:
                                 widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
                             index = widget.findData(current_value)
-                            if index != -1: widget.setCurrentIndex(index)
+                            if index != -1:
+                                widget.setCurrentIndex(index)
                             else:
                                 default_val = schema_item.get("default")
                                 default_idx = widget.findData(default_val)
-                                if default_idx != -1: widget.setCurrentIndex(default_idx)
+                                if default_idx != -1:
+                                    widget.setCurrentIndex(default_idx)
                         else:
                             widget.addItems(schema_item["values"])
-                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count():
+                                widget.setCurrentIndex(current_value)
                             elif isinstance(current_value, str):
                                 index = widget.findText(current_value)
                                 if index != -1: widget.setCurrentIndex(index)
@@ -128,12 +117,7 @@ class OptionDialog(QDialog):
                                         elif isinstance(default_val, str):
                                             default_idx = widget.findText(str(default_val));
                                             if default_idx != -1: widget.setCurrentIndex(default_idx)
-
                     if tooltip: widget.setToolTip(tooltip)
-
-                    if key == "model":
-                        widget.currentIndexChanged.connect(self.on_model_changed)
-
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
                 

@@ -783,3 +783,4 @@ class MainWindow(QMainWindow):
     def clear_log_display(self):
         if hasattr(self, 'log_widget'): self.log_widget.clear()
         self.log_manager.info("画面ログをクリアしました（ファイル記録は継続）。", context="UI_ACTION_CLEAR_LOG", emit_to_ui=False)
+

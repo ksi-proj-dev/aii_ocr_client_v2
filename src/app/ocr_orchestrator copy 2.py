@@ -12,7 +12,6 @@ from log_manager import LogManager, LogLevel
 from api_client import OCRApiClient # ★変更箇所: CubeApiClient から OCRApiClient へ
 from ui_dialogs import OcrConfirmationDialog
 from config_manager import ConfigManager
-from file_model import FileInfo
 from csv_exporter import export_atypical_to_csv
 
 from app_constants import (
@@ -49,6 +48,43 @@ class OcrOrchestrator(QObject):
 
         if not self.active_api_profile:
             self.log_manager.critical("OcrOrchestrator: APIプロファイルが提供されませんでした。処理は続行できません。", context="OCR_ORCH_INIT_ERROR")
+
+    def _handle_csv_export(self):
+        # 現在のプロファイルが dx_atypical_v2 でない場合は何もしない
+        if not self.active_api_profile or self.active_api_profile.get("id") != "dx_atypical_v2":
+            return
+
+        self.log_manager.info("OCR処理完了。CSVエクスポートの準備をします。", context="CSV_EXPORT")
+
+        successful_files = [
+            f for f in self.processed_files_info
+            if f.ocr_engine_status == OCR_STATUS_COMPLETED and "エラー" not in f.status
+        ]
+
+        if not successful_files:
+            self.log_manager.info("CSVエクスポート対象の成功ファイルがありません。", context="CSV_EXPORT")
+            return
+
+        # 出力先の決定
+        # input_root_folder は OcrWorker に渡したものと同じものを使う
+        if not self.input_root_folder or not os.path.isdir(self.input_root_folder):
+            self.log_manager.error("CSV出力先となるルート入力フォルダが無効です。", context="CSV_EXPORT_ERROR")
+            return
+            
+        results_folder_name = self.config.get("file_actions", {}).get("results_folder_name", "OCR結果")
+        output_dir = os.path.join(self.input_root_folder, results_folder_name)
+        
+        # 出力ディレクトリが存在しない場合は作成
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except OSError as e:
+            self.log_manager.error(f"CSV出力先フォルダの作成に失敗しました: {output_dir}, エラー: {e}", context="CSV_EXPORT_ERROR")
+            return
+
+        csv_filename = f"{os.path.basename(os.path.normpath(self.input_root_folder))}.csv"
+        output_csv_path = os.path.join(output_dir, csv_filename)
+
+        export_atypical_to_csv(successful_files, output_csv_path, self.log_manager)
 
     def _create_confirmation_summary(self, files_to_process_count: int, input_folder_path: str, parent_widget_for_dialog) -> str:
         if not self.active_api_profile:
@@ -221,10 +257,10 @@ class OcrOrchestrator(QObject):
                 final_fatal_error_info = self.fatal_error_occurred_info
             
             was_interrupted_by_user = self.user_stopped
-        
+
         if self.is_ocr_running:
             self.is_ocr_running = False
-            # ★★★ ここにあったCSVエクスポートの呼び出しを削除 ★★★
+            # ★★★ ここにあった _handle_csv_export() の呼び出しを削除 ★★★
             self.ocr_process_finished_signal.emit(was_interrupted_by_user or bool(final_fatal_error_info), final_fatal_error_info)
         
         self.request_ui_controls_update_signal.emit()
@@ -460,14 +496,12 @@ class OcrOrchestrator(QObject):
 
         self.log_manager.info("OCR処理完了。CSVエクスポートの準備をします。", context="CSV_EXPORT")
 
-        # 引数で渡されたリストを使用する
         successful_files = [f for f in processed_files if f.ocr_engine_status == OCR_STATUS_COMPLETED]
 
         if not successful_files:
             self.log_manager.info("CSVエクスポート対象の成功ファイルがありません。", context="CSV_EXPORT")
             return
 
-        # 引数で渡されたパスを使用する
         if not input_root_folder or not os.path.isdir(input_root_folder):
             self.log_manager.error("CSV出力先となるルート入力フォルダが無効です。", context="CSV_EXPORT_ERROR")
             return
@@ -484,12 +518,4 @@ class OcrOrchestrator(QObject):
         csv_filename = f"{os.path.basename(os.path.normpath(input_root_folder))}.csv"
         output_csv_path = os.path.join(output_dir, csv_filename)
 
-        # ★★★ CSV Exporter に渡す引数を修正 ★★★
-        # 使用されたモデルIDを取得して渡す
-        active_options = ConfigManager.get_active_api_options_values(self.config)
-        model_id = active_options.get("model") if active_options else None
-        if not model_id:
-            self.log_manager.error("CSVエクスポートに必要なモデルIDが取得できませんでした。", context="CSV_EXPORT_ERROR")
-            return
-
-        export_atypical_to_csv(successful_files, output_csv_path, self.log_manager, model_id)
+        export_atypical_to_csv(successful_files, output_csv_path, self.log_manager)

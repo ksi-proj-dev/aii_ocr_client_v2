@@ -10,19 +10,17 @@ from PyQt6.QtWidgets import (
 )
 from config_manager import ConfigManager
 from ui_dialogs import ClassSelectionDialog # ★ 新しいダイアログをインポート
-from typing import Optional, Dict, Any
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
 class OptionDialog(QDialog):
-    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, api_profile: Optional[Dict[str, Any]], parent=None):
+    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定")
 
         self.options_schema = options_schema
         self.current_option_values = current_option_values if current_option_values else {}
         self.global_config = global_config
-        self.api_profile = api_profile # ★★★ 受け取ったプロファイル情報を保持 ★★★
 
         self.widgets_map = {}
         self.saved_settings = (None, None)
@@ -148,6 +146,8 @@ class OptionDialog(QDialog):
             else:
                 dynamic_options_group.setVisible(False)
 
+        # (共通設定のUI部分は変更なし)
+        # ...
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
         file_process_form_layout = QFormLayout()
         file_actions_config = self.global_config.get("file_actions", {})
@@ -166,20 +166,6 @@ class OptionDialog(QDialog):
         output_format_layout_v.addWidget(self.output_format_both_radio)
         file_process_form_layout.addRow(output_format_label, output_format_layout_v)
         
-        # ★★★ ここからプロファイルに応じたUI制御を追加 ★★★
-        if self.api_profile and self.api_profile.get("id") == "dx_atypical_v2":
-            self.output_format_json_only_radio.setChecked(True)
-            self.output_format_json_only_radio.setEnabled(False)
-            self.output_format_pdf_only_radio.setEnabled(False)
-            self.output_format_both_radio.setEnabled(False)
-            
-            tooltip_text = "このプロファイルはJSON出力のみをサポートしています。"
-            output_format_label.setToolTip(tooltip_text)
-            self.output_format_json_only_radio.setToolTip(tooltip_text)
-            self.output_format_pdf_only_radio.setToolTip("このプロファイルはサーチャブルPDF出力をサポートしていません。")
-            self.output_format_both_radio.setToolTip("このプロファイルはサーチャブルPDF出力をサポートしていません。")
-        # ★★★ ここまで追加 ★★★
-
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
         file_process_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
         self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")

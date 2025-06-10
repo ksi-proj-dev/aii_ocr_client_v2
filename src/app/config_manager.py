@@ -57,7 +57,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "dx_fulltext_v2",
         "name": "DX Suite (全文OCR V2)",
-        "base_uri": "https://{organization_specific_domain}.dx-suite.com/wf/api/fullocr/v2/",
+        "base_uri": "https://{組織固有}.dx-suite.com/wf/api/fullocr/v2/",
         "flow_type": "dx_fulltext_v2_flow",
         "endpoints": {
             "register_ocr": "/register",
