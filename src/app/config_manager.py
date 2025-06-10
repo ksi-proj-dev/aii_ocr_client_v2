@@ -6,15 +6,13 @@ import json
 import datetime
 import shutil
 from typing import Optional, Dict, Any, List
-
 from appdirs import user_config_dir
+
+from model_data import MODEL_DEFINITIONS # ★★★ model_data.py から辞書をインポート ★★★
 
 CONFIG_FILE_NAME = "config.json"
 APP_NAME = "AI inside OCR Client"
 APP_AUTHOR = "KSI"
-
-MODEL_DEFINITIONS_FILE_NAME = "model_definitions.json"
-MODEL_DEFINITIONS = {} # ★ クラス定義を保持するグローバル変数
 
 try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
@@ -209,8 +207,7 @@ class ConfigManager:
 
     @staticmethod
     def load() -> Dict[str, Any]:
-        ConfigManager._load_model_definitions() # ★ 設定読み込み時にモデル定義も読み込む
-
+        # ★★★ JSONファイルの読み込みロジックは不要になったため削除 ★★★
         if not ConfigManager._ensure_config_dir_exists():
             return ConfigManager._get_default_config_structure()
 
@@ -232,6 +229,7 @@ class ConfigManager:
     @staticmethod
     def get_class_definitions_for_model(model_id: str) -> List[Dict[str, str]]:
         """指定されたモデルIDに対応するクラス定義のリストを返す。"""
+        # ★★★ インポートした辞書から直接値を取得 ★★★
         return MODEL_DEFINITIONS.get(model_id, [])
 
     @staticmethod
