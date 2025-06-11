@@ -202,7 +202,7 @@ class OCRApiClient:
             if self.api_execution_mode == "demo":
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Standard V2): {file_name}", context=f"{log_ctx_prefix}_DEMO")
                 workflow_id = effective_options.get("workflowId", 0)
-                if not workflow_id or not str(workflow_id).strip():
+                if not workflow_id:
                     return None, {"message": "必須パラメータ 'ワークフローID' が設定されていません。", "code": "DX_STANDARD_WORKFLOWID_MISSING"}
                 
                 self.log_manager.debug(f"  Simulating Unit Register with workflowId: {workflow_id}", context=f"{log_ctx_prefix}_DEMO")
@@ -219,77 +219,9 @@ class OCRApiClient:
                 ]
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し完了 (DX Suite Standard V2): {file_name}", context=f"{log_ctx_prefix}_DEMO")
                 return demo_result, None
-            else:
-                self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Standard V2 - Register Unit): {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-                # 1. ユニット登録API (/sort/units) の呼び出し
-                register_url = self._get_full_url("register_ocr")
-                print(f"register_url={register_url}")
-                if not register_url: return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard Register)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_REG"}
-                
-                if "{組織固有}" in register_url:
-                    self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {register_url}", context="API_CLIENT_CONFIG_ERROR")
-                    return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
-
-                if not self.api_key:
-                    err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER", error_code="API_KEY_MISSING_LIVE")
-                    return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
-
-                headers = {"apikey": self.api_key}
-                data_payload = {}
-                workflow_id = effective_options.get("workflowId")
-                if not workflow_id or not str(workflow_id).strip():
-                    return None, {"message": "必須パラメータ 'ワークフローID' が設定されていません。", "code": "DX_STANDARD_WORKFLOWID_MISSING"}
-
-                data_payload['workflowId'] = workflow_id
-                
-                if effective_options.get("unitName"):
-                    data_payload['unitName'] = effective_options.get("unitName")
-
-                file_obj = None
-                unit_id = None
-                try:
-                    file_obj = open(file_path, 'rb')
-                    files_payload = {'file': (os.path.basename(file_path), file_obj)}
-                    
-                    self.log_manager.debug(f"  POST to {register_url} with form-data: {data_payload}, file: {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-                    response_register = requests.post(register_url, headers=headers, data=data_payload, files=files_payload, timeout=self.timeout_seconds)
-                    response_register.raise_for_status()
-                    
-                    register_json = response_register.json()
-                    unit_id = register_json.get("unitId")
-                    if not unit_id:
-                        return None, {"message": "ユニット登録APIレスポンスにunitIdが含まれていません。", "code": "DX_STANDARD_NO_UNITID", "detail": register_json}
-                    self.log_manager.info(f"  ユニット登録成功。unitId: {unit_id}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-
-                except Exception as e:
-                    # (エラーハンドリングは長くなるため、ここでは汎用的に記載)
-                    self.log_manager.error(f"ユニット登録APIでエラー: {e}", context=f"{log_ctx_prefix}_LIVE_REGISTER_ERROR", exc_info=True)
-                    return None, {"message": f"ユニット登録APIでエラー: {e}", "code": "DX_STANDARD_REGISTER_FAIL"}
-                finally:
-                    if file_obj and not file_obj.closed: file_obj.close()
-                
-                # 2. OCR送信API (/units/{unitId}/ocr) の呼び出し
-                if unit_id:
-                    send_ocr_endpoint_template = self.active_api_profile_schema.get("endpoints", {}).get("send_to_ocr")
-                    if not send_ocr_endpoint_template:
-                        return None, {"message": "OCR送信エンドポイントがプロファイルに未定義です。", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_SEND"}
-
-                    send_ocr_url = self._get_full_url("send_to_ocr").replace("{unitId}", str(unit_id))
-                    
-                    try:
-                        self.log_manager.debug(f"  POST to {send_ocr_url}", context=f"{log_ctx_prefix}_LIVE_SENDOCR")
-                        response_send = requests.post(send_ocr_url, headers=headers, timeout=self.timeout_seconds)
-                        response_send.raise_for_status()
-                        self.log_manager.info(f"  OCR実行指示 成功。unitId: {unit_id}, Status: {response_send.status_code}", context=f"{log_ctx_prefix}_LIVE_SENDOCR")
-
-                        # OcrWorkerにポーリングを依頼するための情報を返す
-                        return {"unitId": unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
-
-                    except Exception as e:
-                        self.log_manager.error(f"OCR実行指示APIでエラー: {e}", context=f"{log_ctx_prefix}_LIVE_SENDOCR_ERROR", exc_info=True)
-                        return None, {"message": f"OCR実行指示APIでエラー: {e}", "code": "DX_STANDARD_SENDOCR_FAIL"}
-
-                return None, {"message": "ユニット登録後、OCR実行指示に失敗しました。", "code": "DX_STANDARD_POST_REGISTER_FAIL"}
+            else: # Live モード
+                self.log_manager.warning(f"LiveモードAPIコールは実装されていません ({profile_name} - read_document)。", context=f"{log_ctx_prefix}_LIVE")
+                return None, {"message": f"LiveモードAPIコール未実装 ({profile_name} - read_document)。", "code": f"NOT_IMPLEMENTED_{current_flow_type}"}
 
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR")
