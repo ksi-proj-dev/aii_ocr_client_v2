@@ -11,12 +11,11 @@ from PyQt6.QtWidgets import (
 from config_manager import ConfigManager
 from ui_dialogs import ClassSelectionDialog # ★ 新しいダイアログをインポート
 from typing import Optional, Dict, Any
-from ui_dialogs import ClassSelectionDialog, WorkflowSearchDialog # ★ WorkflowSearchDialog を追加 ★
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
 class OptionDialog(QDialog):
-    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, api_profile: Optional[Dict[str, Any]], api_client: Any, parent=None): # ★ api_client 引数を追加
+    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, api_profile: Optional[Dict[str, Any]], parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定")
 
@@ -24,7 +23,6 @@ class OptionDialog(QDialog):
         self.current_option_values = current_option_values if current_option_values else {}
         self.global_config = global_config
         self.api_profile = api_profile # ★★★ 受け取ったプロファイル情報を保持 ★★★
-        self.api_client = api_client # ★ api_client を保持
 
         self.widgets_map = {}
         self.saved_settings = (None, None)
@@ -97,28 +95,11 @@ class OptionDialog(QDialog):
                     self.widgets_map[key] = line_edit
 
                 elif schema_item.get("type") == "string":
-                    # ★★★ ここから workflowId の場合の特別処理を追加 ★★★
-                    if key == "workflowId":
-                        h_layout = QHBoxLayout()
-                        line_edit = QLineEdit(str(current_value) if current_value is not None else "")
-                        if "placeholder" in schema_item: line_edit.setPlaceholderText(schema_item["placeholder"])
-                        if tooltip: line_edit.setToolTip(tooltip)
-                        
-                        search_button = QPushButton("検索...")
-                        search_button.setToolTip("利用可能なワークフローを検索してIDを設定します。")
-                        search_button.clicked.connect(self.open_workflow_search_dialog)
-                        
-                        h_layout.addWidget(line_edit)
-                        h_layout.addWidget(search_button)
-                        
-                        dynamic_form_layout.addRow(label_text, h_layout)
-                        self.widgets_map[key] = line_edit # マップにはQLineEditを登録
-                    else: # ★★★ workflowId 以外はこれまで通りの処理 ★★★
-                        widget = QLineEdit(str(current_value) if current_value is not None else "")
-                        if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
-                        if tooltip: widget.setToolTip(tooltip)
-                        dynamic_form_layout.addRow(label_text, widget)
-                        self.widgets_map[key] = widget
+                    widget = QLineEdit(str(current_value) if current_value is not None else "")
+                    if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
+                    if tooltip: widget.setToolTip(tooltip)
+                    dynamic_form_layout.addRow(label_text, widget)
+                    self.widgets_map[key] = widget
                 
                 elif schema_item.get("type") == "enum":
                     widget = QComboBox()
@@ -415,17 +396,3 @@ class OptionDialog(QDialog):
 
     def get_saved_settings(self):
         return self.saved_settings
-    
-    def open_workflow_search_dialog(self):
-        """「検索...」ボタンが押されたときに呼び出される。"""
-        if not self.api_client:
-            QMessageBox.critical(self, "エラー", "APIクライアントが利用できません。")
-            return
-
-        dialog = WorkflowSearchDialog(self.api_client, self)
-        if dialog.exec():
-            selected_wf = dialog.get_selected_workflow()
-            if selected_wf and "id" in selected_wf:
-                workflow_id_widget = self.widgets_map.get("workflowId")
-                if isinstance(workflow_id_widget, QLineEdit):
-                    workflow_id_widget.setText(selected_wf["id"])
