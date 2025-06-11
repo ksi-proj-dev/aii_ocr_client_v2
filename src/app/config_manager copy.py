@@ -141,15 +141,27 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連するジョブ情報をDX Suiteサーバーから削除します。"}
         }
     },
-    {
+{
         "id": "dx_standard_v2",
         "name": "DX Suite (標準OCR V2)",
-        "base_uri": "http://localhost/dxsuite/api/v2/",
+        "base_uri": "https://{組織固有}.dx-suite.com/api/v2/",
         "flow_type": "dx_standard_v2_flow",
         "endpoints": {
-            "delete_ocr": "/delete"
+            "register_ocr": "/sort/units",
+            "send_to_ocr": "/units/{unitId}/ocr",
+            "get_ocr_status": "/units/{unitId}",
+            "get_ocr_result": "/units/{unitId}/results",
+            "delete_ocr": "/units/{unitId}"
         },
         "options_schema": {
+            "workflowId": {
+                "type": "string",  # int から string に変更
+                "default": "",
+                "label": "ワークフローID (DX Suite 標準):",
+                "placeholder": "例: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                "tooltip": "DX Suiteの管理画面で確認したワークフローID (UUID) を指定します。（必須）"
+            },
+            "unitName": {"type": "string", "default": "", "label": "読取ユニット名 (任意):", "placeholder": "例: 2025年6月分請求書", "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"},
             "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
             "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
@@ -158,39 +170,12 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
             "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "suffix": " 秒"},
             "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "suffix": " 回"},
-            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+            "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーから読取ユニットを削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連する読取ユニットをDX Suiteサーバーから削除します。"}
         }
     }
 ]
 
 class ConfigManager:
-    @staticmethod
-    def _load_model_definitions():
-        """model_definitions.json を読み込み、グローバル変数に格納する。"""
-        global MODEL_DEFINITIONS
-        if MODEL_DEFINITIONS: # 既に読み込み済みの場合は何もしない
-            return
-
-        try:
-            # スクリプト(または実行可能ファイル)からの相対パスでファイルを見つける
-            if getattr(sys, 'frozen', False):
-                base_path = os.path.dirname(sys.executable)
-            else:
-                base_path = os.path.dirname(os.path.abspath(__file__))
-            
-            definitions_path = os.path.join(base_path, MODEL_DEFINITIONS_FILE_NAME)
-            
-            if os.path.exists(definitions_path):
-                with open(definitions_path, 'r', encoding='utf-8') as f:
-                    MODEL_DEFINITIONS = json.load(f)
-                    print(f"モデル定義ファイルを読み込みました: {definitions_path}") # デバッグ用
-            else:
-                print(f"警告: モデル定義ファイルが見つかりません: {definitions_path}")
-                MODEL_DEFINITIONS = {}
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"エラー: モデル定義ファイルの読み込みに失敗しました。エラー: {e}")
-            MODEL_DEFINITIONS = {}
-
     @staticmethod
     def _ensure_config_dir_exists():
         if not CONFIG_PATH:
@@ -207,7 +192,7 @@ class ConfigManager:
 
     @staticmethod
     def load() -> Dict[str, Any]:
-        # ★★★ JSONファイルの読み込みロジックは不要になったため削除 ★★★
+        # ★★★ JSONファイルの読み込みロジックは不要になったため、loadメソッドはシンプルになります ★★★
         if not ConfigManager._ensure_config_dir_exists():
             return ConfigManager._get_default_config_structure()
 

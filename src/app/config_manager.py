@@ -141,21 +141,20 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連するジョブ情報をDX Suiteサーバーから削除します。"}
         }
     },
-{
+    {
         "id": "dx_standard_v2",
         "name": "DX Suite (標準OCR V2)",
-        "base_uri": "https://{組織固有}.dx-suite.com/api/v2/",
+        "base_uri": "https://{組織固有}.dx-suite.com/wf/api/standard/v2/",
         "flow_type": "dx_standard_v2_flow",
         "endpoints": {
-            "register_ocr": "/sort/units",
-            "send_to_ocr": "/units/{unitId}/ocr",
-            "get_ocr_status": "/units/{unitId}",
-            "get_ocr_result": "/units/{unitId}/results",
-            "delete_ocr": "/units/{unitId}"
+            "register_ocr": "/workflows/{workflowId}/units",
+            "get_ocr_status": "/units/status",
+            "get_ocr_result": "/units/dataItems",
+            "delete_ocr": "/units/{unitId}/delete"
         },
         "options_schema": {
             "workflowId": {
-                "type": "string",  # int から string に変更
+                "type": "string",
                 "default": "",
                 "label": "ワークフローID (DX Suite 標準):",
                 "placeholder": "例: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
