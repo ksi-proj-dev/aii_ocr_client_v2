@@ -259,6 +259,7 @@ class MainWindow(QMainWindow):
         self.update_timer.setSingleShot(True)
         self.update_timer.timeout.connect(self.perform_batch_list_view_update)
         self.input_folder_path = ""
+        self.sorting_file_indices = [] # ★★★ この行を追加 ★★★
 
     def _update_window_title(self):
         profile_name = "プロファイル未選択"
@@ -687,7 +688,6 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             sort_config_id = dialog.get_sort_config_id()
             
-            # ★★★ ここから確認ダイアログを追加 ★★★
             reply = QMessageBox.question(self, "仕分け実行の確認",
                                         f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
                                         f"仕分けルールID: {sort_config_id}\n\n"
@@ -696,11 +696,20 @@ class MainWindow(QMainWindow):
                                         QMessageBox.StandardButton.Ok)
 
             if reply == QMessageBox.StandardButton.Ok:
+                # ★★★ ここから修正 ★★★
+                self.sorting_file_indices = [] # リストを初期化
+                for i, file_info in enumerate(self.processed_files_info):
+                    if file_info.is_checked:
+                        self.sorting_file_indices.append(i) # インデックスを保存
+                        file_info.status = "仕分け中..." # ステータスを更新
+                        file_info.ocr_engine_status = OCR_STATUS_PROCESSING # 内部ステータスも更新
+                self.list_view.update_files(self.processed_files_info, is_running=True) # リストビューを更新
+
                 self.log_manager.info(f"仕分け処理を開始します。SortConfigID: {sort_config_id}", context="SORT_FLOW")
                 self.ocr_orchestrator.confirm_and_start_sort(files_to_process, sort_config_id, self.input_folder_path)
+                # ★★★ ここまで修正 ★★★
             else:
                 self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
-            # ★★★ ここまで修正 ★★★
 
     def on_download_csv_clicked(self):
         """CSVダウンロードボタンがクリックされたときの処理"""
@@ -991,7 +1000,17 @@ class MainWindow(QMainWindow):
     def on_sort_process_finished(self, success: bool, result_or_error: object):
         self.log_manager.info(f"MainWindow: Sort process finished. Success: {success}", context="SORT_FLOW_MAIN")
         self.is_ocr_running = False
-        # UI上のボタンを再度有効化
+        
+        # ★★★ ここから追加 ★★★
+        final_status_text = "仕分け完了" if success else "仕分け失敗"
+        for idx in self.sorting_file_indices:
+            if 0 <= idx < len(self.processed_files_info):
+                self.processed_files_info[idx].status = final_status_text
+                self.processed_files_info[idx].ocr_engine_status = OCR_STATUS_COMPLETED if success else OCR_STATUS_FAILED
+        self.list_view.update_files(self.processed_files_info, is_running=False)
+        self.sorting_file_indices = [] # 追跡リストをクリア
+        # ★★★ ここまで追加 ★★★
+
         self.update_ocr_controls()
         
         if success and isinstance(result_or_error, dict):
@@ -1004,4 +1023,3 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "処理エラー", msg)
         else:
             QMessageBox.warning(self, "処理終了", "仕分け処理が予期せず終了しました。")
-    # ★★★ ここまで追加 ★★★

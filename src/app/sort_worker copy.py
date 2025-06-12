@@ -54,7 +54,6 @@ class SortWorker(QThread):
             self.log_manager.info(f"仕分けユニット作成成功。sortUnitId: {sort_unit_id}", context="SORT_WORKER_INFO")
 
             # ステップB: 仕分け完了のポーリング
-            last_status_result = None # ★★★ 最後の成功したステータス結果を保持する変数を追加
             for attempt in range(DEFAULT_POLLING_MAX_ATTEMPTS):
                 if not self.is_running:
                     error_info = {"message": "処理がユーザーによって中断されました。", "code": "USER_INTERRUPT"}
@@ -70,33 +69,17 @@ class SortWorker(QThread):
                     self.sort_finished.emit(False, status_error)
                     return
                 
-                last_status_result = status_result # ★★★ 成功したレスポンスを保持
                 status_code = status_result.get("statusCode")
                 status_name = status_result.get("statusName", "")
                 self.log_manager.info(f"仕分けステータス: {status_code} ({status_name})", context="SORT_WORKER_POLL")
 
+                # API仕様書 P.47 より、60: 仕分け完了
                 if status_code == 60:
-                    self.log_manager.info("仕分け処理が正常に完了しました。OCR処理へ送信します...", context="SORT_WORKER_SUCCESS")
-                    
-                    self.sort_status_update.emit("OCR処理へ送信中...")
-                    send_result, send_error = self.api_client.send_sort_result_to_ocr(sort_unit_id)
-
-                    if send_error:
-                        self.log_manager.error(f"仕分け結果OCR送信APIエラー: {send_error}", context="SORT_WORKER_ERROR")
-                        self.sort_finished.emit(False, send_error)
-                        return
-                    
-                    self.log_manager.info("OCR処理への送信が正常に完了しました。", context="SORT_WORKER_SUCCESS")
-                    
-                    final_success_payload = {
-                        "message": "仕分けが完了し、OCR処理へ正常に送信されました。",
-                        "sortUnitId": sort_unit_id,
-                        "sendOcrResult": send_result,
-                        "statusName": last_status_result.get("statusName", "仕分け完了") # ★★★ 保持したステータス名をペイロードに追加
-                    }
-                    self.sort_finished.emit(True, final_success_payload)
+                    self.log_manager.info("仕分け処理が正常に完了しました。", context="SORT_WORKER_SUCCESS")
+                    self.sort_finished.emit(True, status_result)
                     return
                 
+                # エラーステータスをハンドリング (例: 35: ページ登録エラー, 55: 仕分けエラー)
                 if status_code in [35, 55]:
                     error_info = {"message": f"仕分け処理でエラーが発生しました: {status_name}", "code": f"SORT_API_ERROR_{status_code}"}
                     self.log_manager.error(f"仕分け処理APIエラー: {error_info}", context="SORT_WORKER_ERROR")
@@ -105,6 +88,7 @@ class SortWorker(QThread):
 
                 time.sleep(DEFAULT_POLLING_INTERVAL_SECONDS)
 
+            # タイムアウト処理
             timeout_error = {"message": "仕分け処理がタイムアウトしました。", "code": "SORT_TIMEOUT"}
             self.log_manager.error(f"仕分けタイムアウト: {timeout_error}", context="SORT_WORKER_ERROR")
             self.sort_finished.emit(False, timeout_error)
