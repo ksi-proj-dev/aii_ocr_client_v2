@@ -25,6 +25,7 @@ from api_client import OCRApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
+from ui_dialogs import OcrConfirmationDialog, SortConfigDialog
 
 from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -272,9 +273,13 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.ocr_process_finished_signal.connect(self._handle_ocr_process_finished_from_orchestrator)
             self.ocr_orchestrator.original_file_status_update_signal.connect(self.on_original_file_status_update_from_worker)
             self.ocr_orchestrator.file_ocr_processed_signal.connect(self.on_file_ocr_processed)
-            # ★★★ 新しいシグナルとスロットを接続 ★★★
             self.ocr_orchestrator.file_auto_csv_processed_signal.connect(self.on_file_auto_csv_processed)
             self.ocr_orchestrator.file_searchable_pdf_processed_signal.connect(self.on_file_searchable_pdf_processed)
+
+            # ★★★ 仕分け用シグナルの接続を追加 ★★★
+            self.ocr_orchestrator.sort_process_started_signal.connect(self.on_sort_process_started)
+            self.ocr_orchestrator.sort_process_finished_signal.connect(self.on_sort_process_finished)
+
             self.ocr_orchestrator.request_ui_controls_update_signal.connect(self.update_ocr_controls)
             self.ocr_orchestrator.request_list_view_update_signal.connect(self._handle_request_list_view_update)
 
@@ -399,12 +404,19 @@ class MainWindow(QMainWindow):
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
 
-        # ★★★ ここからアイコンの順序を変更 ★★★
         self.rescan_action = QAction("🔄再スキャン", self)
         self.rescan_action.triggered.connect(self.confirm_rescan_ui)
         toolbar.addAction(self.rescan_action)
 
-        toolbar.addSeparator() # セパレータを追加
+        toolbar.addSeparator()
+
+        # ★★★ ここから「仕分け実行」ボタンを追加 ★★★
+        self.start_sort_action = QAction("📊仕分け", self)
+        self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
+        self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
+        toolbar.addAction(self.start_sort_action)
+        toolbar.addSeparator()
+        # ★★★ ここまで追加 ★★★
 
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
@@ -659,6 +671,36 @@ class MainWindow(QMainWindow):
 
     def confirm_stop_ocr(self):
         if hasattr(self, 'ocr_orchestrator'): self.ocr_orchestrator.confirm_and_stop_ocr(self)
+
+    def on_start_sort_clicked(self):
+        """仕分け実行ボタンがクリックされたときの処理"""
+        if self.is_ocr_running:
+            QMessageBox.warning(self, "処理中", "現在別の処理が実行中です。")
+            return
+
+        files_to_process = [item for item in self.processed_files_info if item.is_checked]
+        if not files_to_process:
+            QMessageBox.information(self, "対象ファイルなし", "仕分け対象として選択（チェック）されているファイルがありません。")
+            return
+
+        dialog = SortConfigDialog(self)
+        if dialog.exec():
+            sort_config_id = dialog.get_sort_config_id()
+            
+            # ★★★ ここから確認ダイアログを追加 ★★★
+            reply = QMessageBox.question(self, "仕分け実行の確認",
+                                        f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
+                                        f"仕分けルールID: {sort_config_id}\n\n"
+                                        "よろしいですか？",
+                                        QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Ok)
+
+            if reply == QMessageBox.StandardButton.Ok:
+                self.log_manager.info(f"仕分け処理を開始します。SortConfigID: {sort_config_id}", context="SORT_FLOW")
+                self.ocr_orchestrator.confirm_and_start_sort(files_to_process, sort_config_id, self.input_folder_path)
+            else:
+                self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
+            # ★★★ ここまで修正 ★★★
 
     def on_download_csv_clicked(self):
         """CSVダウンロードボタンがクリックされたときの処理"""
@@ -936,3 +978,30 @@ class MainWindow(QMainWindow):
 
         if not self.update_timer.isActive():
             self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+
+    # ★★★ ここから仕分け処理用のスロットを追加 ★★★
+    def on_sort_process_started(self, message: str):
+        self.log_manager.info(f"MainWindow: Sort process started. Msg: {message}", context="SORT_FLOW_MAIN")
+        self.is_ocr_running = True
+        # UI上の他のボタンを無効化
+        self.update_ocr_controls()
+        # ★★★ 確認は移動したため、この行を削除またはコメントアウト ★★★
+        # QMessageBox.information(self, "仕分け処理開始", message)
+
+    def on_sort_process_finished(self, success: bool, result_or_error: object):
+        self.log_manager.info(f"MainWindow: Sort process finished. Success: {success}", context="SORT_FLOW_MAIN")
+        self.is_ocr_running = False
+        # UI上のボタンを再度有効化
+        self.update_ocr_controls()
+        
+        if success and isinstance(result_or_error, dict):
+            final_status = result_or_error.get('statusName', '不明')
+            msg = f"仕分け処理が正常に完了しました。\n\n最終ステータス: {final_status}"
+            QMessageBox.information(self, "処理完了", msg)
+        elif not success and isinstance(result_or_error, dict):
+            error_msg = result_or_error.get('message', '不明なエラー')
+            msg = f"仕分け処理中にエラーが発生しました。\n\n詳細: {error_msg}"
+            QMessageBox.critical(self, "処理エラー", msg)
+        else:
+            QMessageBox.warning(self, "処理終了", "仕分け処理が予期せず終了しました。")
+    # ★★★ ここまで追加 ★★★

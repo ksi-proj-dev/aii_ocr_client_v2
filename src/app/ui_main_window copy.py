@@ -272,6 +272,8 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.ocr_process_finished_signal.connect(self._handle_ocr_process_finished_from_orchestrator)
             self.ocr_orchestrator.original_file_status_update_signal.connect(self.on_original_file_status_update_from_worker)
             self.ocr_orchestrator.file_ocr_processed_signal.connect(self.on_file_ocr_processed)
+            # ★★★ 新しいシグナルとスロットを接続 ★★★
+            self.ocr_orchestrator.file_auto_csv_processed_signal.connect(self.on_file_auto_csv_processed)
             self.ocr_orchestrator.file_searchable_pdf_processed_signal.connect(self.on_file_searchable_pdf_processed)
             self.ocr_orchestrator.request_ui_controls_update_signal.connect(self.update_ocr_controls)
             self.ocr_orchestrator.request_list_view_update_signal.connect(self._handle_request_list_view_update)
@@ -324,6 +326,7 @@ class MainWindow(QMainWindow):
         self.summary_view.log_manager = self.log_manager
         self.list_view = ListView(self.processed_files_info)
         self.list_view.item_check_state_changed.connect(self.on_list_item_check_state_changed)
+        self.list_view.table.itemSelectionChanged.connect(self.update_ocr_controls) # ★★★ この行を追加 ★★★
         self.stack.addWidget(self.summary_view)
         self.stack.addWidget(self.list_view)
         self.splitter.addWidget(self.stack)
@@ -354,7 +357,7 @@ class MainWindow(QMainWindow):
             default_height = self.height() if self.height() > 100 else 700
             initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]
             if sum(initial_splitter_sizes) == 0 and default_height > 0 :
-                 initial_splitter_sizes = [200,100]
+                initial_splitter_sizes = [200,100]
             self.splitter.setSizes(initial_splitter_sizes)
         self.main_layout.addWidget(self.splitter)
 
@@ -395,8 +398,22 @@ class MainWindow(QMainWindow):
         self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
-        self.rescan_action = QAction("🔄再スキャン", self); self.rescan_action.triggered.connect(self.confirm_rescan_ui); toolbar.addAction(self.rescan_action)
+
+        # ★★★ ここからアイコンの順序を変更 ★★★
+        self.rescan_action = QAction("🔄再スキャン", self)
+        self.rescan_action.triggered.connect(self.confirm_rescan_ui)
+        toolbar.addAction(self.rescan_action)
+
+        toolbar.addSeparator() # セパレータを追加
+
+        self.download_csv_action = QAction("💾CSV", self)
+        self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
+        self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
+        toolbar.addAction(self.download_csv_action)
+        
         toolbar.addSeparator()
+        # ★★★ ここまで変更 ★★★
+
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
@@ -643,6 +660,49 @@ class MainWindow(QMainWindow):
     def confirm_stop_ocr(self):
         if hasattr(self, 'ocr_orchestrator'): self.ocr_orchestrator.confirm_and_stop_ocr(self)
 
+    def on_download_csv_clicked(self):
+        """CSVダウンロードボタンがクリックされたときの処理"""
+        if not hasattr(self, 'list_view') or not self.list_view.table.selectedItems():
+            return
+
+        selected_row = self.list_view.table.currentRow()
+        if not (0 <= selected_row < len(self.processed_files_info)):
+            return
+            
+        file_info = self.processed_files_info[selected_row]
+
+        # 念のため再度条件をチェック
+        if not (file_info.ocr_engine_status == OCR_STATUS_COMPLETED and file_info.job_id):
+            QMessageBox.information(self, "ダウンロード不可", "このファイルのCSVはダウンロードできません。\n（処理が完了していないか、ジョブIDがありません）")
+            return
+            
+        # ファイル保存ダイアログを開く
+        default_filename = f"{os.path.splitext(file_info.name)[0]}.csv"
+        save_path, _ = QFileDialog.getSaveFileName(self, "CSVを保存", os.path.join(self.input_folder_path, default_filename), "CSVファイル (*.csv)")
+
+        if not save_path:
+            self.log_manager.info("CSV保存がユーザーによってキャンセルされました。", context="CSV_DOWNLOAD")
+            return
+
+        # APIを呼び出してCSVデータを取得
+        self.log_manager.info(f"'{file_info.name}' のCSVダウンロードを開始します (Unit ID: {file_info.job_id})", context="CSV_DOWNLOAD")
+        csv_data, error = self.api_client.download_standard_csv(file_info.job_id)
+
+        if error:
+            self.log_manager.error(f"CSVダウンロードAPIエラー: {error}", context="CSV_DOWNLOAD")
+            QMessageBox.critical(self, "ダウンロード失敗", f"CSVのダウンロードに失敗しました。\n\nエラー: {error.get('message', '詳細不明')}")
+            return
+
+        # ファイルに書き込み
+        try:
+            with open(save_path, 'wb') as f:
+                f.write(csv_data)
+            self.log_manager.info(f"CSVを正常に保存しました: {save_path}", context="CSV_DOWNLOAD")
+            QMessageBox.information(self, "保存完了", f"CSVファイルを以下の場所に保存しました。\n\n{save_path}")
+        except IOError as e:
+            self.log_manager.error(f"CSVファイルの書き込みに失敗: {e}", context="CSV_DOWNLOAD")
+            QMessageBox.critical(self, "ファイル保存エラー", f"ファイルの書き込みに失敗しました。\n\nエラー: {e}")
+
     def on_original_file_status_update_from_worker(self, original_file_path, status_message):
         target_file_info = next((item for item in self.processed_files_info if item.path == original_file_path), None)
         if target_file_info:
@@ -654,42 +714,85 @@ class MainWindow(QMainWindow):
             if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
         else: self.log_manager.warning(f"Status update received for unknown file: {original_file_path}", context="UI_STATUS_UPDATE_WARN")
 
-    def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_status_for_original):
+    def on_file_ocr_processed(self, original_file_main_idx, original_file_path, ocr_result_data_for_original, ocr_error_info_for_original, json_save_status_for_original, job_id: Optional[str]):
         self.log_manager.debug(f"Original File OCR stage processed (MainWin): {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Success={not ocr_error_info_for_original}, JSON Status='{json_save_status_for_original}'", context="CALLBACK_OCR_ORIGINAL")
-        if not (0 <= original_file_main_idx < len(self.processed_files_info)): self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx}. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR"); return
+        if not (0 <= original_file_main_idx < len(self.processed_files_info)):
+            self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx}. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR")
+            return
+            
         target_file_info = self.processed_files_info[original_file_main_idx]
+
+        # ★★★ ここから修正 ★★★
+        # シグナルから直接渡されたjob_idを保存する
+        if job_id:
+            target_file_info.job_id = str(job_id)
+            self.log_manager.debug(f"Job ID '{job_id}' saved for file '{target_file_info.name}'.", context="JOB_ID_STORE")
+        # ★★★ ここまで修正 ★★★
+                
         if ocr_error_info_for_original and isinstance(ocr_error_info_for_original, dict):
-            target_file_info.status = "OCR失敗"; target_file_info.ocr_engine_status = OCR_STATUS_FAILED
-            err_msg = ocr_error_info_for_original.get('message', '不明なOCRエラー'); err_code = ocr_error_info_for_original.get('code', ''); err_detail = ocr_error_info_for_original.get('detail', '')
+            target_file_info.status = "OCR失敗"
+            target_file_info.ocr_engine_status = OCR_STATUS_FAILED
+            err_msg = ocr_error_info_for_original.get('message', '不明なOCRエラー')
+            err_code = ocr_error_info_for_original.get('code', '')
+            # (以降のコードは変更ありません)
+            err_detail = ocr_error_info_for_original.get('detail', '')
             target_file_info.ocr_result_summary = f"エラー: {err_msg}" + (f" (コード: {err_code})" if err_code else "")
             if err_code not in ["USER_INTERRUPT", "NOT_IMPLEMENTED_LIVE_API", "NOT_IMPLEMENTED_API_CALL", "FATAL_ERROR_STOP", "PART_PROCESSING_ERROR", "DXSUITE_REGISTER_HTTP_ERROR_NON_JSON", "DXSUITE_GETRESULT_HTTP_ERROR_NON_JSON", "DXSUITE_REGISTER_REQUEST_FAIL", "DXSUITE_GETRESULT_REQUEST_FAIL", "DXSUITE_REGISTER_UNEXPECTED_ERROR", "DXSUITE_GETRESULT_UNEXPECTED_ERROR", "DXSUITE_BASE_URI_NOT_CONFIGURED"] and not ("DXSUITE_API_" in err_code):
                  QMessageBox.warning(self, f"OCR処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のOCR処理中にエラーが発生しました。\n\nメッセージ: {err_msg}\nコード: {err_code}\n詳細: {err_detail if err_detail else 'N/A'}\n\nログファイルをご確認ください。")
         elif ocr_result_data_for_original:
-            target_file_info.status = "OCR成功"; target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED; fulltext = ""
+            target_file_info.status = "OCR成功"
+            target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED
+            fulltext = ""
             if isinstance(ocr_result_data_for_original, dict):
-                if ocr_result_data_for_original.get("status") == "ocr_registered": fulltext = f"(登録成功 Job ID: {ocr_result_data_for_original.get('job_id', 'N/A')})"; target_file_info.status = "OCR登録済 (結果待機中)"; target_file_info.ocr_engine_status = OCR_STATUS_PROCESSING
+                if ocr_result_data_for_original.get("status") == "ocr_registered":
+                    fulltext = f"(登録成功 Job ID: {target_file_info.job_id or 'N/A'})"
+                    target_file_info.status = "OCR登録済 (結果待機中)"
+                    target_file_info.ocr_engine_status = OCR_STATUS_PROCESSING
                 elif ocr_result_data_for_original.get("status") == "done":
-                    results_list = ocr_result_data_for_original.get("results", []); fulltext = " ".join(filter(None, [page.get("fulltext", "") for page in (results_list[0].get("pages") if results_list and isinstance(results_list, list) and results_list[0].get("pages") else [])])) if results_list else "結果解析エラー(DX Suite)"
-                elif "detail" in ocr_result_data_for_original: fulltext = ocr_result_data_for_original["detail"]
-                elif "message" in ocr_result_data_for_original: fulltext = ocr_result_data_for_original["message"]
-                else: fulltext_parts = [ocr_result_data_for_original.get("fulltext", ""), (ocr_result_data_for_original.get("result", {}) or {}).get("fulltext", ""), (ocr_result_data_for_original.get("result", {}) or {}).get("aGroupingFulltext", "")]; fulltext = " / ".join(filter(None, fulltext_parts))
+                    results_list = ocr_result_data_for_original.get("results", [])
+                    fulltext = " ".join(filter(None, [page.get("fulltext", "") for page in (results_list[0].get("pages") if results_list and isinstance(results_list, list) and results_list[0].get("pages") else [])])) if results_list else "結果解析エラー(DX Suite)"
+                elif "dataItems" in ocr_result_data_for_original:
+                    num_items = len(ocr_result_data_for_original.get("dataItems", []))
+                    fulltext = f"成功 ({num_items}項目)"
+                elif "detail" in ocr_result_data_for_original:
+                    fulltext = ocr_result_data_for_original["detail"]
+                elif "message" in ocr_result_data_for_original:
+                    fulltext = ocr_result_data_for_original["message"]
+                else:
+                    fulltext_parts = [ocr_result_data_for_original.get("fulltext", ""), (ocr_result_data_for_original.get("result", {}) or {}).get("fulltext", ""), (ocr_result_data_for_original.get("result", {}) or {}).get("aGroupingFulltext", "")]
+                    fulltext = " / ".join(filter(None, fulltext_parts))
             elif isinstance(ocr_result_data_for_original, list) and ocr_result_data_for_original:
-                try: first_page_res = ocr_result_data_for_original[0].get("result", {}); fulltext_parts = [first_page_res.get("fulltext", ""), first_page_res.get("aGroupingFulltext", "")]; fulltext = " / ".join(filter(None, fulltext_parts))
-                except Exception: fulltext = "結果解析エラー(集約)"
-            else: fulltext = "OCR結果あり(形式不明)"
+                try:
+                    first_page_res = ocr_result_data_for_original[0].get("result", {})
+                    fulltext_parts = [first_page_res.get("fulltext", ""), first_page_res.get("aGroupingFulltext", "")]
+                    fulltext = " / ".join(filter(None, fulltext_parts))
+                except Exception:
+                    fulltext = "結果解析エラー(集約)"
+            else:
+                fulltext = "OCR結果あり(形式不明)"
             target_file_info.ocr_result_summary = (fulltext[:50] + '...') if len(fulltext) > 50 else (fulltext or "(テキスト抽出なし)")
-        else: target_file_info.status = "OCR状態不明"; target_file_info.ocr_engine_status = OCR_STATUS_FAILED; target_file_info.ocr_result_summary = "APIレスポンスなし(OCR)"; QMessageBox.warning(self, f"OCR処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のOCR処理でAPIから有効な応答がありませんでした。")
-        if isinstance(json_save_status_for_original, str): target_file_info.json_status = json_save_status_for_original
-        elif ocr_error_info_for_original : target_file_info.json_status = "エラー(OCR失敗)"
+        else:
+            target_file_info.status = "OCR状態不明"
+            target_file_info.ocr_engine_status = OCR_STATUS_FAILED
+            target_file_info.ocr_result_summary = "APIレスポンスなし(OCR)"
+            QMessageBox.warning(self, f"OCR処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のOCR処理でAPIから有効な応答がありませんでした。")
+        
+        if isinstance(json_save_status_for_original, str):
+            target_file_info.json_status = json_save_status_for_original
+        elif ocr_error_info_for_original:
+            target_file_info.json_status = "エラー(OCR失敗)"
+            
         output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
         if output_format_cfg == "json_only":
             if target_file_info.ocr_engine_status == OCR_STATUS_COMPLETED:
                 if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=True)
                 target_file_info.status = "完了"
             elif target_file_info.ocr_engine_status == OCR_STATUS_FAILED:
-                 if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=False)
+                if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=False)
             self.update_status_bar()
-        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+            
+        if not self.update_timer.isActive():
+            self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
         self.log_manager.debug(f"Original File Searchable PDF processed: {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Path={pdf_final_path}, Error={pdf_error_info}", context="CALLBACK_PDF_ORIGINAL")
@@ -729,21 +832,58 @@ class MainWindow(QMainWindow):
         self.update_ocr_controls()
 
     def update_ocr_controls(self):
-        running = self.is_ocr_running; self.api_mode_toggle_button.setEnabled(not running) if hasattr(self, 'api_mode_toggle_button') else None
+        running = self.is_ocr_running
+        if hasattr(self, 'api_mode_toggle_button'):
+            self.api_mode_toggle_button.setEnabled(not running)
+
         can_start = not running and any(f.is_checked and f.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT for f in self.processed_files_info)
-        if hasattr(self, 'start_ocr_action'): self.start_ocr_action.setEnabled(can_start)
+        if hasattr(self, 'start_ocr_action'):
+            self.start_ocr_action.setEnabled(can_start)
+
         can_resume = False
         if not running and self.processed_files_info:
             eligible_resume = [f for f in self.processed_files_info if f.is_checked and f.ocr_engine_status in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and f.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT]
-            if eligible_resume and not all(f.ocr_engine_status == OCR_STATUS_NOT_PROCESSED for f in eligible_resume): can_resume = True
-        if hasattr(self, 'resume_ocr_action'): self.resume_ocr_action.setEnabled(can_resume)
-        if hasattr(self, 'stop_ocr_action'): self.stop_ocr_action.setEnabled(running)
+            if eligible_resume and not all(f.ocr_engine_status == OCR_STATUS_NOT_PROCESSED for f in eligible_resume):
+                can_resume = True
+        if hasattr(self, 'resume_ocr_action'):
+            self.resume_ocr_action.setEnabled(can_resume)
+
+        if hasattr(self, 'stop_ocr_action'):
+            self.stop_ocr_action.setEnabled(running)
+
         can_rescan = not running and (bool(self.processed_files_info) or bool(self.input_folder_path))
-        if hasattr(self, 'rescan_action'): self.rescan_action.setEnabled(can_rescan)
+        if hasattr(self, 'rescan_action'):
+            self.rescan_action.setEnabled(can_rescan)
+        
+        # ★★★ ここからロジックを修正 ★★★
+        # CSVダウンロードボタンの状態制御
+        can_download_csv = False
+        if not running and hasattr(self, 'list_view'):
+            # 「選択された行」のリストを取得する
+            selected_rows = self.list_view.table.selectionModel().selectedRows()
+            # 選択されている行が1つだけの場合に有効化を検討
+            if len(selected_rows) == 1:
+                selected_row_index = selected_rows[0].row()
+                if 0 <= selected_row_index < len(self.processed_files_info):
+                    file_info = self.processed_files_info[selected_row_index]
+                    # 完了済み、job_idがあり、現在のプロファイルがdx_standard_v2の場合のみ
+                    if (file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
+                        file_info.job_id and
+                        self.active_api_profile and
+                        self.active_api_profile.get('id') == 'dx_standard_v2'):
+                        can_download_csv = True
+        
+        if hasattr(self, 'download_csv_action'):
+            self.download_csv_action.setEnabled(can_download_csv)
+        # ★★★ ここまで修正 ★★★
+
         enable_others = not running
-        if hasattr(self, 'input_folder_action'): self.input_folder_action.setEnabled(enable_others)
-        if hasattr(self, 'option_action'): self.option_action.setEnabled(enable_others)
-        if hasattr(self, 'toggle_view_action') and not self.toggle_view_action.isEnabled(): self.toggle_view_action.setEnabled(True)
+        if hasattr(self, 'input_folder_action'):
+            self.input_folder_action.setEnabled(enable_others)
+        if hasattr(self, 'option_action'):
+            self.option_action.setEnabled(enable_others)
+        if hasattr(self, 'toggle_view_action') and not self.toggle_view_action.isEnabled():
+            self.toggle_view_action.setEnabled(True)
 
     def perform_batch_list_view_update(self):
         self.log_manager.debug(f"Performing batch ListView update for {len(self.processed_files_info)} items.", context="UI_UPDATE"); self.list_view.update_files(self.processed_files_info, self.is_ocr_running) if hasattr(self, 'list_view') else None; self.update_all_status_displays()
@@ -784,3 +924,15 @@ class MainWindow(QMainWindow):
     def clear_log_display(self):
         if hasattr(self, 'log_widget'): self.log_widget.clear()
         self.log_manager.info("画面ログをクリアしました（ファイル記録は継続）。", context="UI_ACTION_CLEAR_LOG", emit_to_ui=False)
+
+    def on_file_auto_csv_processed(self, original_file_main_idx, original_file_path, status_info):
+        self.log_manager.debug(f"Original File Auto CSV processed: {os.path.basename(original_file_path)}, Status: {status_info}", context="CALLBACK_CSV_ORIGINAL")
+        if not (0 <= original_file_main_idx < len(self.processed_files_info)):
+            return # エラーログは省略
+        
+        target_file_info = self.processed_files_info[original_file_main_idx]
+        if status_info and isinstance(status_info, dict):
+            target_file_info.auto_csv_status = status_info.get("message", "状態不明")
+
+        if not self.update_timer.isActive():
+            self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)

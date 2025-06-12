@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from typing import Optional, Dict, Any, List
 
 from ocr_worker import OcrWorker
+from sort_worker import SortWorker
 from log_manager import LogManager, LogLevel
 from api_client import OCRApiClient # ★変更箇所: CubeApiClient から OCRApiClient へ
 from ui_dialogs import OcrConfirmationDialog
@@ -25,12 +26,15 @@ from file_model import FileInfo
 class OcrOrchestrator(QObject):
     ocr_process_started_signal = pyqtSignal(int, list) # int: num_files_to_process, list: updated_file_list (List[FileInfo])
     ocr_process_finished_signal = pyqtSignal(bool, object) # bool: was_interrupted, object: fatal_error_info (Optional[Dict[str, Any]])
-    
     original_file_status_update_signal = pyqtSignal(str, str) # str: original_file_path, str: status_message
     file_ocr_processed_signal = pyqtSignal(int, str, object, object, object, object) # int: original_idx, str: path, object: ocr_result, object: ocr_error, object: json_status, object: job_id
     file_auto_csv_processed_signal = pyqtSignal(int, str, object)
     file_searchable_pdf_processed_signal = pyqtSignal(int, str, object, object)
-    
+
+    # ★★★ 仕分け用シグナルを追加 ★★★
+    sort_process_started_signal = pyqtSignal(str)
+    sort_process_finished_signal = pyqtSignal(bool, object)
+
     request_ui_controls_update_signal = pyqtSignal()
     request_list_view_update_signal = pyqtSignal(list) # list: updated_file_list (List[FileInfo])
 
@@ -40,13 +44,13 @@ class OcrOrchestrator(QObject):
         self.log_manager = log_manager
         self.config = config
         self.active_api_profile = api_profile 
-        self.thread_pool: List[OcrWorker] = []
         self.is_ocr_running = False
         self.user_stopped = False
         self.fatal_error_occurred_info: Optional[Dict[str, Any]] = None
         self.thread_lock = threading.Lock()
         self.input_root_folder = ""
         self.ocr_worker: Optional[OcrWorker] = None
+        self.sort_worker: Optional[SortWorker] = None # ★★★ sort_worker を保持する変数を追加 ★★★
 
         if not self.active_api_profile:
             self.log_manager.critical("OcrOrchestrator: APIプロファイルが提供されませんでした。処理は続行できません。", context="OCR_ORCH_INIT_ERROR")
@@ -423,40 +427,67 @@ class OcrOrchestrator(QObject):
 
 
     def confirm_and_stop_ocr(self, parent_widget_for_dialog):
-        self.log_manager.debug("OcrOrchestrator: Confirming OCR stop...", context="OCR_ORCH_FLOW_STOP")
-        worker_to_stop = self.ocr_worker
-        if worker_to_stop is not None and hasattr(worker_to_stop, 'isRunning') and worker_to_stop.isRunning():
-            reply = QMessageBox.question(parent_widget_for_dialog, "OCR中止確認", "OCR処理を中止しますか？",
+        self.log_manager.debug("OcrOrchestrator: Confirming process stop...", context="OCR_ORCH_FLOW_STOP")
+        # ★★★ OCRと仕分け、両方のワーカーを停止対象にする ★★★
+        worker_to_stop = self.ocr_worker if self.ocr_worker and self.ocr_worker.isRunning() else self.sort_worker
+        
+        if worker_to_stop is not None and worker_to_stop.isRunning():
+            reply = QMessageBox.question(parent_widget_for_dialog, "処理中止確認", "現在の処理を中止しますか？",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                         QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
-                self.log_manager.info("OcrOrchestrator: User confirmed OCR stop. Requesting worker to stop.", context="OCR_ORCH_FLOW_STOP")
+                self.log_manager.info("OcrOrchestrator: User confirmed process stop. Requesting worker to stop.", context="OCR_ORCH_FLOW_STOP")
                 if hasattr(worker_to_stop, 'stop'):
-                    worker_to_stop.stop() 
-                else:
-                    self.log_manager.warning(f"OcrOrchestrator: Worker object {id(worker_to_stop)} no longer has stop method (unexpected). Manually setting is_ocr_running to False.", context="OCR_ORCH_FLOW_STOP")
-                    self.is_ocr_running = False 
-                    self.ocr_process_finished_signal.emit(True, {"message": "ワーカーの停止メソッド呼び出しに失敗（内部エラー）", "code":"WORKER_STOP_METHOD_FAIL"}) 
-                    self.request_ui_controls_update_signal.emit()
+                    worker_to_stop.stop()
+                self.user_stopped = True
+                # UIの更新は各ワーカーの終了シグナルに任せる
             else:
-                self.log_manager.info("OcrOrchestrator: User cancelled OCR stop.", context="OCR_ORCH_FLOW_STOP")
-        else: 
-            current_worker_id = id(worker_to_stop) if worker_to_stop is not None else 'N/A'
-            is_running_attr = hasattr(worker_to_stop, 'isRunning')
-            is_actually_running = worker_to_stop.isRunning() if is_running_attr and worker_to_stop is not None else False
-            
-            current_worker_state_log = f"Worker instance is {'None' if worker_to_stop is None else 'Exists'}. "
-            if worker_to_stop is not None:
-                current_worker_state_log += f"Has isRunning: {is_running_attr}. Is actually running: {is_actually_running}."
-
-            self.log_manager.debug(f"OcrOrchestrator: Stop OCR requested, but OCR worker state is not suitable for stop. Details: {current_worker_state_log} Worker ID: {current_worker_id}", context="OCR_ORCH_FLOW_STOP")
-
+                self.log_manager.info("OcrOrchestrator: User cancelled process stop.", context="OCR_ORCH_FLOW_STOP")
+        else:
             if self.is_ocr_running:
-                self.log_manager.warning(f"OcrOrchestrator: is_ocr_running was True but worker state suggests it's not active. Resetting orchestrator state.", context="OCR_ORCH_STATE_MISMATCH")
+                self.log_manager.warning(f"OcrOrchestrator: is_ocr_running was True but no active worker found. Resetting state.", context="OCR_ORCH_STATE_MISMATCH")
                 self.is_ocr_running = False
-                self.ocr_process_finished_signal.emit(True, self.fatal_error_occurred_info if self.fatal_error_occurred_info else {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
-            
-            self.request_ui_controls_update_signal.emit() 
+                # 状態の不整合があった場合、手動で終了シグナルを出す
+                self.ocr_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
+                self.sort_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
+            self.request_ui_controls_update_signal.emit()
+
+    # ★★★ ここから仕分け処理用のメソッドを新しく追加 ★★★
+    def confirm_and_start_sort(self, processed_files_info: List[FileInfo], sort_config_id: str, input_folder_path: str):
+        self.log_manager.debug("OcrOrchestrator: Starting sort process...", context="SORT_ORCH_FLOW")
+        self.is_ocr_running = True # is_ocr_running を汎用的な「処理中フラグ」として使う
+        self.user_stopped = False
+        self.request_ui_controls_update_signal.emit()
+
+        file_paths_to_sort = [f.path for f in processed_files_info if f.is_checked]
+
+        self.sort_worker = SortWorker(
+            api_client=self.api_client,
+            file_paths=file_paths_to_sort,
+            sort_config_id=sort_config_id,
+            log_manager=self.log_manager
+        )
+
+        # SortWorkerからのシグナルを処理するスロットに接続
+        self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update)
+        self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
+        
+        # 処理開始をUIに通知
+        self.sort_process_started_signal.emit(f"{len(file_paths_to_sort)}件のファイルで仕分け処理を開始します...")
+        self.sort_worker.start()
+
+    def _handle_sort_worker_status_update(self, message: str):
+        # 現状はログに出すだけだが、将来的にUIのステータスバーなどに表示できる
+        self.log_manager.info(message, context="SORT_STATUS_UPDATE")
+
+    def _handle_sort_worker_finished(self, success: bool, result_or_error: object):
+        self.log_manager.info(f"Orchestrator: Sort worker finished. Success: {success}", context="SORT_ORCH_FLOW")
+        self.is_ocr_running = False
+        self.sort_worker = None
+        
+        # 終了をUIに通知
+        self.sort_process_finished_signal.emit(success, result_or_error)
+        self.request_ui_controls_update_signal.emit()
 
     def get_is_ocr_running(self) -> bool:
         return self.is_ocr_running

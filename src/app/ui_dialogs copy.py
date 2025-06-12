@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QPushButton, QDialogButtonBox, QCheckBox,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from typing import List, Dict, Optional, Any
 
 class OcrConfirmationDialog(QDialog):
@@ -105,23 +105,20 @@ class WorkflowSearchDialog(QDialog):
         
         self.api_client = api_client
         self.selected_workflow: Optional[Dict[str, str]] = None
+        self.all_workflows_cache: List[Dict[str, str]] = []
 
         # --- UI要素の作成 ---
         main_layout = QVBoxLayout(self)
 
-        # 検索ボックス
         search_layout = QHBoxLayout()
-        # ★★★ 修正箇所 ★★★
-        search_layout.addWidget(QLabel("ワークフロー名 (完全一致):"))
+        search_layout.addWidget(QLabel("ワークフロー名 (部分一致):"))
         self.search_box = QLineEdit()
-        # ★★★ ここまで修正 ★★★
         self.search_box.setPlaceholderText("検索したいワークフロー名を入力...")
         search_layout.addWidget(self.search_box)
-        self.search_button = QPushButton("検索")
+        self.search_button = QPushButton("再検索")
         search_layout.addWidget(self.search_button)
         main_layout.addLayout(search_layout)
 
-        # 結果表示テーブル
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(2)
         self.results_table.setHorizontalHeaderLabels(["ワークフロー名", "ワークフローID"])
@@ -130,59 +127,84 @@ class WorkflowSearchDialog(QDialog):
         self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.results_table.setAlternatingRowColors(True)
+        self.results_table.setStyleSheet("""
+            QHeaderView::section { 
+                background-color: #f0f0f0;
+                padding: 4px;
+                border: 1px solid #d0d0d0;
+            }
+        """)
         main_layout.addWidget(self.results_table)
         
-        # OK/キャンセルボタン
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.ok_button = self.button_box.button(QDialogButtonBox.StandardButton.Ok)
-        self.ok_button.setText("選択")
-        self.ok_button.setEnabled(False) # 初期状態では無効
+        # --- ボタンボックスの修正 ---
+        self.button_box = QDialogButtonBox()
+        self.ok_button = self.button_box.addButton("選択", QDialogButtonBox.ButtonRole.AcceptRole)
+        # ★★★ 「選択をクリア」ボタンを追加 ★★★
+        self.clear_button = self.button_box.addButton("選択をクリア", QDialogButtonBox.ButtonRole.ResetRole)
+        self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
+
+        self.ok_button.setEnabled(False)
+        self.clear_button.setEnabled(False) # ★★★ クリアボタンも初期状態は無効 ★★★
+        
         main_layout.addWidget(self.button_box)
 
         # --- シグナル接続 ---
-        self.search_button.clicked.connect(self.perform_search)
-        self.search_box.returnPressed.connect(self.perform_search)
+        self.search_button.clicked.connect(self.fetch_all_workflows)
+        self.search_box.textChanged.connect(self.filter_and_display_workflows)
         self.results_table.itemSelectionChanged.connect(self.on_selection_changed)
         self.results_table.itemDoubleClicked.connect(self.accept_selection)
         self.button_box.accepted.connect(self.accept_selection)
         self.button_box.rejected.connect(self.reject)
-
-    def perform_search(self):
-        """検索ボタンが押されたときの処理"""
-        search_term = self.search_box.text().strip()
-        self.results_table.setRowCount(0)
-        self.ok_button.setEnabled(False)
+        self.clear_button.clicked.connect(self.clear_selection) # ★★★ クリアボタンのシグナルを接続 ★★★
         
-        # APIクライアントを使ってワークフローを検索
-        results, error = self.api_client.search_workflows(workflow_name=search_term if search_term else None)
+        QTimer.singleShot(50, self.fetch_all_workflows)
+
+    def fetch_all_workflows(self):
+        """APIから全ワークフローリストを取得し、キャッシュする"""
+        results, error = self.api_client.search_workflows(workflow_name=None)
 
         if error:
-            QMessageBox.critical(self, "APIエラー", f"ワークフローの検索に失敗しました。\n\n{error.get('message', '詳細不明')}")
-            return
+            QMessageBox.critical(self, "APIエラー", f"ワークフローの全件取得に失敗しました。\n\n{error.get('message', '詳細不明')}")
+            self.all_workflows_cache = []
+        else:
+            self.all_workflows_cache = results.get("workflows", [])
         
-        # API仕様書P.11のレスポンス形式 `{"workflows": [...]}` を想定 
-        workflows = results.get("workflows", [])
-        if not workflows:
-            QMessageBox.information(self, "検索結果", "該当するワークフローが見つかりませんでした。")
+        self.filter_and_display_workflows()
+
+    def filter_and_display_workflows(self):
+        """キャッシュされたリストを検索語句でフィルタリングして表示する"""
+        search_term = self.search_box.text().strip().lower()
+        self.results_table.setRowCount(0)
+        self.ok_button.setEnabled(False)
+        self.clear_button.setEnabled(False) # ★★★ 検索時もクリアボタンを無効化 ★★★
+
+        if not self.all_workflows_cache:
             return
             
-        self.results_table.setRowCount(len(workflows))
-        for row, wf in enumerate(workflows):
-            # ★★★ 修正箇所１ ★★★
-            # API仕様書P.11の表に従い、IDのキーを "workflowId" から "id" に変更
+        workflows_to_display = []
+        if search_term:
+            for wf in self.all_workflows_cache:
+                if search_term in wf.get("name", "").lower():
+                    workflows_to_display.append(wf)
+        else:
+            workflows_to_display = self.all_workflows_cache
+
+        if not workflows_to_display and search_term:
+            pass
+        
+        self.results_table.setRowCount(len(workflows_to_display))
+        for row, wf in enumerate(workflows_to_display):
             name_item = QTableWidgetItem(wf.get("name", "名前なし"))
             id_item = QTableWidgetItem(wf.get("id", "IDなし"))
-            
-            # ★★★ 修正箇所２ ★★★
-            # テーブルアイテムに保持するデータも "id" を使用
             name_item.setData(Qt.ItemDataRole.UserRole, {"id": wf.get("id"), "name": wf.get("name")})
-            
             self.results_table.setItem(row, 0, name_item)
             self.results_table.setItem(row, 1, id_item)
 
     def on_selection_changed(self):
         """テーブルの選択状態が変わったときの処理"""
-        self.ok_button.setEnabled(len(self.results_table.selectedItems()) > 0)
+        is_something_selected = len(self.results_table.selectedItems()) > 0
+        self.ok_button.setEnabled(is_something_selected)
+        self.clear_button.setEnabled(is_something_selected) # ★★★ 選択状態に応じてクリアボタンも有効/無効化 ★★★
 
     def accept_selection(self):
         """OKボタンが押された、またはダブルクリックされたときの処理"""
@@ -190,10 +212,15 @@ class WorkflowSearchDialog(QDialog):
         if not selected_items:
             return
             
-        # 選択された行の最初のアイテムからデータを取得
-        first_item = selected_items[0]
+        first_item = self.results_table.item(self.results_table.currentRow(), 0)
         self.selected_workflow = first_item.data(Qt.ItemDataRole.UserRole)
         self.accept()
+        
+    # ★★★ 新しいメソッドを追加 ★★★
+    def clear_selection(self):
+        """「選択をクリア」ボタンが押されたときの処理"""
+        self.results_table.clearSelection()
+        self.selected_workflow = None
 
     def get_selected_workflow(self) -> Optional[Dict[str, str]]:
         """選択されたワークフロー情報を返す"""

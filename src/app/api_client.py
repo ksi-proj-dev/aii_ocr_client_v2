@@ -9,7 +9,7 @@ import requests
 from log_manager import LogLevel
 from PyPDF2 import PdfWriter
 import io
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 
 from config_manager import ConfigManager
 
@@ -736,3 +736,67 @@ class OCRApiClient:
             return None, {"message": err_msg, "code": "DXSUITE_CSV_HTTP_ERROR", "detail": detail_text}
         except Exception as e:
             return None, {"message": f"DX Suite CSVダウンロードで予期せぬエラー: {e}", "code": "DXSUITE_CSV_UNEXPECTED_ERROR", "detail": str(e)}
+
+    def add_sort_unit(self, file_paths: List[str], sort_config_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIで仕分けユニットを追加（作成）する (API仕様書 P.33)"""
+        log_ctx_prefix = "API_DX_SORTER_ADD"
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (Add Sort Unit)", context=log_ctx_prefix)
+
+        # この機能はLiveモード専用と想定
+        if self.api_execution_mode == "demo":
+            dummy_sort_unit_id = f"demo-sort-unit-{random.randint(100000, 999999)}"
+            return {"sortUnitId": dummy_sort_unit_id, "runSorting": True}, None
+
+        # Liveモード
+        base_uri = self._get_full_url("register_ocr").split('/workflows/')[0]
+        url = f"{base_uri}/sorter/add"
+
+        if not self.api_key: return None, {"message": "APIキーが設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        data_payload = {
+            "sortConfigId": sort_config_id,
+            "runSorting": "true" # 仕分けユニット作成と同時に仕分け処理も開始する
+        }
+        
+        files_payload = []
+        try:
+            for path in file_paths:
+                files_payload.append(('files', (os.path.basename(path), open(path, 'rb'), 'application/octet-stream')))
+            
+            response = requests.post(url, headers=headers, data=data_payload, files=files_payload, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            return response.json(), None
+        except Exception as e:
+            return None, {"message": f"仕分けユニット追加APIでエラー: {e}", "code": "SORTER_ADD_FAIL", "detail": str(e)}
+        finally:
+            # 開いたファイルをクローズ
+            for _, (_, f_obj, _) in files_payload:
+                if f_obj:
+                    f_obj.close()
+
+    def get_sort_unit_status(self, sort_unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIで仕分けユニットの状態を取得する (API仕様書 P.40)"""
+        log_ctx_prefix = "API_DX_SORTER_STATUS"
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        
+        if self.api_execution_mode == "demo":
+            # Demoでは常に完了ステータスを返す
+            return {"statusCode": 60, "statusName": "仕分け完了"}, None
+
+        # Liveモード
+        base_uri = self._get_full_url("register_ocr").split('/workflows/')[0]
+        url = f"{base_uri}/sorter/status"
+
+        if not self.api_key: return None, {"message": "APIキーが設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        data_payload = {"sortUnitId": sort_unit_id} # P.40ではmultipart/form-data
+        
+        try:
+            response = requests.post(url, headers=headers, data=data_payload, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            return response.json(), None
+        except Exception as e:
+            return None, {"message": f"仕分けユニット状態取得APIでエラー: {e}", "code": "SORTER_STATUS_FAIL", "detail": str(e)}
