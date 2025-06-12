@@ -2,15 +2,15 @@
 
 import os
 import csv
-import threading
+import threading # ★ threading をインポート
 from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+from PyQt6.QtCore import QObject, pyqtSignal
 from typing import Optional, Dict, Any, List
 
 from ocr_worker import OcrWorker
 from sort_worker import SortWorker
 from log_manager import LogManager, LogLevel
-from api_client import OCRApiClient
+from api_client import OCRApiClient # ★変更箇所: CubeApiClient から OCRApiClient へ
 from ui_dialogs import OcrConfirmationDialog
 from config_manager import ConfigManager
 from file_model import FileInfo
@@ -21,22 +21,22 @@ from app_constants import (
     OCR_STATUS_FAILED, OCR_STATUS_SKIPPED_SIZE_LIMIT, OCR_STATUS_SPLITTING,
     OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING
 )
+from file_model import FileInfo
 
 class OcrOrchestrator(QObject):
-    # OCR用シグナル
-    ocr_process_started_signal = pyqtSignal(int, list)
-    ocr_process_finished_signal = pyqtSignal(bool, object)
-    original_file_status_update_signal = pyqtSignal(str, str)
-    file_ocr_processed_signal = pyqtSignal(int, str, object, object, object, object)
+    ocr_process_started_signal = pyqtSignal(int, list) # int: num_files_to_process, list: updated_file_list (List[FileInfo])
+    ocr_process_finished_signal = pyqtSignal(bool, object) # bool: was_interrupted, object: fatal_error_info (Optional[Dict[str, Any]])
+    original_file_status_update_signal = pyqtSignal(str, str) # str: original_file_path, str: status_message
+    file_ocr_processed_signal = pyqtSignal(int, str, object, object, object, object) # int: original_idx, str: path, object: ocr_result, object: ocr_error, object: json_status, object: job_id
     file_auto_csv_processed_signal = pyqtSignal(int, str, object)
     file_searchable_pdf_processed_signal = pyqtSignal(int, str, object, object)
-    
-    # 仕分け用シグナル
+
+    # ★★★ 仕分け用シグナルを追加 ★★★
     sort_process_started_signal = pyqtSignal(str)
     sort_process_finished_signal = pyqtSignal(bool, object)
 
     request_ui_controls_update_signal = pyqtSignal()
-    request_list_view_update_signal = pyqtSignal(list)
+    request_list_view_update_signal = pyqtSignal(list) # list: updated_file_list (List[FileInfo])
 
     def __init__(self, api_client: OCRApiClient, log_manager: LogManager, config: Dict[str, Any], api_profile: Optional[Dict[str, Any]]):
         super().__init__()
@@ -44,13 +44,13 @@ class OcrOrchestrator(QObject):
         self.log_manager = log_manager
         self.config = config
         self.active_api_profile = api_profile 
-        self.is_ocr_running = False # OCR or Sort
+        self.is_ocr_running = False
         self.user_stopped = False
         self.fatal_error_occurred_info: Optional[Dict[str, Any]] = None
         self.thread_lock = threading.Lock()
         self.input_root_folder = ""
         self.ocr_worker: Optional[OcrWorker] = None
-        self.sort_worker: Optional[SortWorker] = None
+        self.sort_worker: Optional[SortWorker] = None # ★★★ sort_worker を保持する変数を追加 ★★★
 
         if not self.active_api_profile:
             self.log_manager.critical("OcrOrchestrator: APIプロファイルが提供されませんでした。処理は続行できません。", context="OCR_ORCH_INIT_ERROR")
@@ -60,7 +60,8 @@ class OcrOrchestrator(QObject):
             return "エラー: APIプロファイルがアクティブではありません。設定を確認してください。"
 
         active_options_values = ConfigManager.get_active_api_options_values(self.config)
-        if active_options_values is None: active_options_values = {} 
+        if active_options_values is None:
+            active_options_values = {} 
 
         file_actions_cfg = self.config.get("file_actions", {})
         
@@ -149,18 +150,25 @@ class OcrOrchestrator(QObject):
         if not has_specific_ocr_options:
             summary_lines.append(" (このAPIプロファイルに固有の主要OCRオプションはありません)")
 
+
         summary_lines.append("<br>上記内容で処理を開始します。")
-        return "<br>".join(summary_lines)
+        return "<br>".join([line.replace("  <small>", "&nbsp;&nbsp;<small>").replace("    <small>", "&nbsp;&nbsp;&nbsp;&nbsp;<small>") for line in summary_lines])
 
     def _prepare_and_start_ocr_worker(self, files_to_send_to_worker_tuples: List[tuple], input_folder_path: str):
         self.log_manager.info(f"OcrOrchestrator: Instantiating OcrWorker for {len(files_to_send_to_worker_tuples)} files.", context="OCR_ORCH_WORKER_INIT")
         self.fatal_error_occurred_info = None
         
-        if not self.api_client or not self.active_api_profile:
-            error_msg = "APIクライアントまたはプロファイルが未設定です。"
-            self.log_manager.error(f"OcrOrchestrator: {error_msg} Cannot start OCR worker.", context="OCR_ORCH_ERROR")
+        if not self.api_client:
+            self.log_manager.error("OcrOrchestrator: ApiClient is not configured. Cannot start OCR worker.", context="OCR_ORCH_ERROR", error_code="NO_API_CLIENT")
             self.is_ocr_running = False
-            self.ocr_process_finished_signal.emit(True, {"message": error_msg, "code": "ORCH_CONFIG_ERROR"})
+            self.ocr_process_finished_signal.emit(True, {"message": "APIクライアント未設定", "code": "NO_API_CLIENT"})
+            self.request_ui_controls_update_signal.emit()
+            return
+
+        if not self.active_api_profile: 
+            self.log_manager.error("OcrOrchestrator: Active API profile is not set. Cannot start OCR worker.", context="OCR_ORCH_ERROR", error_code="NO_ACTIVE_API_PROFILE")
+            self.is_ocr_running = False
+            self.ocr_process_finished_signal.emit(True, {"message": "アクティブなAPIプロファイルが未設定です。", "code": "NO_ACTIVE_API_PROFILE"})
             self.request_ui_controls_update_signal.emit()
             return
 
@@ -172,9 +180,9 @@ class OcrOrchestrator(QObject):
             config=self.config, 
             api_profile=self.active_api_profile 
         )
-        self.ocr_worker.original_file_status_update.connect(self.original_file_status_update_signal)
+        self.ocr_worker.original_file_status_update.connect(self._handle_worker_status_update)
         self.ocr_worker.file_processed.connect(self._handle_worker_file_ocr_processed)
-        self.ocr_worker.auto_csv_processed.connect(self.file_auto_csv_processed_signal)
+        self.ocr_worker.auto_csv_processed.connect(self._handle_worker_auto_csv_processed)
         self.ocr_worker.searchable_pdf_processed.connect(self._handle_worker_searchable_pdf_processed)
         self.ocr_worker.all_files_processed.connect(self._handle_worker_all_files_processed)
 
@@ -182,7 +190,7 @@ class OcrOrchestrator(QObject):
             self.ocr_worker.start()
             self.is_ocr_running = True
         except Exception as e_start_worker:
-            self.log_manager.error(f"OcrOrchestrator: Failed to start OcrWorker thread: {e_start_worker}", context="OCR_ORCH_WORKER_ERROR", exc_info=True)
+            self.log_manager.error(f"OcrOrchestrator: Failed to start OcrWorker thread: {e_start_worker}", context="OCR_ORCH_WORKER_ERROR", exc_info=True, error_code="WORKER_START_FAIL")
             self.is_ocr_running = False
             self.ocr_worker = None
             self.ocr_process_finished_signal.emit(True, {"message": f"ワーカー起動失敗: {e_start_worker}", "code": "WORKER_START_FAIL"})
@@ -194,8 +202,10 @@ class OcrOrchestrator(QObject):
     def _handle_worker_auto_csv_processed(self, original_idx: int, path: str, status_info: Any):
         self.file_auto_csv_processed_signal.emit(original_idx, path, status_info)
 
+    # ★★★ メソッドの定義とemit呼び出しを修正 ★★★
     def _handle_worker_file_ocr_processed(self, original_idx: int, path: str, ocr_result: Any, ocr_error: Any, json_status: Any, job_id: Any):
-        if ocr_error and isinstance(ocr_error, dict) and ocr_error.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API"]:
+        if ocr_error and isinstance(ocr_error, dict) and \
+            ocr_error.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API"]:
             self.fatal_error_occurred_info = ocr_error
             self.log_manager.error(f"OcrOrchestrator: Fatal OCR error detected: {ocr_error.get('message')}. Worker will stop.", context="OCR_ORCH_FATAL_ERROR", error_code=ocr_error.get("code"))
         
@@ -203,19 +213,28 @@ class OcrOrchestrator(QObject):
         self.request_ui_controls_update_signal.emit()
 
     def _handle_worker_searchable_pdf_processed(self, original_idx: int, path: str, pdf_final_path: Any, pdf_error_info: Any):
-        if pdf_error_info and isinstance(pdf_error_info, dict) and pdf_error_info.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_LIVE_API_PDF"]:
+        if pdf_error_info and isinstance(pdf_error_info, dict) and \
+            pdf_error_info.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_LIVE_API_PDF"]:
             self.fatal_error_occurred_info = pdf_error_info
             self.log_manager.error(f"OcrOrchestrator: Fatal PDF error detected: {pdf_error_info.get('message')}. Worker will stop.", context="OCR_ORCH_FATAL_ERROR", error_code=pdf_error_info.get("code"))
+
         self.file_searchable_pdf_processed_signal.emit(original_idx, path, pdf_final_path, pdf_error_info)
 
     def _handle_worker_all_files_processed(self):
-        self.log_manager.info("Orchestrator: 全てのOCRワーカー処理が完了しました。", context="OCR_FLOW_ORCH")
+        self.log_manager.info("Orchestrator: 全てのワーカー処理が完了しました。", context="OCR_FLOW_ORCH")
         
-        final_fatal_error_info = self.fatal_error_occurred_info
-        was_interrupted_by_user = self.user_stopped
+        final_fatal_error_info = None
+        was_interrupted_by_user = False
+        with self.thread_lock:
+            self.thread_pool.clear()
+            if self.fatal_error_occurred_info:
+                final_fatal_error_info = self.fatal_error_occurred_info
+            
+            was_interrupted_by_user = self.user_stopped
         
         if self.is_ocr_running:
             self.is_ocr_running = False
+            # ★★★ ここにあったCSVエクスポートの呼び出しを削除 ★★★
             self.ocr_process_finished_signal.emit(was_interrupted_by_user or bool(final_fatal_error_info), final_fatal_error_info)
         
         self.request_ui_controls_update_signal.emit()
@@ -409,9 +428,10 @@ class OcrOrchestrator(QObject):
 
     def confirm_and_stop_ocr(self, parent_widget_for_dialog):
         self.log_manager.debug("OcrOrchestrator: Confirming process stop...", context="OCR_ORCH_FLOW_STOP")
+        # ★★★ OCRと仕分け、両方のワーカーを停止対象にする ★★★
         worker_to_stop = self.ocr_worker if self.ocr_worker and self.ocr_worker.isRunning() else self.sort_worker
         
-        if worker_to_stop and worker_to_stop.isRunning():
+        if worker_to_stop is not None and worker_to_stop.isRunning():
             reply = QMessageBox.question(parent_widget_for_dialog, "処理中止確認", "現在の処理を中止しますか？",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                         QMessageBox.StandardButton.No)
@@ -420,19 +440,22 @@ class OcrOrchestrator(QObject):
                 if hasattr(worker_to_stop, 'stop'):
                     worker_to_stop.stop()
                 self.user_stopped = True
+                # UIの更新は各ワーカーの終了シグナルに任せる
             else:
                 self.log_manager.info("OcrOrchestrator: User cancelled process stop.", context="OCR_ORCH_FLOW_STOP")
         else:
             if self.is_ocr_running:
                 self.log_manager.warning(f"OcrOrchestrator: is_ocr_running was True but no active worker found. Resetting state.", context="OCR_ORCH_STATE_MISMATCH")
                 self.is_ocr_running = False
+                # 状態の不整合があった場合、手動で終了シグナルを出す
                 self.ocr_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
                 self.sort_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
             self.request_ui_controls_update_signal.emit()
 
+    # ★★★ ここから仕分け処理用のメソッドを新しく追加 ★★★
     def confirm_and_start_sort(self, processed_files_info: List[FileInfo], sort_config_id: str, input_folder_path: str):
         self.log_manager.debug("OcrOrchestrator: Starting sort process...", context="SORT_ORCH_FLOW")
-        self.is_ocr_running = True
+        self.is_ocr_running = True # is_ocr_running を汎用的な「処理中フラグ」として使う
         self.user_stopped = False
         self.request_ui_controls_update_signal.emit()
 
@@ -442,17 +465,19 @@ class OcrOrchestrator(QObject):
             api_client=self.api_client,
             file_paths=file_paths_to_sort,
             sort_config_id=sort_config_id,
-            log_manager=self.log_manager,
-            input_root_folder=input_folder_path,
-            config=self.config # ★★★ この行を追加 ★★★
+            log_manager=self.log_manager
         )
+
+        # SortWorkerからのシグナルを処理するスロットに接続
         self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update)
         self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
         
+        # 処理開始をUIに通知
         self.sort_process_started_signal.emit(f"{len(file_paths_to_sort)}件のファイルで仕分け処理を開始します...")
         self.sort_worker.start()
 
     def _handle_sort_worker_status_update(self, message: str):
+        # 現状はログに出すだけだが、将来的にUIのステータスバーなどに表示できる
         self.log_manager.info(message, context="SORT_STATUS_UPDATE")
 
     def _handle_sort_worker_finished(self, success: bool, result_or_error: object):
@@ -460,6 +485,7 @@ class OcrOrchestrator(QObject):
         self.is_ocr_running = False
         self.sort_worker = None
         
+        # 終了をUIに通知
         self.sort_process_finished_signal.emit(success, result_or_error)
         self.request_ui_controls_update_signal.emit()
 

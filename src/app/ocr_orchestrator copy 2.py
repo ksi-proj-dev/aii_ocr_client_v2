@@ -442,9 +442,7 @@ class OcrOrchestrator(QObject):
             api_client=self.api_client,
             file_paths=file_paths_to_sort,
             sort_config_id=sort_config_id,
-            log_manager=self.log_manager,
-            input_root_folder=input_folder_path,
-            config=self.config # ★★★ この行を追加 ★★★
+            log_manager=self.log_manager
         )
         self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update)
         self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
