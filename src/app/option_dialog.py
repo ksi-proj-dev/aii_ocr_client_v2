@@ -16,15 +16,15 @@ from ui_dialogs import ClassSelectionDialog, WorkflowSearchDialog # ★ Workflow
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
 class OptionDialog(QDialog):
-    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, api_profile: Optional[Dict[str, Any]], api_client: Any, parent=None): # ★ api_client 引数を追加
+    def __init__(self, options_schema: dict, current_option_values: dict, global_config: dict, api_profile: Optional[Dict[str, Any]], api_client: Any, parent=None):
         super().__init__(parent)
         self.setWindowTitle("オプション設定")
 
         self.options_schema = options_schema
         self.current_option_values = current_option_values if current_option_values else {}
         self.global_config = global_config
-        self.api_profile = api_profile # ★★★ 受け取ったプロファイル情報を保持 ★★★
-        self.api_client = api_client # ★ api_client を保持
+        self.api_profile = api_profile
+        self.api_client = api_client
 
         self.widgets_map = {}
         self.saved_settings = (None, None)
@@ -32,10 +32,44 @@ class OptionDialog(QDialog):
         self.init_ui()
         self.resize(550, 900)
 
+        # init_ui の後にプロファイル別のUI制御を追加
+        is_dx_standard = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
+        
+        self.output_format_widget.setVisible(not is_dx_standard)
+        self.dx_standard_output_widget.setVisible(is_dx_standard)
+
+        # dx_atypical の場合の制御もここに集約
+        is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
+        if is_dx_atypical:
+            self.output_format_json_only_radio.setChecked(True)
+            self.output_format_widget.setEnabled(False)
+            tooltip_text = "このプロファイルはJSON出力のみをサポートしています。"
+            self.output_format_widget.setToolTip(tooltip_text)
+        elif not is_dx_standard: # is_dx_standardでない場合のみ、有効化/ツールチップ解除を行う
+            self.output_format_widget.setEnabled(True)
+            self.output_format_widget.setToolTip("")
+
     def init_ui(self):
         main_layout = QVBoxLayout(self)
 
+        # ★★★ スタイル定義を追加 ★★★
+        group_box_style = """
+            QGroupBox {
+                background-color: #f0f0f0;
+                border: 1px solid #d0d0d0;
+                border-radius: 5px;
+                margin-top: 1ex; /* QGroupBoxのタイトルとかぶらないようにマージンを設定 */
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 3px;
+                background-color: transparent;
+            }
+        """
+
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
+        api_connection_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         api_connection_form_layout = QFormLayout()
 
         current_api_key = self.current_option_values.get("api_key", "")
@@ -55,6 +89,7 @@ class OptionDialog(QDialog):
 
         if self.options_schema:
             dynamic_options_group = QGroupBox("API別 OCRオプション")
+            dynamic_options_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
             dynamic_form_layout = QFormLayout()
             
             for key, schema_item in self.options_schema.items():
@@ -97,7 +132,6 @@ class OptionDialog(QDialog):
                     self.widgets_map[key] = line_edit
 
                 elif schema_item.get("type") == "string":
-                    # ★★★ ここから workflowId の場合の特別処理を追加 ★★★
                     if key == "workflowId":
                         h_layout = QHBoxLayout()
                         line_edit = QLineEdit(str(current_value) if current_value is not None else "")
@@ -112,8 +146,8 @@ class OptionDialog(QDialog):
                         h_layout.addWidget(search_button)
                         
                         dynamic_form_layout.addRow(label_text, h_layout)
-                        self.widgets_map[key] = line_edit # マップにはQLineEditを登録
-                    else: # ★★★ workflowId 以外はこれまで通りの処理 ★★★
+                        self.widgets_map[key] = line_edit
+                    else:
                         widget = QLineEdit(str(current_value) if current_value is not None else "")
                         if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
                         if tooltip: widget.setToolTip(tooltip)
@@ -168,9 +202,12 @@ class OptionDialog(QDialog):
                 dynamic_options_group.setVisible(False)
 
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
+        file_process_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         file_process_form_layout = QFormLayout()
         file_actions_config = self.global_config.get("file_actions", {})
         
+        # 既存のラジオボタン群を一つのウィジェットにまとめる
+        self.output_format_widget = QWidget()
         output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
         self.output_format_pdf_only_radio = QRadioButton("サーチャブルPDFのみ")
@@ -179,25 +216,25 @@ class OptionDialog(QDialog):
         if current_output_format == "json_only": self.output_format_json_only_radio.setChecked(True)
         elif current_output_format == "pdf_only": self.output_format_pdf_only_radio.setChecked(True)
         else: self.output_format_both_radio.setChecked(True)
-        output_format_layout_v = QVBoxLayout()
+        output_format_layout_v = QVBoxLayout(self.output_format_widget)
+        output_format_layout_v.setContentsMargins(0,0,0,0)
         output_format_layout_v.addWidget(self.output_format_json_only_radio)
         output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
         output_format_layout_v.addWidget(self.output_format_both_radio)
-        file_process_form_layout.addRow(output_format_label, output_format_layout_v)
-        
-        # ★★★ ここからプロファイルに応じたUI制御を追加 ★★★
-        if self.api_profile and self.api_profile.get("id") == "dx_atypical_v2":
-            self.output_format_json_only_radio.setChecked(True)
-            self.output_format_json_only_radio.setEnabled(False)
-            self.output_format_pdf_only_radio.setEnabled(False)
-            self.output_format_both_radio.setEnabled(False)
-            
-            tooltip_text = "このプロファイルはJSON出力のみをサポートしています。"
-            output_format_label.setToolTip(tooltip_text)
-            self.output_format_json_only_radio.setToolTip(tooltip_text)
-            self.output_format_pdf_only_radio.setToolTip("このプロファイルはサーチャブルPDF出力をサポートしていません。")
-            self.output_format_both_radio.setToolTip("このプロファイルはサーチャブルPDF出力をサポートしていません。")
-        # ★★★ ここまで追加 ★★★
+        file_process_form_layout.addRow(output_format_label, self.output_format_widget)
+
+        # dx_standard_v2 専用のチェックボックス群ウィジェットを作成
+        self.dx_standard_output_widget = QWidget()
+        dx_standard_output_label = QLabel("出力形式 (dx standard):")
+        self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
+        self.dx_standard_json_check.setChecked(file_actions_config.get("dx_standard_output_json", True))
+        self.dx_standard_csv_check = QCheckBox("OCR完了時にCSVファイルを自動でダウンロードする")
+        self.dx_standard_csv_check.setChecked(file_actions_config.get("dx_standard_auto_download_csv", True))
+        dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
+        dx_standard_layout_v.setContentsMargins(0,0,0,0)
+        dx_standard_layout_v.addWidget(self.dx_standard_json_check)
+        dx_standard_layout_v.addWidget(self.dx_standard_csv_check)
+        file_process_form_layout.addRow(dx_standard_output_label, self.dx_standard_output_widget)
 
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
         file_process_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
@@ -229,6 +266,7 @@ class OptionDialog(QDialog):
         main_layout.addWidget(file_process_group)
         
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
+        log_settings_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         log_settings_config = self.global_config.get("log_settings", {})
         log_checkbox_layout = QHBoxLayout()
         self.log_level_info_chk = QCheckBox("INFO")
@@ -253,10 +291,13 @@ class OptionDialog(QDialog):
         main_layout.addLayout(log_section_layout)
 
         button_layout = QHBoxLayout()
-        self.save_btn = QPushButton("保存"); self.cancel_btn = QPushButton("キャンセル")
+        self.save_btn = QPushButton("保存")
+        self.cancel_btn = QPushButton("キャンセル")
         self.save_btn.clicked.connect(self.on_save_settings)
         self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addStretch(); button_layout.addWidget(self.save_btn); button_layout.addWidget(self.cancel_btn)
+        button_layout.addStretch()
+        button_layout.addWidget(self.save_btn)
+        button_layout.addWidget(self.cancel_btn)
         main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
@@ -386,16 +427,28 @@ class OptionDialog(QDialog):
         if not self.is_valid_folder_name(failure_folder, "失敗ファイル移動先サブフォルダ名"): return
         
         if self.move_on_success_chk.isChecked() and self.move_on_failure_chk.isChecked() and success_folder == failure_folder:
-            QMessageBox.warning(self, "入力エラー", "「成功ファイル移動先」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください。"); return
+            QMessageBox.warning(self, "入力エラー", "「成功ファイル移動先」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください。")
+            return
         if self.move_on_success_chk.isChecked() and results_folder == success_folder:
-            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「成功ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「成功ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。")
+            return
         if self.move_on_failure_chk.isChecked() and results_folder == failure_folder:
-            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。"); return
+            QMessageBox.warning(self, "入力エラー", "「OCR結果」と「失敗ファイル移動先」のサブフォルダ名は、互いに異なる名称にしてください（移動が有効な場合）。")
+            return
 
         file_actions = updated_global_config.setdefault("file_actions", {})
-        if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
-        elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
-        else: file_actions["output_format"] = "both"
+        
+        is_dx_standard = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
+        if is_dx_standard:
+            # dx_standard の場合はチェックボックスから設定を保存
+            file_actions["dx_standard_output_json"] = self.dx_standard_json_check.isChecked()
+            file_actions["dx_standard_auto_download_csv"] = self.dx_standard_csv_check.isChecked()
+        else:
+            # それ以外のプロファイルではラジオボタンから設定を保存
+            if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
+            elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
+            else: file_actions["output_format"] = "both"
+
         file_actions["results_folder_name"] = results_folder
         file_actions["move_on_success_enabled"] = self.move_on_success_chk.isChecked()
         file_actions["success_folder_name"] = success_folder

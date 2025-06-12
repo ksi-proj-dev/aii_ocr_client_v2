@@ -272,8 +272,6 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.ocr_process_finished_signal.connect(self._handle_ocr_process_finished_from_orchestrator)
             self.ocr_orchestrator.original_file_status_update_signal.connect(self.on_original_file_status_update_from_worker)
             self.ocr_orchestrator.file_ocr_processed_signal.connect(self.on_file_ocr_processed)
-            # ★★★ 新しいシグナルとスロットを接続 ★★★
-            self.ocr_orchestrator.file_auto_csv_processed_signal.connect(self.on_file_auto_csv_processed)
             self.ocr_orchestrator.file_searchable_pdf_processed_signal.connect(self.on_file_searchable_pdf_processed)
             self.ocr_orchestrator.request_ui_controls_update_signal.connect(self.update_ocr_controls)
             self.ocr_orchestrator.request_list_view_update_signal.connect(self._handle_request_list_view_update)
@@ -357,7 +355,7 @@ class MainWindow(QMainWindow):
             default_height = self.height() if self.height() > 100 else 700
             initial_splitter_sizes = [int(default_height * 0.65), int(default_height * 0.35)]
             if sum(initial_splitter_sizes) == 0 and default_height > 0 :
-                initial_splitter_sizes = [200,100]
+                 initial_splitter_sizes = [200,100]
             self.splitter.setSizes(initial_splitter_sizes)
         self.main_layout.addWidget(self.splitter)
 
@@ -399,21 +397,15 @@ class MainWindow(QMainWindow):
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
 
-        # ★★★ ここからアイコンの順序を変更 ★★★
-        self.rescan_action = QAction("🔄再スキャン", self)
-        self.rescan_action.triggered.connect(self.confirm_rescan_ui)
-        toolbar.addAction(self.rescan_action)
-
-        toolbar.addSeparator() # セパレータを追加
-
+        # ★★★ ここから追加 ★★★
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
-        
-        toolbar.addSeparator()
-        # ★★★ ここまで変更 ★★★
+        # ★★★ ここまで追加 ★★★
 
+        self.rescan_action = QAction("🔄再スキャン", self); self.rescan_action.triggered.connect(self.confirm_rescan_ui); toolbar.addAction(self.rescan_action)
+        toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
@@ -924,15 +916,3 @@ class MainWindow(QMainWindow):
     def clear_log_display(self):
         if hasattr(self, 'log_widget'): self.log_widget.clear()
         self.log_manager.info("画面ログをクリアしました（ファイル記録は継続）。", context="UI_ACTION_CLEAR_LOG", emit_to_ui=False)
-
-    def on_file_auto_csv_processed(self, original_file_main_idx, original_file_path, status_info):
-        self.log_manager.debug(f"Original File Auto CSV processed: {os.path.basename(original_file_path)}, Status: {status_info}", context="CALLBACK_CSV_ORIGINAL")
-        if not (0 <= original_file_main_idx < len(self.processed_files_info)):
-            return # エラーログは省略
-        
-        target_file_info = self.processed_files_info[original_file_main_idx]
-        if status_info and isinstance(status_info, dict):
-            target_file_info.auto_csv_status = status_info.get("message", "状態不明")
-
-        if not self.update_timer.isActive():
-            self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)

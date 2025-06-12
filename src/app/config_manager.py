@@ -150,6 +150,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "register_ocr": "/workflows/{workflowId}/units",
             "get_ocr_status": "/units/status",
             "get_ocr_result": "/units/dataItems",
+            "download_csv": "/units/{unitId}/csv",  # ★★★ この行を追加 ★★★
             "delete_ocr": "/units/{unitId}/delete"
         },
         "options_schema": {
@@ -299,7 +300,7 @@ class ConfigManager:
         config.setdefault("window_state", "normal")
         config.setdefault("current_view", 0) 
         config.setdefault("log_visible", True)
-        config.setdefault("column_widths", [35, 50, 280, 100, 270, 100, 120, 100])
+        config.setdefault("column_widths", [35, 50, 280, 100, 270, 100, 100, 120, 60, 100])
         config.setdefault("sort_order", {"column": 1, "order": "asc"})
         config.setdefault("splitter_sizes", [])
         config.setdefault("last_target_dir", "")

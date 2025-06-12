@@ -35,7 +35,7 @@ class ListView(QWidget):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
         self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "CSV", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
+        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "自動CSV", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         

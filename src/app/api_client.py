@@ -690,3 +690,49 @@ class OCRApiClient:
             return None, {"message": err_msg, "code": "DXSUITE_WF_SEARCH_HTTP_ERROR", "detail": detail_text}
         except Exception as e:
             return None, {"message": f"DX Suite ワークフロー検索で予期せぬエラー: {e}", "code": "DXSUITE_WF_SEARCH_UNEXPECTED_ERROR", "detail": str(e)}
+
+    def download_standard_csv(self, unit_id: str) -> Tuple[Optional[bytes], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIで、指定したユニットのCSVをダウンロードする。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_CSV"
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (Download CSV): unitId={unit_id}", context=log_ctx_prefix)
+
+        # Demoモードの処理
+        if self.api_execution_mode == "demo":
+            self.log_manager.debug(f"  Demoモード: '{unit_id}' のCSVダウンロードをシミュレートします。", context=log_ctx_prefix)
+            # BOM付きUTF-8でダミーのCSVデータをバイトとして作成
+            dummy_csv_data = '"請求日","請求金額","会社名"\n"2025/06/12","11000","株式会社デモ"\n'
+            return dummy_csv_data.encode('utf-8-sig'), None
+
+        # Liveモードの処理
+        url_template = self._get_full_url("download_csv")
+        if not url_template:
+            return None, {"message": "エンドポイントURL取得失敗 (Download CSV)", "code": "CONFIG_ENDPOINT_URL_FAIL_CSV"}
+        
+        url = url_template.replace("{unitId}", str(unit_id))
+
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        
+        try:
+            self.log_manager.debug(f"  GET from {url}", context=log_ctx_prefix)
+            response = requests.get(url, headers=headers, timeout=self.timeout_seconds)
+            response.raise_for_status()
+
+            # text/csvが返ってくることを確認
+            content_type = response.headers.get('Content-Type', '')
+            if 'text/csv' in content_type:
+                self.log_manager.info(f"  DX Suite Download CSV API success.", context=log_ctx_prefix)
+                return response.content, None # バイトデータを返す
+            else:
+                err_msg = f"APIがCSVを返しませんでした (Content-Type: {content_type})。"
+                return None, {"message": err_msg, "code": "API_UNEXPECTED_CONTENT_TYPE_CSV", "detail": response.text[:500]}
+
+        except requests.exceptions.HTTPError as e_http:
+            err_msg = f"DX Suite CSVダウンロードAPI HTTPエラー: {e_http.response.status_code}"
+            detail_text = e_http.response.text
+            return None, {"message": err_msg, "code": "DXSUITE_CSV_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite CSVダウンロードで予期せぬエラー: {e}", "code": "DXSUITE_CSV_UNEXPECTED_ERROR", "detail": str(e)}

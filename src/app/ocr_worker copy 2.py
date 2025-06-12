@@ -26,7 +26,7 @@ DEFAULT_POLLING_MAX_ATTEMPTS = 60
 
 
 class OcrWorker(QThread):
-    file_processed = pyqtSignal(int, str, object, object, object)
+    file_processed = pyqtSignal(int, str, object, object, object, object)
     searchable_pdf_processed = pyqtSignal(int, str, object, object)
     all_files_processed = pyqtSignal()
     original_file_status_update = pyqtSignal(str, str)
@@ -697,8 +697,18 @@ class OcrWorker(QThread):
                         if self.user_stopped: pdf_error_for_signal = {"message": "処理中止によりPDF作成不可", "code": "USER_INTERRUPT_PDF"}
                         elif self.encountered_fatal_error: pdf_error_for_signal = {"message": "致命的エラーによりPDF作成不可", "code": "FATAL_ERROR_STOP_PDF"}
                         else: pdf_error_for_signal = {"message": f"'{original_file_basename}' の処理エラー等によりPDF作成不可", "code": "PDF_CREATION_FAIL_DUE_TO_OCR_ERROR"}
-                
-                self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_main, final_ocr_error_for_main, json_status_for_original_file)
+
+                # ★★★ ここから修正 ★★★
+                # job_id を取得してシグナルで渡す
+                job_id_for_signal = None
+                if initial_ocr_response and isinstance(initial_ocr_response, dict):
+                    job_id_for_signal = initial_ocr_response.get("unitId") or \
+                                        initial_ocr_response.get("receptionId") or \
+                                        initial_ocr_response.get("job_id")
+
+                self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_main, final_ocr_error_for_main, json_status_for_original_file, job_id_for_signal)
+                # ★★★ ここまで修正 ★★★
+
                 self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, pdf_final_path_for_signal, pdf_error_for_signal)
 
                 move_original_file_succeeded_final = all_parts_processed_successfully

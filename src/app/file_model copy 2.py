@@ -11,10 +11,9 @@ class FileInfo:
     size: int
     status: str
     ocr_engine_status: str
-    job_id: Optional[str] = None
+    job_id: Optional[str] = None  # ★★★ この行を追加 ★★★
     ocr_result_summary: str = ""
     json_status: str = "-"
-    auto_csv_status: str = "-"  # ★★★ この行を追加 ★★★
     searchable_pdf_status: str = "-"
     page_count: Optional[int] = None
     is_checked: bool = True

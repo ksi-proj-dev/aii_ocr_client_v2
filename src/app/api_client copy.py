@@ -196,60 +196,60 @@ class OCRApiClient:
                     if file_obj and not file_obj.closed:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"非定型API用一時ファイルのクローズに失敗: {e_close}", context=log_ctx_prefix)
-        # ★★★ 新しいフロータイプ dx_standard_v2_flow の分岐を追加 ★★★
+
+        # ★★★ ここから dx_standard_v2_flow のブロックを丸ごと置き換え ★★★
         elif current_flow_type == "dx_standard_v2_flow":
             log_ctx_prefix = "API_DX_STANDARD_V2"
+            
+            # 必須パラメータのチェック
+            workflow_id = effective_options.get("workflowId")
+            if not workflow_id or not str(workflow_id).strip():
+                return None, {"message": "必須パラメータ 'ワークフローID' が設定されていません。", "code": "DX_STANDARD_WORKFLOWID_MISSING"}
+
+            # Demoモード
             if self.api_execution_mode == "demo":
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Standard V2): {file_name}", context=f"{log_ctx_prefix}_DEMO")
-                workflow_id = effective_options.get("workflowId", 0)
-                if not workflow_id or not str(workflow_id).strip():
-                    return None, {"message": "必須パラメータ 'ワークフローID' が設定されていません。", "code": "DX_STANDARD_WORKFLOWID_MISSING"}
-                
                 self.log_manager.debug(f"  Simulating Unit Register with workflowId: {workflow_id}", context=f"{log_ctx_prefix}_DEMO")
-                dummy_unit_id = random.randint(100000, 999999)
-                self.log_manager.debug(f"  Simulated Unit Register success. unitId: {dummy_unit_id}", context=f"{log_ctx_prefix}_DEMO")
                 
-                self.log_manager.debug(f"  Simulating Send to OCR for unitId: {dummy_unit_id}", context=f"{log_ctx_prefix}_DEMO")
-                time.sleep(random.uniform(0.3, 0.8)) # サーバー内処理をシミュレート
+                # Demoモードでは、即座にダミーのユニットIDを返す
+                dummy_unit_id = f"demo-unit-{random.randint(100000, 999999)}"
+                self.log_manager.info(f"  Simulated Unit Register success. unitId: {dummy_unit_id}", context=f"{log_ctx_prefix}_DEMO")
                 
-                # 仕様書P.32の結果を模したダミーデータ
-                demo_result = [
-                    {"labelName": "請求日", "text": "2025/06/11", "accuracy": 99, "box": {}},
-                    {"labelName": "請求金額", "text": "11,000", "accuracy": 98, "box": {}}
-                ]
-                self.log_manager.info(f"'{profile_name}' Demoモード呼び出し完了 (DX Suite Standard V2): {file_name}", context=f"{log_ctx_prefix}_DEMO")
-                return demo_result, None
+                # OcrWorkerにポーリングを依頼するための情報を返す
+                return {"unitId": dummy_unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
+
+            # Liveモード
             else:
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Standard V2 - Register Unit): {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-                # 1. ユニット登録API (/sort/units) の呼び出し
-                register_url = self._get_full_url("register_ocr")
-                print(f"register_url={register_url}")
-                if not register_url: return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard Register)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_REG"}
                 
+                # config_managerで修正したエンドポイントパスには {workflowId} が含まれる
+                register_url_template = self._get_full_url("register_ocr")
+                if not register_url_template:
+                    return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard Register)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_REG"}
+                
+                # URLにworkflowIdを埋め込む
+                register_url = register_url_template.replace("{workflowId}", str(workflow_id))
+
                 if "{組織固有}" in register_url:
                     self.log_manager.error(f"DX Suite のベースURIに組織固有ドメインのプレースホルダーが含まれています。設定を確認してください: {register_url}", context="API_CLIENT_CONFIG_ERROR")
                     return None, {"message": "DX Suite ベースURI未設定エラー。", "code": "DXSUITE_BASE_URI_NOT_CONFIGURED"}
 
                 if not self.api_key:
-                    err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER", error_code="API_KEY_MISSING_LIVE")
+                    err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"
+                    self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER", error_code="API_KEY_MISSING_LIVE")
                     return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
 
                 headers = {"apikey": self.api_key}
                 data_payload = {}
-                workflow_id = effective_options.get("workflowId")
-                if not workflow_id or not str(workflow_id).strip():
-                    return None, {"message": "必須パラメータ 'ワークフローID' が設定されていません。", "code": "DX_STANDARD_WORKFLOWID_MISSING"}
-
-                data_payload['workflowId'] = workflow_id
                 
+                # unitNameは任意パラメータ
                 if effective_options.get("unitName"):
                     data_payload['unitName'] = effective_options.get("unitName")
 
                 file_obj = None
-                unit_id = None
                 try:
                     file_obj = open(file_path, 'rb')
-                    files_payload = {'file': (os.path.basename(file_path), file_obj)}
+                    files_payload = {'files': (os.path.basename(file_path), file_obj, 'application/octet-stream')} # files -> files, Content-Typeを付与
                     
                     self.log_manager.debug(f"  POST to {register_url} with form-data: {data_payload}, file: {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
                     response_register = requests.post(register_url, headers=headers, data=data_payload, files=files_payload, timeout=self.timeout_seconds)
@@ -259,37 +259,34 @@ class OCRApiClient:
                     unit_id = register_json.get("unitId")
                     if not unit_id:
                         return None, {"message": "ユニット登録APIレスポンスにunitIdが含まれていません。", "code": "DX_STANDARD_NO_UNITID", "detail": register_json}
+                    
                     self.log_manager.info(f"  ユニット登録成功。unitId: {unit_id}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
 
+                    # OcrWorkerにポーリングを依頼するための情報を返す
+                    return {"unitId": unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
+
+                except requests.exceptions.HTTPError as e_http:
+                    err_msg = f"DX Suite 標準 登録API HTTPエラー: {e_http.response.status_code}"
+                    detail_text = e_http.response.text
+                    self.log_manager.error(f"{err_msg} - {detail_text}", context=f"{log_ctx_prefix}_LIVE_REGISTER_HTTP_ERROR", exc_info=True)
+                    try:
+                        err_json = e_http.response.json()
+                        api_err_detail = err_json.get("errors", [{}])[0]
+                        api_err_code = api_err_detail.get("errorCode", "UNKNOWN_API_ERROR")
+                        api_err_msg_from_json = api_err_detail.get("message", detail_text)
+                        return None, {"message": f"DX Suite APIエラー: {api_err_msg_from_json}", "code": f"DXSUITE_API_{api_err_code}", "detail": err_json}
+                    except ValueError:
+                        return None, {"message": f"DX Suite 標準 登録API HTTPエラー (非JSON応答): {e_http.response.status_code}", "code": "DXSUITE_STANDARD_HTTP_ERROR_NON_JSON", "detail": detail_text}
+                except requests.exceptions.RequestException as e_req:
+                    err_msg = f"DX Suite 標準 登録APIリクエストエラー: {e_req}"
+                    self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER_REQUEST_ERROR", exc_info=True)
+                    return None, {"message": "DX Suite 標準 登録APIリクエスト失敗。", "code": "DXSUITE_STANDARD_REGISTER_REQUEST_FAIL", "detail": str(e_req)}
                 except Exception as e:
-                    # (エラーハンドリングは長くなるため、ここでは汎用的に記載)
                     self.log_manager.error(f"ユニット登録APIでエラー: {e}", context=f"{log_ctx_prefix}_LIVE_REGISTER_ERROR", exc_info=True)
                     return None, {"message": f"ユニット登録APIでエラー: {e}", "code": "DX_STANDARD_REGISTER_FAIL"}
                 finally:
                     if file_obj and not file_obj.closed: file_obj.close()
-                
-                # 2. OCR送信API (/units/{unitId}/ocr) の呼び出し
-                if unit_id:
-                    send_ocr_endpoint_template = self.active_api_profile_schema.get("endpoints", {}).get("send_to_ocr")
-                    if not send_ocr_endpoint_template:
-                        return None, {"message": "OCR送信エンドポイントがプロファイルに未定義です。", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_SEND"}
-
-                    send_ocr_url = self._get_full_url("send_to_ocr").replace("{unitId}", str(unit_id))
-                    
-                    try:
-                        self.log_manager.debug(f"  POST to {send_ocr_url}", context=f"{log_ctx_prefix}_LIVE_SENDOCR")
-                        response_send = requests.post(send_ocr_url, headers=headers, timeout=self.timeout_seconds)
-                        response_send.raise_for_status()
-                        self.log_manager.info(f"  OCR実行指示 成功。unitId: {unit_id}, Status: {response_send.status_code}", context=f"{log_ctx_prefix}_LIVE_SENDOCR")
-
-                        # OcrWorkerにポーリングを依頼するための情報を返す
-                        return {"unitId": unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
-
-                    except Exception as e:
-                        self.log_manager.error(f"OCR実行指示APIでエラー: {e}", context=f"{log_ctx_prefix}_LIVE_SENDOCR_ERROR", exc_info=True)
-                        return None, {"message": f"OCR実行指示APIでエラー: {e}", "code": "DX_STANDARD_SENDOCR_FAIL"}
-
-                return None, {"message": "ユニット登録後、OCR実行指示に失敗しました。", "code": "DX_STANDARD_POST_REGISTER_FAIL"}
+        # ★★★ ここまでが置き換え範囲 ★★★
 
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR")
@@ -310,7 +307,6 @@ class OCRApiClient:
         except requests.exceptions.RequestException as e_req: err_msg = f"DX Suite 結果取得APIリクエストエラー: {e_req}"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_GETRESULT_REQUEST_ERROR", exc_info=True); return None, {"message": "DX Suite 結果取得APIリクエスト失敗。", "code": "DXSUITE_GETRESULT_REQUEST_FAIL", "detail": str(e_req)}
         except Exception as e_generic: err_msg = f"DX Suite 結果取得API処理中に予期せぬエラー: {e_generic}"; self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_GETRESULT_UNEXPECTED_ERROR", exc_info=True); return None, {"message": "DX Suite 結果取得処理中に予期せぬエラー。", "code": "DXSUITE_GETRESULT_UNEXPECTED_ERROR", "detail": str(e_generic)}
 
-    # ★★★ ここに新しいメソッドを追加 ★★★
     def get_dx_atypical_ocr_result(self, reception_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         """DX Suite 非定型APIの読取結果を取得する。"""
         log_ctx_prefix = "API_DX_ATYPICAL_V2"
@@ -345,6 +341,127 @@ class OCRApiClient:
             return None, {"message": "DX Suite 非定型 結果取得APIリクエスト失敗。", "code": "DXSUITE_ATYPICAL_GET_REQUEST_FAIL", "detail": str(e_req)}
         except Exception as e_generic:
             return None, {"message": "DX Suite 非定型 結果取得処理中に予期せぬエラー。", "code": "DXSUITE_ATYPICAL_GET_UNEXPECTED_ERROR", "detail": str(e_generic)}
+
+    def get_dx_standard_status(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIのユニット状態を取得する。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_STATUS"
+        # ★★★ 修正箇所 ★★★
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - GetStatus): unitId={unit_id}", context=f"{log_ctx_prefix}_LIVE_GETSTATUS")
+
+        # Demoモードの処理
+        if self.api_execution_mode == "demo":
+            self.log_manager.debug(f"  Demoモード: '{unit_id}' の状態取得をシミュレートします。", context=log_ctx_prefix)
+            # Demoでは常に完了ステータスを返す（Worker側で遅延をシミュレートするため）
+            return [{"unitId": unit_id, "dataProcessingStatus": 400}], None
+
+        # Liveモードの処理
+        url = self._get_full_url("get_ocr_status")
+        if not url:
+            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard GetStatus)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_STATUS"}
+        
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        params = {"unitId": unit_id}
+        
+        try:
+            self.log_manager.debug(f"  GET from {url} with params: {params}", context=log_ctx_prefix)
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json()
+            # 正常な応答はリスト形式 [ { ... } ]
+            if isinstance(response_json, list) and response_json:
+                self.log_manager.info(f"  DX Suite Standard GetStatus API success. Status: {response_json[0].get('dataProcessingStatus')}", context=log_ctx_prefix)
+            return response_json, None
+        except requests.exceptions.HTTPError as e_http:
+            # (エラーハンドリングは他のメソッドと同様)
+            err_msg = f"DX Suite 標準 状態取得API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
+            return None, {"message": err_msg, "code": "DXSUITE_STANDARD_STATUS_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite 標準 状態取得で予期せぬエラー: {e}", "code": "DXSUITE_STANDARD_STATUS_UNEXPECTED_ERROR", "detail": str(e)}
+
+# api_client.py 内
+
+    def get_dx_standard_result(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIのOCR結果を取得する。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_RESULT"
+        # ★★★ 修正箇所 ★★★
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - GetResult): unitId={unit_id}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
+
+        # Demoモードの処理
+        if self.api_execution_mode == "demo":
+            self.log_manager.debug(f"  Demoモード: '{unit_id}' の結果取得をシミュレートします。", context=log_ctx_prefix)
+            # 仕様書P.23 のレスポンスを模したダミーデータ
+            return {
+                "dataItems": [
+                    {"dataItemId": "demo-item-1", "result": "株式会社デモ", "columnName": "会社名", "accuracy": 0.99},
+                    {"dataItemId": "demo-item-2", "result": "11,000", "columnName": "合計金額", "accuracy": 0.98}
+                ]
+            }, None
+
+        # Liveモードの処理
+        url = self._get_full_url("get_ocr_result")
+        if not url:
+            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard GetResult)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_RESULT"}
+
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        params = {"unitId": unit_id}
+        
+        try:
+            self.log_manager.debug(f"  GET from {url} with params: {params}", context=log_ctx_prefix)
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json()
+            self.log_manager.info(f"  DX Suite Standard GetResult API success.", context=log_ctx_prefix)
+            return response_json, None
+        except requests.exceptions.HTTPError as e_http:
+            err_msg = f"DX Suite 標準 結果取得API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
+            return None, {"message": err_msg, "code": "DXSUITE_STANDARD_RESULT_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite 標準 結果取得で予期せぬエラー: {e}", "code": "DXSUITE_STANDARD_RESULT_UNEXPECTED_ERROR", "detail": str(e)}
+
+    def delete_dx_standard_job(self, unit_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIのユニットを削除する。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_DELETE"
+        # ★★★ 修正箇所 ★★★
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - Delete): unitId={unit_id}", context=log_ctx_prefix)
+
+        # Demoモードの処理
+        if self.api_execution_mode == "demo":
+            self.log_manager.info(f"  Demoモード: '{unit_id}' の削除をシミュレートします。", context=log_ctx_prefix)
+            return {"unitId": unit_id, "status": "deleted_successfully"}, None
+
+        # Liveモードの処理
+        url_template = self._get_full_url("delete_ocr")
+        if not url_template:
+            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard Delete)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_DELETE"}
+        
+        url = url_template.replace("{unitId}", str(unit_id))
+
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        
+        try:
+            self.log_manager.debug(f"  POST to {url}", context=log_ctx_prefix)
+            response = requests.post(url, headers=headers, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json() # P.20 によるとunitIdとunitNameが返る
+            self.log_manager.info(f"  DX Suite Standard Delete API success. Response: {response_json}", context=log_ctx_prefix)
+            return response_json, None
+        except requests.exceptions.HTTPError as e_http:
+            err_msg = f"DX Suite 標準 削除API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
+            return None, {"message": err_msg, "code": "DXSUITE_STANDARD_DELETE_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite 標準 削除処理中に予期せぬエラー: {e}", "code": "DXSUITE_STANDARD_DELETE_UNEXPECTED_ERROR", "detail": str(e)}
 
     def register_dx_searchable_pdf(self, full_ocr_job_id: str, high_resolution_mode: int) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         log_ctx_prefix = "API_DX_FULLTEXT_V2_PDF_REGISTER"; profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"; self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF - Register): fullOcrJobId={full_ocr_job_id}", context=log_ctx_prefix); url = self._get_full_url("register_searchable_pdf")
@@ -441,15 +558,10 @@ class OCRApiClient:
                 self.log_manager.info(f"DX Suite Searchable PDF登録成功。SearchablePdfJobId: {spdf_job_id}。結果取得はWorkerのポーリングに委ねます。", context=log_ctx_prefix)
                 return {"job_id": spdf_job_id, "status": "searchable_pdf_registered", "profile_flow_type": current_flow_type}, None
         
-        elif current_flow_type == "dx_atypical_v2_flow":
-            log_ctx_prefix = "API_DX_ATYPICAL_V2_PDF"
-            if self.api_execution_mode == "demo":
-                self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Atypical V2 - Searchable PDF): {file_name}", context=f"{log_ctx_prefix}_DEMO")
-                try: writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
-                except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Atypical): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite 非定型PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_ATYPICAL_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
-            else: # Live モード
-                self.log_manager.warning(f"非定型APIにはサーチャブルPDF作成機能がありません。'{profile_name}' - make_searchable_pdf", context=f"{log_ctx_prefix}_LIVE")
-                return None, {"message": f"非定型APIにはサーチャブルPDF作成機能がありません。", "code": f"NOT_SUPPORTED_{current_flow_type}_PDF"}
+        # ★★★ 標準APIはサーチャブルPDFをサポートしないため、エラーを返すようにする ★★★
+        elif current_flow_type in ["dx_atypical_v2_flow", "dx_standard_v2_flow"]:
+            self.log_manager.warning(f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", context="API_CLIENT_WARN")
+            return None, {"message": f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", "code": f"NOT_SUPPORTED_{current_flow_type}_PDF"}
         
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type} (PDF作成)", context="API_CLIENT_ERROR")
@@ -524,3 +636,57 @@ class OCRApiClient:
             return None, {"message": "DX Suite 非定型 削除APIリクエスト失敗。", "code": "DXSUITE_ATYPICAL_DELETE_REQUEST_FAIL", "detail": str(e_req)}
         except Exception as e_generic:
             return None, {"message": "DX Suite 非定型 削除処理中に予期せぬエラー。", "code": "DXSUITE_ATYPICAL_DELETE_UNEXPECTED_ERROR", "detail": str(e_generic)}
+
+    def search_workflows(self, workflow_name: Optional[str] = None) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+        """DX Suite 標準APIでワークフローを検索する。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_WF_SEARCH"
+        profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (Workflow Search)", context=log_ctx_prefix)
+
+        # Demoモードの処理
+        if self.api_execution_mode == "demo":
+            self.log_manager.debug(f"  Demoモード: ワークフロー検索をシミュレートします。", context=log_ctx_prefix)
+            # ダミーのレスポンスを作成
+            dummy_workflows = {
+                "workflows": [
+                    {"workflowId": "demo-wf-uuid-001", "folderId": "demo-folder-1", "name": "【デモ】請求書ワークフロー"},
+                    {"workflowId": "demo-wf-uuid-002", "folderId": "demo-folder-1", "name": "【デモ】注文書ワークフロー"},
+                    {"workflowId": "demo-wf-uuid-003", "folderId": "demo-folder-2", "name": "【デモ】経費申請ワークフロー"},
+                ]
+            }
+            # 検索名があればフィルタリングをシミュレート
+            if workflow_name:
+                dummy_workflows["workflows"] = [
+                    wf for wf in dummy_workflows["workflows"] if workflow_name in wf["name"]
+                ]
+            return dummy_workflows, None
+
+        # Liveモードの処理
+        # ★★★ 仕様書P.10ではエンドポイントが `/workflows` となっています ★★★
+        # config_manager で `search_workflows` のようなキーを新たに追加するか、
+        # 他のエンドポイント定義から類推してパスを構築する必要があります。
+        # ここでは、base_uri直下の `/workflows` を直接使用します。
+        
+        base_uri = self._get_full_url("register_ocr").split('/workflows/')[0]
+        url = f"{base_uri}/workflows"
+
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        params = {}
+        if workflow_name:
+            params["workflowName"] = workflow_name # 
+        
+        try:
+            self.log_manager.debug(f"  GET from {url} with params: {params}", context=log_ctx_prefix)
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json()
+            self.log_manager.info(f"  DX Suite Workflow Search API success.", context=log_ctx_prefix)
+            return response_json, None
+        except requests.exceptions.HTTPError as e_http:
+            err_msg = f"DX Suite ワークフロー検索API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
+            return None, {"message": err_msg, "code": "DXSUITE_WF_SEARCH_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite ワークフロー検索で予期せぬエラー: {e}", "code": "DXSUITE_WF_SEARCH_UNEXPECTED_ERROR", "detail": str(e)}

@@ -604,7 +604,8 @@ class MainWindow(QMainWindow):
             options_schema=options_schema,
             current_option_values=current_option_values,
             global_config=self.config,
-            api_profile=self.active_api_profile, # ★★★ この引数を追加 ★★★
+            api_profile=self.active_api_profile,
+            api_client=self.api_client, # ★★★ この引数を追加 ★★★
             parent=self
         )
         if dialog.exec():

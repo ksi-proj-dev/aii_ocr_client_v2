@@ -27,9 +27,8 @@ class OcrOrchestrator(QObject):
     ocr_process_finished_signal = pyqtSignal(bool, object) # bool: was_interrupted, object: fatal_error_info (Optional[Dict[str, Any]])
     
     original_file_status_update_signal = pyqtSignal(str, str) # str: original_file_path, str: status_message
-    file_ocr_processed_signal = pyqtSignal(int, str, object, object, object, object) # int: original_idx, str: path, object: ocr_result, object: ocr_error, object: json_status, object: job_id
-    file_auto_csv_processed_signal = pyqtSignal(int, str, object)
-    file_searchable_pdf_processed_signal = pyqtSignal(int, str, object, object)
+    file_ocr_processed_signal = pyqtSignal(int, str, object, object, object) # int: original_idx, str: path, object: ocr_result, object: ocr_error, object: json_status
+    file_searchable_pdf_processed_signal = pyqtSignal(int, str, object, object) # int: original_idx, str: path, object: pdf_final_path, object: pdf_error_info
     
     request_ui_controls_update_signal = pyqtSignal()
     request_list_view_update_signal = pyqtSignal(list) # list: updated_file_list (List[FileInfo])
@@ -178,7 +177,6 @@ class OcrOrchestrator(QObject):
         )
         self.ocr_worker.original_file_status_update.connect(self._handle_worker_status_update)
         self.ocr_worker.file_processed.connect(self._handle_worker_file_ocr_processed)
-        self.ocr_worker.auto_csv_processed.connect(self._handle_worker_auto_csv_processed)
         self.ocr_worker.searchable_pdf_processed.connect(self._handle_worker_searchable_pdf_processed)
         self.ocr_worker.all_files_processed.connect(self._handle_worker_all_files_processed)
 
@@ -195,17 +193,13 @@ class OcrOrchestrator(QObject):
     def _handle_worker_status_update(self, path: str, status_message: str):
         self.original_file_status_update_signal.emit(path, status_message)
 
-    def _handle_worker_auto_csv_processed(self, original_idx: int, path: str, status_info: Any):
-        self.file_auto_csv_processed_signal.emit(original_idx, path, status_info)
-
-    # ★★★ メソッドの定義とemit呼び出しを修正 ★★★
-    def _handle_worker_file_ocr_processed(self, original_idx: int, path: str, ocr_result: Any, ocr_error: Any, json_status: Any, job_id: Any):
+    def _handle_worker_file_ocr_processed(self, original_idx: int, path: str, ocr_result: Any, ocr_error: Any, json_status: Any):
         if ocr_error and isinstance(ocr_error, dict) and \
             ocr_error.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API"]:
             self.fatal_error_occurred_info = ocr_error
             self.log_manager.error(f"OcrOrchestrator: Fatal OCR error detected: {ocr_error.get('message')}. Worker will stop.", context="OCR_ORCH_FATAL_ERROR", error_code=ocr_error.get("code"))
         
-        self.file_ocr_processed_signal.emit(original_idx, path, ocr_result, ocr_error, json_status, job_id)
+        self.file_ocr_processed_signal.emit(original_idx, path, ocr_result, ocr_error, json_status)
         self.request_ui_controls_update_signal.emit()
 
     def _handle_worker_searchable_pdf_processed(self, original_idx: int, path: str, pdf_final_path: Any, pdf_error_info: Any):
@@ -309,24 +303,9 @@ class OcrOrchestrator(QObject):
                 item_info.status = OCR_STATUS_PROCESSING
                 item_info.ocr_engine_status = OCR_STATUS_PROCESSING
                 item_info.ocr_result_summary = ""
-
-                # ★★★ ここからステータス設定ロジックを修正 ★★★
-                file_actions = self.config.get("file_actions", {})
-                is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
-
-                if is_dx_standard:
-                    # dx_standard の場合は専用チェックボックスから判断
-                    item_info.json_status = "処理待ち" if file_actions.get("dx_standard_output_json", False) else "作成しない(設定)"
-                    item_info.auto_csv_status = "処理待ち" if file_actions.get("dx_standard_auto_download_csv", False) else "作成しない(設定)"
-                    item_info.searchable_pdf_status = "対象外"
-                else:
-                    # それ以外のプロファイルでは従来のラジオボタンから判断
-                    output_format_cfg = file_actions.get("output_format", "both")
-                    item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
-                    item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
-                    item_info.auto_csv_status = "対象外"
-                # ★★★ ここまで修正 ★★★
-
+                output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
+                item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
+                item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
                 files_to_send_to_worker_tuples.append((item_info.path, original_idx))
             updated_processed_files_info_for_start.append(item_info) 
         
@@ -398,22 +377,8 @@ class OcrOrchestrator(QObject):
                 item_info.ocr_engine_status = OCR_STATUS_PROCESSING
                 item_info.status = f"{OCR_STATUS_PROCESSING}(再開)"
                 item_info.ocr_result_summary = "" 
-
-                # ★★★ ここからステータス設定ロジックを修正 ★★★
-                file_actions = self.config.get("file_actions", {})
-                is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
-
-                if is_dx_standard:
-                    item_info.json_status = "処理待ち" if file_actions.get("dx_standard_output_json", False) else "作成しない(設定)"
-                    item_info.auto_csv_status = "処理待ち" if file_actions.get("dx_standard_auto_download_csv", False) else "作成しない(設定)"
-                    item_info.searchable_pdf_status = "対象外"
-                else:
-                    output_format_cfg = file_actions.get("output_format", "both")
-                    item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
-                    item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
-                    item_info.auto_csv_status = "対象外"
-                # ★★★ ここまで修正 ★★★
-
+                item_info.json_status = initial_json_status_ui 
+                item_info.searchable_pdf_status = initial_pdf_status_ui 
             updated_processed_files_info_for_resume.append(item_info)
 
         self.ocr_process_started_signal.emit(len(files_to_resume_tuples), updated_processed_files_info_for_resume)

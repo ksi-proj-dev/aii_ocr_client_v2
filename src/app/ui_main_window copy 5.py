@@ -399,21 +399,15 @@ class MainWindow(QMainWindow):
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
 
-        # ★★★ ここからアイコンの順序を変更 ★★★
-        self.rescan_action = QAction("🔄再スキャン", self)
-        self.rescan_action.triggered.connect(self.confirm_rescan_ui)
-        toolbar.addAction(self.rescan_action)
-
-        toolbar.addSeparator() # セパレータを追加
-
+        # ★★★ ここから追加 ★★★
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
-        
-        toolbar.addSeparator()
-        # ★★★ ここまで変更 ★★★
+        # ★★★ ここまで追加 ★★★
 
+        self.rescan_action = QAction("🔄再スキャン", self); self.rescan_action.triggered.connect(self.confirm_rescan_ui); toolbar.addAction(self.rescan_action)
+        toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)

@@ -150,6 +150,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "register_ocr": "/workflows/{workflowId}/units",
             "get_ocr_status": "/units/status",
             "get_ocr_result": "/units/dataItems",
+            "download_csv": "/units/{unitId}/csv",  # ★★★ この行を追加 ★★★
             "delete_ocr": "/units/{unitId}/delete"
         },
         "options_schema": {

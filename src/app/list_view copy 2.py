@@ -34,8 +34,8 @@ class ListView(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
-        self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "CSV", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
+        self.table.setColumnCount(9)
+        self.table.setHorizontalHeaderLabels(["☑", "No", "ファイル名", "ステータス", "OCR結果", "JSON", "サーチャブルPDF", "ページ数", "サイズ(MB)"])
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         
@@ -247,18 +247,10 @@ class ListView(QWidget):
                 json_status_item = QTableWidgetItem(file_info.json_status)
                 if "失敗" in file_info.json_status or "エラー" in file_info.json_status or "中断" in file_info.json_status: json_status_item.setForeground(error_color)
                 self.table.setItem(idx, 5, json_status_item)
-
-                # ★★★ ここから自動CSV列の処理を追加 ★★★
-                auto_csv_status_item = QTableWidgetItem(file_info.auto_csv_status)
-                if "失敗" in file_info.auto_csv_status or "エラー" in file_info.auto_csv_status:
-                    auto_csv_status_item.setForeground(error_color)
-                self.table.setItem(idx, 6, auto_csv_status_item)
-                # ★★★ ここまで追加 ★★★
-
                 pdf_status_item = QTableWidgetItem(file_info.searchable_pdf_status)
                 if ("失敗" in file_info.searchable_pdf_status or "エラー" in file_info.searchable_pdf_status or "中断" in file_info.searchable_pdf_status) and "部品PDFは結合されません(設定)" not in file_info.searchable_pdf_status and "個の部品PDF出力成功" not in file_info.searchable_pdf_status : 
                     pdf_status_item.setForeground(error_color)
-                self.table.setItem(idx, 7, pdf_status_item)
+                self.table.setItem(idx, 6, pdf_status_item)
 
                 page_count_value = file_info.page_count
                 if page_count_value is not None:
@@ -267,14 +259,14 @@ class ListView(QWidget):
                 else:
                     page_count_item = QTableWidgetItem("-")
                     page_count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(idx, 8, page_count_item)
+                self.table.setItem(idx, 7, page_count_item)
                 
                 size_bytes = file_info.size
                 size_mb = size_bytes / (1024 * 1024)
                 size_mb_display_text = f"{size_mb:,.3f} MB"
                 size_item = NumericTableWidgetItem(size_mb_display_text, size_bytes)
                 size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                self.table.setItem(idx, 9, size_item)
+                self.table.setItem(idx, 8, size_item)
 
         finally:
             self.table.setSortingEnabled(current_sorting_enabled_state) 
@@ -285,7 +277,7 @@ class ListView(QWidget):
         self.populate_table(files_data, is_running)
 
     def restore_column_widths(self):
-        default_widths = [35, 50, 280, 100, 270, 100, 100, 120, 60, 100]
+        default_widths = [35, 50, 280, 100, 270, 100, 120, 60, 100]
         widths = self.config.get("column_widths", default_widths)
         if len(widths) != self.table.columnCount():
             widths = default_widths
@@ -332,6 +324,6 @@ class ListView(QWidget):
             header = self.table.horizontalHeader()
             current_sort_section = header.sortIndicatorSection()
             if current_sort_section == 0:
-                return self.config.get("sort_order", {"column": 1, "order": "asc"})
+                 return self.config.get("sort_order", {"column": 1, "order": "asc"})
             return {"column": current_sort_section, "order": "asc" if header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder else "desc"}
         return self.config.get("sort_order", {"column": 1, "order": "asc"})

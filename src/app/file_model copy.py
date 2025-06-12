@@ -1,7 +1,7 @@
 # file_model.py
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional # ★ Optionalをインポート
 
 @dataclass
 class FileInfo:
@@ -11,10 +11,8 @@ class FileInfo:
     size: int
     status: str
     ocr_engine_status: str
-    job_id: Optional[str] = None
     ocr_result_summary: str = ""
     json_status: str = "-"
-    auto_csv_status: str = "-"  # ★★★ この行を追加 ★★★
     searchable_pdf_status: str = "-"
-    page_count: Optional[int] = None
+    page_count: Optional[int] = None # ★★★ ページ数フィールドを追加 ★★★
     is_checked: bool = True
