@@ -72,18 +72,18 @@ class OptionDialog(QDialog):
         api_connection_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         api_connection_form_layout = QFormLayout()
 
-        current_api_key = self.current_option_values.get("api_key", "")
-        self.profile_api_key_edit = QLineEdit(current_api_key)
-        self.profile_api_key_edit.setPlaceholderText("このプロファイル用のAPIキーを入力")
-        self.profile_api_key_edit.setToolTip("現在選択されているAPIプロファイルにのみ適用されるAPIキーです。")
-        api_connection_form_layout.addRow("APIキー:", self.profile_api_key_edit)
-
         current_base_uri = self.current_option_values.get("base_uri", "")
         self.profile_base_uri_edit = QLineEdit(current_base_uri)
         self.profile_base_uri_edit.setPlaceholderText("このプロファイル用のベースURIを入力 (例: https://example.com/api/v1)")
         self.profile_base_uri_edit.setToolTip("APIの接続先となる基本URLです。末尾のスラッシュは任意です。")
         api_connection_form_layout.addRow("ベースURI:", self.profile_base_uri_edit)
         
+        current_api_key = self.current_option_values.get("api_key", "")
+        self.profile_api_key_edit = QLineEdit(current_api_key)
+        self.profile_api_key_edit.setPlaceholderText("このプロファイル用のAPIキーを入力")
+        self.profile_api_key_edit.setToolTip("現在選択されているAPIプロファイルにのみ適用されるAPIキーです。")
+        api_connection_form_layout.addRow("APIキー:", self.profile_api_key_edit)
+
         api_connection_group.setLayout(api_connection_form_layout)
         main_layout.addWidget(api_connection_group)
 

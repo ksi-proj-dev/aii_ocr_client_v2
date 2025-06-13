@@ -3,6 +3,7 @@ import io
 import random
 import time
 import json
+from urllib.parse import quote  # ★ この行を追加
 from flask import Flask, request, jsonify, make_response, send_file
 from PyPDF2 import PdfWriter # ダミーPDF生成用
 
@@ -151,7 +152,14 @@ def mock_make_searchable_pdf():
         print(f"  Responding with dummy PDF for {file_name}.")
         response = make_response(dummy_pdf_content)
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename="mock_searchable_{file_name}.pdf"'
+        # response.headers['Content-Disposition'] = f'attachment; filename="mock_searchable_{file_name}.pdf"'
+        # UTF-8でエンコードし、URLエンコードしたファイル名を作成
+        encoded_filename = quote(f"mock_searchable_{file_name}.pdf")
+        # ASCIIフォールバック用のファイル名も用意
+        ascii_fallback_filename = "mock_searchable_file.pdf"
+        # RFC 2231形式でヘッダーを設定
+        response.headers['Content-Disposition'] = f"attachment; filename=\"{ascii_fallback_filename}\"; filename*=UTF-8''{encoded_filename}"
+
         return response, 200
     else:
         print("  Error generating dummy PDF.")

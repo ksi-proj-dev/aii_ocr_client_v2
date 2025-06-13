@@ -18,14 +18,14 @@ try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
     CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
 except Exception as e:
-    print(f"重大な警告: appdirs での設定パス取得に失敗しました。エラー: {e}")
+    #print(f"重大な警告: appdirs での設定パス取得に失敗しました。エラー: {e}")
     fallback_dir_name = f"{APP_AUTHOR}_{APP_NAME}_config_error_fallback".replace(" ", "_")
     try:
         CONFIG_DIR = os.path.join(os.getcwd(), fallback_dir_name)
         CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
-        print(f"フォールバック先のパス: {CONFIG_PATH}")
+        #print(f"フォールバック先のパス: {CONFIG_PATH}")
     except Exception as fallback_e:
-        print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
+        #print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
         CONFIG_PATH = None; CONFIG_DIR = None
 
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
@@ -46,11 +46,11 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "fulltext_output_mode": {"type": "enum", "values": ["詳細情報を取得 (bbox, 表など)", "全文テキストのみ取得"], "default": 0, "label": "テキスト出力モード:", "tooltip": "0=詳細情報 (bbox, 表などを含む), 1=全文テキスト(fulltext)のみを返却。"},
             "fulltext_linebreak_char": {"type": "bool", "default": 0, "label": "全文テキストにグループ区切り文字(\\n)を付加", "tooltip": "0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。"},
             "ocr_model": {"type": "enum", "values": ["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"], "default": "katsuji", "label": "OCRモデル選択:", "tooltip": "OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用"},
-            "upload_max_size_mb": {"type": "int", "default": 60, "min": 1, "max": 200, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":200, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード可能な最大ファイルサイズ」を超えない値を指定してください。"},
+            "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード対象として認識する最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":50, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード対象として認識する最大ファイルサイズ」を超えない値を指定してください。"},
             "split_by_page_count_enabled": {"type": "bool", "default": False, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。"},
-            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"},
+            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
         }
     },
@@ -71,9 +71,9 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "characterExtraction": {"type": "bool", "default": 0, "label": "文字抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはOFF."},
             "tableExtraction": {"type": "bool", "default": 1, "label": "表抽出オプション (DX Suite)", "tooltip": "0: OFF, 1: ON. デフォルトはON."},
             "highResolutionMode": {"type": "bool", "default": 0, "label": "高解像度オプション (サーチャブルPDF, DX Suite)", "tooltip": "0: OFF (低解像度), 1: ON (高解像度). デフォルトはOFF."},
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite 全文読取APIのファイルサイズ上限 (20MB)。"},
-            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "PDFファイルが「アップロード可能な最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり, DX Suite):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。"},
+            "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ, DX Suite)", "tooltip": "PDFファイルが「アップロード対象として認識する最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 50, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり, DX Suite):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。"},
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時, DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。DX Suite推奨は100ページ以下のためデフォルトON。"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時, DX Suite):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。\nDX Suiteの推奨は100ページ以下です。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する (DX Suite)", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。"},
@@ -130,9 +130,9 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
                 "placeholder": "例: 123",
                 "tooltip": "DX Suiteの部署IDを数字で指定します。"
             },
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:", "tooltip":"DX Suite APIの一般的なファイルサイズ上限の目安 (20MB)。"},
+            "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 50, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 500, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "DX Suiteの推奨は500ページ以下です。"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
@@ -162,9 +162,9 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
                 "tooltip": "DX Suiteの管理画面で確認したワークフローID (UUID) を指定します。（必須）"
             },
             "unitName": {"type": "string", "default": "", "label": "読取ユニット名 (任意):", "placeholder": "例: 2025年6月分請求書", "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"},
-            "upload_max_size_mb": {"type": "int", "default": 20, "min": 1, "max": 20, "suffix": " MB", "label": "アップロード可能な最大ファイルサイズ:"},
+            "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
-            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 20, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max": 50, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):"},
             "split_by_page_count_enabled": {"type": "bool", "default": True, "label": "ページ数上限で分割する (PDF分割時)"},
             "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):"},
             "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する"},
@@ -202,7 +202,7 @@ class ConfigManager:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     user_config = json.load(f)
             except (json.JSONDecodeError, Exception) as e:
-                print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
+                #print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
                 ConfigManager._backup_corrupted_config()
                 user_config = ConfigManager._get_default_config_structure()
         else:
