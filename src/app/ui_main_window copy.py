@@ -6,7 +6,6 @@ import platform
 import subprocess
 from typing import Optional, Any, List, Dict
 import argparse
-import tempfile
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QToolBar, QVBoxLayout, QWidget,
@@ -14,19 +13,19 @@ from PyQt6.QtWidgets import (
     QFormLayout, QPushButton, QHBoxLayout, QFrame, QSizePolicy,
     QDialog, QDialogButtonBox, QComboBox
 )
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QAction, QFontMetrics, QIcon
+from PyQt6.QtCore import Qt, QTimer, QSize
 
 from list_view import ListView
 from option_dialog import OptionDialog
 from summary_view import SummaryView
-from config_manager import ConfigManager, CONFIG_DIR
-from log_manager import LogManager, LogLevel, LOG_DIR_PATH
+from config_manager import ConfigManager
+from log_manager import LogManager, LogLevel
 from api_client import OCRApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
-from ui_dialogs import SortConfigDialog
+from ui_dialogs import OcrConfirmationDialog, SortConfigDialog
 
 from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -128,23 +127,6 @@ class MainWindow(QMainWindow):
         self._update_all_ui_controls_state()
 
         self.log_manager.info(f"Application initialized. API: {self.active_api_profile.get('name')}, Mode: {self.config.get('api_execution_mode', 'demo').upper()}", context="SYSTEM_LIFECYCLE")
-
-        QTimer.singleShot(100, self._log_startup_paths)
-
-    def _log_startup_paths(self):
-        """
-        起動時に各種パス情報をログに出力する。
-        UIの準備が整った後に呼び出されることを想定。
-        """
-        self.log_manager.info("--- アプリケーション情報 ---", context="SYSTEM_INFO")
-        try:
-            temp_dir = tempfile.gettempdir()
-            self.log_manager.info(f"設定ファイル保存先: {CONFIG_DIR}", context="SYSTEM_PATH")
-            self.log_manager.info(f"ログファイル保存先: {LOG_DIR_PATH}", context="SYSTEM_PATH")
-            self.log_manager.info(f"一時ファイル保存先: {temp_dir}", context="SYSTEM_PATH")
-        except Exception as e:
-            self.log_manager.error(f"パス情報のログ出力中にエラーが発生しました: {e}", context="SYSTEM_PATH_ERROR")
-        self.log_manager.info("--------------------------", context="SYSTEM_INFO")
 
     def _handle_api_profile_selection(self):
         available_profiles = self.config.get("api_profiles", [])
@@ -277,7 +259,7 @@ class MainWindow(QMainWindow):
         self.update_timer.setSingleShot(True)
         self.update_timer.timeout.connect(self.perform_batch_list_view_update)
         self.input_folder_path = ""
-        self.sorting_file_indices = []
+        self.sorting_file_indices = [] # ★★★ この行を追加 ★★★
 
     def _update_window_title(self):
         profile_name = "プロファイル未選択"
@@ -295,6 +277,7 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.file_auto_csv_processed_signal.connect(self.on_file_auto_csv_processed)
             self.ocr_orchestrator.file_searchable_pdf_processed_signal.connect(self.on_file_searchable_pdf_processed)
 
+            # ★★★ 仕分け用シグナルの接続を追加 ★★★
             self.ocr_orchestrator.sort_process_started_signal.connect(self.on_sort_process_started)
             self.ocr_orchestrator.sort_process_finished_signal.connect(self.on_sort_process_finished)
 
@@ -349,7 +332,7 @@ class MainWindow(QMainWindow):
         self.summary_view.log_manager = self.log_manager
         self.list_view = ListView(self.processed_files_info)
         self.list_view.item_check_state_changed.connect(self.on_list_item_check_state_changed)
-        self.list_view.table.itemSelectionChanged.connect(self.update_ocr_controls)
+        self.list_view.table.itemSelectionChanged.connect(self.update_ocr_controls) # ★★★ この行を追加 ★★★
         self.stack.addWidget(self.summary_view)
         self.stack.addWidget(self.list_view)
         self.splitter.addWidget(self.stack)
@@ -428,11 +411,13 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
+        # ★★★ ここから「仕分け実行」ボタンを追加 ★★★
         self.start_sort_action = QAction("📊仕分け", self)
         self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
         self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
         toolbar.addAction(self.start_sort_action)
         toolbar.addSeparator()
+        # ★★★ ここまで追加 ★★★
 
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
@@ -440,12 +425,15 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.download_csv_action)
         
         toolbar.addSeparator()
+        # ★★★ ここまで変更 ★★★
 
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
         self.api_mode_toggle_button = QPushButton(); self.api_mode_toggle_button.setCheckable(False); self.api_mode_toggle_button.clicked.connect(self._toggle_api_mode); self.api_mode_toggle_button.setMinimumWidth(120)
 
+        # ★★★ ここを変更 ★★★
+        # paddingを元に戻し、margin を上下に 2px ずつ追加します
         self.api_mode_toggle_button.setStyleSheet("""
             QPushButton { 
                 padding: 4px 8px; 
@@ -459,6 +447,7 @@ class MainWindow(QMainWindow):
             QPushButton[apiMode="demo"] { background-color: #e6f7ff; color: #005f9e; }
             QPushButton:disabled { background-color: #f0f0f0; color: #a0a0a0; }
         """)
+        # ★★★ ここまで変更 ★★★
 
         toolbar.addWidget(self.api_mode_toggle_button)
         right_spacer = QWidget(); right_spacer.setFixedWidth(10); toolbar.addWidget(right_spacer)
@@ -530,12 +519,15 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'list_view'): self.list_view.set_checkboxes_enabled(True)
         self.update_ocr_controls()
 
+        # ★★★ ここからCSVエクスポートの呼び出し処理を追加 ★★★
         if not was_interrupted and not fatal_error_info:
+            # 正常終了した場合のみCSVエクスポートを試みる
             try:
                 self.ocr_orchestrator.export_results_to_csv(self.processed_files_info, self.input_folder_path)
             except Exception as e:
                 self.log_manager.error(f"CSVエクスポート処理中に予期せぬエラーが発生しました: {e}", context="CSV_EXPORT_ERROR", exc_info=True)
                 QMessageBox.critical(self, "CSVエクスポートエラー", f"CSVファイルのエクスポートに失敗しました。\n詳細はログを確認してください。\n\nエラー: {e}")
+        # ★★★ ここまで追加 ★★★
 
         final_message = "全てのファイルのOCR処理が完了しました。"
         if fatal_error_info and isinstance(fatal_error_info, dict):
@@ -580,6 +572,7 @@ class MainWindow(QMainWindow):
         self.update_all_status_displays(); self.update_ocr_controls()    
 
     def append_log_message_to_widget(self, level, message):
+        # ★★★ ここから変更 ★★★
         if hasattr(self, 'log_widget') and self.log_widget:
             # 設定から現在のログ表示レベルを取得
             log_settings = self.config.get("log_settings", {})
@@ -604,7 +597,7 @@ class MainWindow(QMainWindow):
 
             self.log_widget.append(f'<font color="{color}">{message}</font>')
             self.log_widget.ensureCursorVisible()
-
+        # ★★★ ここまで変更 ★★★
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
         if not os.path.isdir(last_dir): last_dir = os.path.expanduser("~")
@@ -642,7 +635,7 @@ class MainWindow(QMainWindow):
             current_option_values=current_option_values,
             global_config=self.config,
             api_profile=self.active_api_profile,
-            api_client=self.api_client,
+            api_client=self.api_client, # ★★★ この引数を追加 ★★★
             parent=self
         )
         if dialog.exec():
@@ -695,6 +688,7 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             sort_config_id = dialog.get_sort_config_id()
             
+            # ★★★ ここから警告メッセージのロジックを追加 ★★★
             is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
             if is_dx_standard:
                 file_actions = self.config.get("file_actions", {})
@@ -712,7 +706,8 @@ class MainWindow(QMainWindow):
                     
                     if warning_reply == QMessageBox.StandardButton.Cancel:
                         self.log_manager.info("ユーザーが出力設定の警告後にキャンセルしました。", context="SORT_FLOW")
-                        return
+                        return # 処理を中断
+            # ★★★ ここまで追加 ★★★
 
             # 最終確認ダイアログ
             reply = QMessageBox.question(self, "仕分け実行の確認",
@@ -798,16 +793,19 @@ class MainWindow(QMainWindow):
             
         target_file_info = self.processed_files_info[original_file_main_idx]
 
+        # ★★★ ここから修正 ★★★
         # シグナルから直接渡されたjob_idを保存する
         if job_id:
             target_file_info.job_id = str(job_id)
             self.log_manager.debug(f"Job ID '{job_id}' saved for file '{target_file_info.name}'.", context="JOB_ID_STORE")
+        # ★★★ ここまで修正 ★★★
                 
         if ocr_error_info_for_original and isinstance(ocr_error_info_for_original, dict):
             target_file_info.status = "OCR失敗"
             target_file_info.ocr_engine_status = OCR_STATUS_FAILED
             err_msg = ocr_error_info_for_original.get('message', '不明なOCRエラー')
             err_code = ocr_error_info_for_original.get('code', '')
+            # (以降のコードは変更ありません)
             err_detail = ocr_error_info_for_original.get('detail', '')
             target_file_info.ocr_result_summary = f"エラー: {err_msg}" + (f" (コード: {err_code})" if err_code else "")
             if err_code not in ["USER_INTERRUPT", "NOT_IMPLEMENTED_LIVE_API", "NOT_IMPLEMENTED_API_CALL", "FATAL_ERROR_STOP", "PART_PROCESSING_ERROR", "DXSUITE_REGISTER_HTTP_ERROR_NON_JSON", "DXSUITE_GETRESULT_HTTP_ERROR_NON_JSON", "DXSUITE_REGISTER_REQUEST_FAIL", "DXSUITE_GETRESULT_REQUEST_FAIL", "DXSUITE_REGISTER_UNEXPECTED_ERROR", "DXSUITE_GETRESULT_UNEXPECTED_ERROR", "DXSUITE_BASE_URI_NOT_CONFIGURED"] and not ("DXSUITE_API_" in err_code):
@@ -928,6 +926,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rescan_action'):
             self.rescan_action.setEnabled(can_rescan)
         
+        # ★★★ ここからロジックを修正 ★★★
         # CSVダウンロードボタンの状態制御
         can_download_csv = False
         if not running and hasattr(self, 'list_view'):
@@ -947,6 +946,7 @@ class MainWindow(QMainWindow):
         
         if hasattr(self, 'download_csv_action'):
             self.download_csv_action.setEnabled(can_download_csv)
+        # ★★★ ここまで修正 ★★★
 
         enable_others = not running
         if hasattr(self, 'input_folder_action'):
@@ -1008,15 +1008,20 @@ class MainWindow(QMainWindow):
         if not self.update_timer.isActive():
             self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
+    # ★★★ ここから仕分け処理用のスロットを追加 ★★★
     def on_sort_process_started(self, message: str):
         self.log_manager.info(f"MainWindow: Sort process started. Msg: {message}", context="SORT_FLOW_MAIN")
         self.is_ocr_running = True
+        # UI上の他のボタンを無効化
         self.update_ocr_controls()
+        # ★★★ 確認は移動したため、この行を削除またはコメントアウト ★★★
+        # QMessageBox.information(self, "仕分け処理開始", message)
 
     def on_sort_process_finished(self, success: bool, result_or_error: object):
         self.log_manager.info(f"MainWindow: Sort process finished. Success: {success}", context="SORT_FLOW_MAIN")
         self.is_ocr_running = False
         
+        # ★★★ ここから追加 ★★★
         final_status_text = "仕分け完了" if success else "仕分け失敗"
         for idx in self.sorting_file_indices:
             if 0 <= idx < len(self.processed_files_info):
@@ -1024,10 +1029,12 @@ class MainWindow(QMainWindow):
                 self.processed_files_info[idx].ocr_engine_status = OCR_STATUS_COMPLETED if success else OCR_STATUS_FAILED
         self.list_view.update_files(self.processed_files_info, is_running=False)
         self.sorting_file_indices = [] # 追跡リストをクリア
+        # ★★★ ここまで追加 ★★★
 
         self.update_ocr_controls()
         
         if success and isinstance(result_or_error, dict):
+            # ★★★ メッセージの組み立て部分を修正 ★★★
             final_message = result_or_error.get('message', '仕分け処理が正常に完了しました。')
             QMessageBox.information(self, "処理完了", final_message)
         elif not success and isinstance(result_or_error, dict):
