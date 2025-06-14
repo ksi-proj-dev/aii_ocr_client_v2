@@ -1,3 +1,5 @@
+# ui_main_window.py
+
 import sys
 import os
 import platform
@@ -12,8 +14,8 @@ from PyQt6.QtWidgets import (
     QFormLayout, QPushButton, QHBoxLayout, QFrame, QSizePolicy,
     QDialog, QDialogButtonBox, QComboBox
 )
-from PyQt6.QtGui import QAction, QFontMetrics, QIcon
-from PyQt6.QtCore import Qt, QTimer, QSize
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, QTimer
 
 from list_view import ListView
 from option_dialog import OptionDialog
@@ -24,7 +26,7 @@ from api_client import OCRApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
-from ui_dialogs import OcrConfirmationDialog, SortConfigDialog
+from ui_dialogs import SortConfigDialog
 
 from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -68,10 +70,11 @@ class ApiSelectionDialog(QDialog):
 
         selected_text_to_set = None
         if initial_selection_filter and profiles_to_display:
+            # フィルタリングされたリストの最初の項目を選択状態にする
             selected_text_to_set = profiles_to_display[0].get("name", profiles_to_display[0].get("id"))
         elif not initial_selection_filter and current_profile_id:
-            profile = next((p for p in profiles_to_display if p.get("id") == current_profile_id), None)
-            if profile:
+             profile = next((p for p in profiles_to_display if p.get("id") == current_profile_id), None)
+             if profile:
                 selected_text_to_set = profile.get("name", profile.get("id"))
 
         for profile in profiles_to_display:
@@ -99,22 +102,7 @@ class ApiSelectionDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self, cli_args: Optional[argparse.Namespace] = None):
         super().__init__()
-        
         self.log_manager = LogManager()
-        if self.log_manager.initialization_error:
-            error = self.log_manager.initialization_error
-            log_dir = self.log_manager.log_dir
-            QMessageBox.critical(self, "重大なエラー", 
-                                f"ログフォルダの作成に失敗しました。アプリケーションを終了します。\n\n"
-                                f"■試行したパス:\n{log_dir}\n\n"
-                                f"■エラー内容:\n{error}\n\n"
-                                f"【考えられる原因と対策】\n"
-                                f"・アプリケーションにフォルダを作成する権限がありません。\n"
-                                f"  -> 管理者権限で実行するか、別の場所にインストールし直してください。\n"
-                                f"・セキュリティソフトがフォルダ作成をブロックしています。\n"
-                                f"  -> セキュリティソフトの設定で、このアプリケーションを許可してください。")
-            sys.exit(1)
-
         self.log_manager.info(f"AI inside OCR Client Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
 
         self.config = ConfigManager.load()
@@ -235,7 +223,7 @@ class MainWindow(QMainWindow):
             initial_dialog_selection_id = current_saved_profile_id
             if ids_for_dialog_filter:
                 if not (current_saved_profile_id in ids_for_dialog_filter) and ids_for_dialog_filter:
-                    initial_dialog_selection_id = ids_for_dialog_filter[0]
+                     initial_dialog_selection_id = ids_for_dialog_filter[0]
             
             profiles_for_dialog_display = [p for p in available_profiles if ids_for_dialog_filter is None or p.get("id") in ids_for_dialog_filter]
             if not profiles_for_dialog_display:
@@ -433,24 +421,31 @@ class MainWindow(QMainWindow):
         self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
+
         self.rescan_action = QAction("🔄再スキャン", self)
         self.rescan_action.triggered.connect(self.confirm_rescan_ui)
         toolbar.addAction(self.rescan_action)
+
         toolbar.addSeparator()
+
         self.start_sort_action = QAction("📊仕分け", self)
         self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
         self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
         toolbar.addAction(self.start_sort_action)
         toolbar.addSeparator()
+
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
+        
         toolbar.addSeparator()
+
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
         self.api_mode_toggle_button = QPushButton(); self.api_mode_toggle_button.setCheckable(False); self.api_mode_toggle_button.clicked.connect(self._toggle_api_mode); self.api_mode_toggle_button.setMinimumWidth(120)
+
         self.api_mode_toggle_button.setStyleSheet("""
             QPushButton { 
                 padding: 4px 8px; 
@@ -464,6 +459,7 @@ class MainWindow(QMainWindow):
             QPushButton[apiMode="demo"] { background-color: #e6f7ff; color: #005f9e; }
             QPushButton:disabled { background-color: #f0f0f0; color: #a0a0a0; }
         """)
+
         toolbar.addWidget(self.api_mode_toggle_button)
         right_spacer = QWidget(); right_spacer.setFixedWidth(10); toolbar.addWidget(right_spacer)
         folder_label_toolbar = QToolBar("Folder Paths Toolbar"); folder_label_toolbar.setMovable(False); folder_label_widget = QWidget(); folder_label_layout = QFormLayout(folder_label_widget); folder_label_layout.setContentsMargins(5,5,5,5); folder_label_layout.setSpacing(3)
@@ -585,20 +581,27 @@ class MainWindow(QMainWindow):
 
     def append_log_message_to_widget(self, level, message):
         if hasattr(self, 'log_widget') and self.log_widget:
+            # 設定から現在のログ表示レベルを取得
             log_settings = self.config.get("log_settings", {})
+            
+            # 設定に基づいて表示するかどうかを判断
             if level == LogLevel.INFO and not log_settings.get("log_level_info_enabled", True):
-                return
+                return # INFO非表示設定なら、ここで処理を終了
             if level == LogLevel.WARNING and not log_settings.get("log_level_warning_enabled", True):
-                return
+                return # WARNING非表示設定なら、ここで処理を終了
             if level == LogLevel.DEBUG and not log_settings.get("log_level_debug_enabled", False):
-                return
+                return # DEBUG非表示設定なら、ここで処理を終了
+            # ERRORは常に表示するため、フィルタリングしない
+
+            # 色付けと表示処理
             color_map = {
                 LogLevel.ERROR: "red",
                 LogLevel.WARNING: "orange",
                 LogLevel.DEBUG: "gray",
                 LogLevel.INFO: "black"
             }
-            color = color_map.get(level, "black")
+            color = color_map.get(level, "black") # 未知のレベルは黒で表示
+
             self.log_widget.append(f'<font color="{color}">{message}</font>')
             self.log_widget.ensureCursorVisible()
 
@@ -678,6 +681,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'ocr_orchestrator'): self.ocr_orchestrator.confirm_and_stop_ocr(self)
 
     def on_start_sort_clicked(self):
+        """仕分け実行ボタンがクリックされたときの処理"""
         if self.is_ocr_running:
             QMessageBox.warning(self, "処理中", "現在別の処理が実行中です。")
             return
@@ -697,18 +701,20 @@ class MainWindow(QMainWindow):
                 auto_download_csv_enabled = file_actions.get("dx_standard_auto_download_csv", False)
                 
                 if not auto_download_csv_enabled:
+                    # CSV自動ダウンロードがオフの場合、警告を出す
                     warning_reply = QMessageBox.warning(self, "注意：出力設定の確認",
                                                         "「OCR完了時にCSVファイルを自動でダウンロードする」設定がオフになっています。\n\n"
                                                         "このまま処理を続行すると、サーバー上では処理が完了しますが、"
                                                         "後からこのアプリケーションを使ってCSVを手動でダウンロードすることはできません。\n\n"
                                                         "よろしいですか？",
                                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                                                        QMessageBox.StandardButton.Cancel)
+                                                        QMessageBox.StandardButton.Cancel) # デフォルトはキャンセル
                     
                     if warning_reply == QMessageBox.StandardButton.Cancel:
                         self.log_manager.info("ユーザーが出力設定の警告後にキャンセルしました。", context="SORT_FLOW")
                         return
 
+            # 最終確認ダイアログ
             reply = QMessageBox.question(self, "仕分け実行の確認",
                                         f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
                                         f"仕分けルールID: {sort_config_id}\n\n"
@@ -731,6 +737,7 @@ class MainWindow(QMainWindow):
                 self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
 
     def on_download_csv_clicked(self):
+        """CSVダウンロードボタンがクリックされたときの処理"""
         if not hasattr(self, 'list_view') or not self.list_view.table.selectedItems():
             return
 
@@ -740,10 +747,12 @@ class MainWindow(QMainWindow):
             
         file_info = self.processed_files_info[selected_row]
 
+        # 念のため再度条件をチェック
         if not (file_info.ocr_engine_status == OCR_STATUS_COMPLETED and file_info.job_id):
             QMessageBox.information(self, "ダウンロード不可", "このファイルのCSVはダウンロードできません。\n（処理が完了していないか、ジョブIDがありません）")
             return
             
+        # ファイル保存ダイアログを開く
         default_filename = f"{os.path.splitext(file_info.name)[0]}.csv"
         save_path, _ = QFileDialog.getSaveFileName(self, "CSVを保存", os.path.join(self.input_folder_path, default_filename), "CSVファイル (*.csv)")
 
@@ -751,6 +760,7 @@ class MainWindow(QMainWindow):
             self.log_manager.info("CSV保存がユーザーによってキャンセルされました。", context="CSV_DOWNLOAD")
             return
 
+        # APIを呼び出してCSVデータを取得
         self.log_manager.info(f"'{file_info.name}' のCSVダウンロードを開始します (Unit ID: {file_info.job_id})", context="CSV_DOWNLOAD")
         csv_data, error = self.api_client.download_standard_csv(file_info.job_id)
 
@@ -759,6 +769,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "ダウンロード失敗", f"CSVのダウンロードに失敗しました。\n\nエラー: {error.get('message', '詳細不明')}")
             return
 
+        # ファイルに書き込み
         try:
             with open(save_path, 'wb') as f:
                 f.write(csv_data)
@@ -787,6 +798,7 @@ class MainWindow(QMainWindow):
             
         target_file_info = self.processed_files_info[original_file_main_idx]
 
+        # シグナルから直接渡されたjob_idを保存する
         if job_id:
             target_file_info.job_id = str(job_id)
             self.log_manager.debug(f"Job ID '{job_id}' saved for file '{target_file_info.name}'.", context="JOB_ID_STORE")
@@ -799,7 +811,7 @@ class MainWindow(QMainWindow):
             err_detail = ocr_error_info_for_original.get('detail', '')
             target_file_info.ocr_result_summary = f"エラー: {err_msg}" + (f" (コード: {err_code})" if err_code else "")
             if err_code not in ["USER_INTERRUPT", "NOT_IMPLEMENTED_LIVE_API", "NOT_IMPLEMENTED_API_CALL", "FATAL_ERROR_STOP", "PART_PROCESSING_ERROR", "DXSUITE_REGISTER_HTTP_ERROR_NON_JSON", "DXSUITE_GETRESULT_HTTP_ERROR_NON_JSON", "DXSUITE_REGISTER_REQUEST_FAIL", "DXSUITE_GETRESULT_REQUEST_FAIL", "DXSUITE_REGISTER_UNEXPECTED_ERROR", "DXSUITE_GETRESULT_UNEXPECTED_ERROR", "DXSUITE_BASE_URI_NOT_CONFIGURED"] and not ("DXSUITE_API_" in err_code):
-                QMessageBox.warning(self, f"OCR処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のOCR処理中にエラーが発生しました。\n\nメッセージ: {err_msg}\nコード: {err_code}\n詳細: {err_detail if err_detail else 'N/A'}\n\nログファイルをご確認ください。")
+                 QMessageBox.warning(self, f"OCR処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のOCR処理中にエラーが発生しました。\n\nメッセージ: {err_msg}\nコード: {err_code}\n詳細: {err_detail if err_detail else 'N/A'}\n\nログファイルをご確認ください。")
         elif ocr_result_data_for_original:
             target_file_info.status = "OCR成功"
             target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED
@@ -916,13 +928,17 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rescan_action'):
             self.rescan_action.setEnabled(can_rescan)
         
+        # CSVダウンロードボタンの状態制御
         can_download_csv = False
         if not running and hasattr(self, 'list_view'):
+            # 「選択された行」のリストを取得する
             selected_rows = self.list_view.table.selectionModel().selectedRows()
+            # 選択されている行が1つだけの場合に有効化を検討
             if len(selected_rows) == 1:
                 selected_row_index = selected_rows[0].row()
                 if 0 <= selected_row_index < len(self.processed_files_info):
                     file_info = self.processed_files_info[selected_row_index]
+                    # 完了済み、job_idがあり、現在のプロファイルがdx_standard_v2の場合のみ
                     if (file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
                         file_info.job_id and
                         self.active_api_profile and
@@ -983,7 +999,7 @@ class MainWindow(QMainWindow):
     def on_file_auto_csv_processed(self, original_file_main_idx, original_file_path, status_info):
         self.log_manager.debug(f"Original File Auto CSV processed: {os.path.basename(original_file_path)}, Status: {status_info}", context="CALLBACK_CSV_ORIGINAL")
         if not (0 <= original_file_main_idx < len(self.processed_files_info)):
-            return
+            return # エラーログは省略
         
         target_file_info = self.processed_files_info[original_file_main_idx]
         if status_info and isinstance(status_info, dict):
@@ -1007,8 +1023,8 @@ class MainWindow(QMainWindow):
                 self.processed_files_info[idx].status = final_status_text
                 self.processed_files_info[idx].ocr_engine_status = OCR_STATUS_COMPLETED if success else OCR_STATUS_FAILED
         self.list_view.update_files(self.processed_files_info, is_running=False)
-        self.sorting_file_indices = []
-        
+        self.sorting_file_indices = [] # 追跡リストをクリア
+
         self.update_ocr_controls()
         
         if success and isinstance(result_or_error, dict):
