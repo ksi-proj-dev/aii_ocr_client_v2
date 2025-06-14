@@ -39,11 +39,9 @@ class ListView(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         
-        # ★★★ ここから修正 ★★★
-        # OSのテーマに依存しないように、固定の色を指定します。
         current_palette = self.palette()
         base_color = current_palette.color(QPalette.ColorRole.Base).name()
-        alternate_base_color = "#f5f5f5"  # 薄いグレーに固定
+        alternate_base_color = current_palette.color(QPalette.ColorRole.AlternateBase).name()
         highlight_color = current_palette.color(QPalette.ColorRole.Highlight).name()
         highlighted_text_color = current_palette.color(QPalette.ColorRole.HighlightedText).name()
         
@@ -55,7 +53,7 @@ class ListView(QWidget):
             }}
             QTableWidget {{ 
                 gridline-color: #e0e0e0; 
-                alternate-background-color: {alternate_base_color}; /* 固定色を適用 */
+                alternate-background-color: {alternate_base_color}; 
                 background-color: {base_color};
                 outline: 0;
             }}
@@ -72,7 +70,6 @@ class ListView(QWidget):
                 color: {highlighted_text_color};
             }}
         """)
-        # ★★★ ここまで修正 ★★★
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
