@@ -5,12 +5,13 @@ import re
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox, QHBoxLayout,
     QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton,
-    QVBoxLayout, QLabel, QWidget, QScrollArea
+    QVBoxLayout, QLabel,
+    QWidget
 )
-from PyQt6.QtCore import Qt
 from config_manager import ConfigManager
-from ui_dialogs import ClassSelectionDialog, WorkflowSearchDialog
+from ui_dialogs import ClassSelectionDialog # ★ 新しいダイアログをインポート
 from typing import Optional, Dict, Any
+from ui_dialogs import ClassSelectionDialog, WorkflowSearchDialog # ★ WorkflowSearchDialog を追加 ★
 
 INVALID_FOLDER_NAME_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -49,22 +50,15 @@ class OptionDialog(QDialog):
             self.output_format_widget.setToolTip("")
 
     def init_ui(self):
-        # ★★★ ここから修正 ★★★
-        # メインレイアウトとスクロールエリアの準備
         main_layout = QVBoxLayout(self)
-        scroll_area = QScrollArea(self)
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
-        scroll_container = QWidget()
-        options_layout = QVBoxLayout(scroll_container) # 全てのオプションはこのレイアウトに追加
 
+        # ★★★ スタイル定義を追加 ★★★
         group_box_style = """
             QGroupBox {
                 background-color: #f0f0f0;
                 border: 1px solid #d0d0d0;
                 border-radius: 5px;
-                margin-top: 1ex;
+                margin-top: 1ex; /* QGroupBoxのタイトルとかぶらないようにマージンを設定 */
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -74,42 +68,45 @@ class OptionDialog(QDialog):
             }
         """
 
-        # API接続設定グループ
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
-        api_connection_group.setStyleSheet(group_box_style)
+        api_connection_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         api_connection_form_layout = QFormLayout()
+
         current_base_uri = self.current_option_values.get("base_uri", "")
         self.profile_base_uri_edit = QLineEdit(current_base_uri)
         self.profile_base_uri_edit.setPlaceholderText("このプロファイル用のベースURIを入力 (例: https://example.com/api/v1)")
         self.profile_base_uri_edit.setToolTip("APIの接続先となる基本URLです。末尾のスラッシュは任意です。")
         api_connection_form_layout.addRow("ベースURI:", self.profile_base_uri_edit)
+        
         current_api_key = self.current_option_values.get("api_key", "")
         self.profile_api_key_edit = QLineEdit(current_api_key)
         self.profile_api_key_edit.setPlaceholderText("このプロファイル用のAPIキーを入力")
         self.profile_api_key_edit.setToolTip("現在選択されているAPIプロファイルにのみ適用されるAPIキーです。")
         api_connection_form_layout.addRow("APIキー:", self.profile_api_key_edit)
-        api_connection_group.setLayout(api_connection_form_layout)
-        options_layout.addWidget(api_connection_group)
 
-        # API別OCRオプションのグループ
+        api_connection_group.setLayout(api_connection_form_layout)
+        main_layout.addWidget(api_connection_group)
+
         if self.options_schema:
             dynamic_options_group = QGroupBox("API別 OCRオプション")
-            dynamic_options_group.setStyleSheet(group_box_style)
+            dynamic_options_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
             dynamic_form_layout = QFormLayout()
             
-            # (中身のロジックは変更なし)
             for key, schema_item in self.options_schema.items():
                 if key in ["api_key", "base_uri"]: continue
+
                 label_text = schema_item.get("label", key) + ":"
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
                 widget = None
                 tooltip = schema_item.get("tooltip", "")
+
                 if schema_item.get("type") == "bool":
                     widget = QCheckBox(schema_item.get("label", key))
                     widget.setChecked(bool(current_value))
                     if tooltip: widget.setToolTip(tooltip)
                     dynamic_form_layout.addRow(widget)
                     self.widgets_map[key] = widget
+                
                 elif schema_item.get("type") == "int":
                     widget = QSpinBox()
                     if "min" in schema_item: widget.setMinimum(schema_item["min"])
@@ -119,6 +116,7 @@ class OptionDialog(QDialog):
                     if tooltip: widget.setToolTip(tooltip)
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
+
                 elif key == "classes":
                     h_layout = QHBoxLayout()
                     line_edit = QLineEdit(str(current_value) if current_value is not None else "")
@@ -126,21 +124,27 @@ class OptionDialog(QDialog):
                     line_edit.setToolTip(tooltip)
                     select_button = QPushButton("クラスを選択...")
                     select_button.clicked.connect(self.open_class_selection_dialog)
+
                     h_layout.addWidget(line_edit)
                     h_layout.addWidget(select_button)
+                    
                     dynamic_form_layout.addRow(label_text, h_layout)
                     self.widgets_map[key] = line_edit
+
                 elif schema_item.get("type") == "string":
                     if key == "workflowId":
                         h_layout = QHBoxLayout()
                         line_edit = QLineEdit(str(current_value) if current_value is not None else "")
                         if "placeholder" in schema_item: line_edit.setPlaceholderText(schema_item["placeholder"])
                         if tooltip: line_edit.setToolTip(tooltip)
+                        
                         search_button = QPushButton("検索...")
                         search_button.setToolTip("利用可能なワークフローを検索してIDを設定します。")
                         search_button.clicked.connect(self.open_workflow_search_dialog)
+                        
                         h_layout.addWidget(line_edit)
                         h_layout.addWidget(search_button)
+                        
                         dynamic_form_layout.addRow(label_text, h_layout)
                         self.widgets_map[key] = line_edit
                     else:
@@ -149,6 +153,7 @@ class OptionDialog(QDialog):
                         if tooltip: widget.setToolTip(tooltip)
                         dynamic_form_layout.addRow(label_text, widget)
                         self.widgets_map[key] = widget
+                
                 elif schema_item.get("type") == "enum":
                     widget = QComboBox()
                     if "values" in schema_item and isinstance(schema_item["values"], list):
@@ -176,28 +181,32 @@ class OptionDialog(QDialog):
                                         elif isinstance(default_val, str):
                                             default_idx = widget.findText(str(default_val));
                                             if default_idx != -1: widget.setCurrentIndex(default_idx)
+
                     if tooltip: widget.setToolTip(tooltip)
+
                     if key == "model":
                         widget.currentIndexChanged.connect(self.on_model_changed)
+
                     dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
+                
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox):
                         widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
 
             if dynamic_form_layout.rowCount() > 0:
                 dynamic_options_group.setLayout(dynamic_form_layout)
-                options_layout.addWidget(dynamic_options_group)
+                main_layout.addWidget(dynamic_options_group)
                 self.toggle_dynamic_split_options_enabled_state()
             else:
                 dynamic_options_group.setVisible(False)
 
-        # ファイル処理後設定のグループ
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
-        file_process_group.setStyleSheet(group_box_style)
+        file_process_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         file_process_form_layout = QFormLayout()
         file_actions_config = self.global_config.get("file_actions", {})
         
+        # 既存のラジオボタン群を一つのウィジェットにまとめる
         self.output_format_widget = QWidget()
         output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
@@ -214,6 +223,7 @@ class OptionDialog(QDialog):
         output_format_layout_v.addWidget(self.output_format_both_radio)
         file_process_form_layout.addRow(output_format_label, self.output_format_widget)
 
+        # dx_standard_v2 専用のチェックボックス群ウィジェットを作成
         self.dx_standard_output_widget = QWidget()
         dx_standard_output_label = QLabel("出力形式 (dx standard):")
         self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
@@ -253,11 +263,10 @@ class OptionDialog(QDialog):
         collision_layout_v.addWidget(self.collision_skip_radio)
         file_process_form_layout.addRow(collision_label, collision_layout_v)
         file_process_group.setLayout(file_process_form_layout)
-        options_layout.addWidget(file_process_group)
+        main_layout.addWidget(file_process_group)
         
-        # ログ設定グループ
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
-        log_settings_group.setStyleSheet(group_box_style)
+        log_settings_group.setStyleSheet(group_box_style) # ★★★ スタイルを適用 ★★★
         log_settings_config = self.global_config.get("log_settings", {})
         log_checkbox_layout = QHBoxLayout()
         self.log_level_info_chk = QCheckBox("INFO")
@@ -279,13 +288,8 @@ class OptionDialog(QDialog):
         error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
         error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
         log_section_layout.addWidget(error_label)
-        options_layout.addLayout(log_section_layout)
+        main_layout.addLayout(log_section_layout)
 
-        options_layout.addStretch(1)
-        scroll_area.setWidget(scroll_container)
-        main_layout.addWidget(scroll_area)
-
-        # 保存/キャンセルボタン（スクロールエリアの外に配置）
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
         self.cancel_btn = QPushButton("キャンセル")
@@ -295,11 +299,8 @@ class OptionDialog(QDialog):
         button_layout.addWidget(self.save_btn)
         button_layout.addWidget(self.cancel_btn)
         main_layout.addLayout(button_layout)
-        
-        # ダイアログのサイズを画面に合わせて調整
-        screen_height = self.screen().geometry().height() if self.screen() else 800
-        self.resize(600, min(900, int(screen_height * 0.9)))
-        # ★★★ ここまで修正 ★★★
+
+        self.setLayout(main_layout)
 
     def on_model_changed(self):
         """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
