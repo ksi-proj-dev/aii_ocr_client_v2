@@ -5,8 +5,9 @@ import re
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QComboBox, QCheckBox, QHBoxLayout,
     QPushButton, QMessageBox, QGroupBox, QSpinBox, QRadioButton,
-    QVBoxLayout, QLabel, QWidget, QTabWidget
+    QVBoxLayout, QLabel, QWidget, QScrollArea
 )
+from PyQt6.QtCore import Qt
 from config_manager import ConfigManager
 from ui_dialogs import ClassSelectionDialog, WorkflowSearchDialog
 from typing import Optional, Dict, Any
@@ -28,6 +29,7 @@ class OptionDialog(QDialog):
         self.saved_settings = (None, None)
 
         self.init_ui()
+        self.resize(550, 900)
 
         # init_ui の後にプロファイル別のUI制御を追加
         is_dx_standard = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
@@ -35,37 +37,28 @@ class OptionDialog(QDialog):
         self.output_format_widget.setVisible(not is_dx_standard)
         self.dx_standard_output_widget.setVisible(is_dx_standard)
 
+        # dx_atypical の場合の制御もここに集約
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
         if is_dx_atypical:
             self.output_format_json_only_radio.setChecked(True)
             self.output_format_widget.setEnabled(False)
             tooltip_text = "このプロファイルはJSON出力のみをサポートしています。"
             self.output_format_widget.setToolTip(tooltip_text)
-        elif not is_dx_standard:
+        elif not is_dx_standard: # is_dx_standardでない場合のみ、有効化/ツールチップ解除を行う
             self.output_format_widget.setEnabled(True)
             self.output_format_widget.setToolTip("")
 
     def init_ui(self):
-        # ★★★ ここから全面的に修正 ★★★
-        # メインレイアウト
+        # ★★★ ここから修正 ★★★
+        # メインレイアウトとスクロールエリアの準備
         main_layout = QVBoxLayout(self)
-        self.setLayout(main_layout)
+        scroll_area = QScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        scroll_container = QWidget()
+        options_layout = QVBoxLayout(scroll_container) # 全てのオプションはこのレイアウトに追加
 
-        # タブウィジェットの作成
-        self.tabs = QTabWidget()
-        main_layout.addWidget(self.tabs)
-
-        # --- タブ1: API別オプション ---
-        api_options_tab = QWidget()
-        api_layout = QVBoxLayout(api_options_tab)
-        api_layout.setContentsMargins(5, 10, 5, 10)
-
-        # --- タブ2: 共通設定 ---
-        common_settings_tab = QWidget()
-        common_layout = QVBoxLayout(common_settings_tab)
-        common_layout.setContentsMargins(5, 10, 5, 10)
-
-        # グループボックスの共通スタイル
         group_box_style = """
             QGroupBox {
                 background-color: #f0f0f0;
@@ -81,7 +74,6 @@ class OptionDialog(QDialog):
             }
         """
 
-        # --- 「API別オプション」タブの中身を作成 ---
         # API接続設定グループ
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
         api_connection_group.setStyleSheet(group_box_style)
@@ -97,7 +89,7 @@ class OptionDialog(QDialog):
         self.profile_api_key_edit.setToolTip("現在選択されているAPIプロファイルにのみ適用されるAPIキーです。")
         api_connection_form_layout.addRow("APIキー:", self.profile_api_key_edit)
         api_connection_group.setLayout(api_connection_form_layout)
-        api_layout.addWidget(api_connection_group)
+        options_layout.addWidget(api_connection_group)
 
         # API別OCRオプションのグループ
         if self.options_schema:
@@ -107,7 +99,8 @@ class OptionDialog(QDialog):
             
             for key, schema_item in self.options_schema.items():
                 if key in ["api_key", "base_uri"]: continue
-                label_text = schema_item.get("label", key) + ":"
+                # label_text = schema_item.get("label", key) + ":"
+                label_text = schema_item.get("label", key)
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
                 widget = None
                 tooltip = schema_item.get("tooltip", "")
@@ -194,14 +187,11 @@ class OptionDialog(QDialog):
 
             if dynamic_form_layout.rowCount() > 0:
                 dynamic_options_group.setLayout(dynamic_form_layout)
-                api_layout.addWidget(dynamic_options_group)
+                options_layout.addWidget(dynamic_options_group)
                 self.toggle_dynamic_split_options_enabled_state()
             else:
                 dynamic_options_group.setVisible(False)
 
-        api_layout.addStretch(1) # 残りのスペースを埋める
-
-        # --- 「共通設定」タブの中身を作成 ---
         # ファイル処理後設定のグループ
         file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
         file_process_group.setStyleSheet(group_box_style)
@@ -226,10 +216,13 @@ class OptionDialog(QDialog):
 
         self.dx_standard_output_widget = QWidget()
         dx_standard_output_label = QLabel("出力形式 (dx standard):")
+
         self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
         self.dx_standard_json_check.setChecked(file_actions_config.get("dx_standard_output_json", True))
+        self.dx_standard_json_check.setToolTip("OCR完了後、JSONファイルはサーバからダウンロードできません。")
         self.dx_standard_csv_check = QCheckBox("OCR完了時にCSVファイルを自動でダウンロードする")
         self.dx_standard_csv_check.setChecked(file_actions_config.get("dx_standard_auto_download_csv", True))
+        self.dx_standard_csv_check.setToolTip("チェックを外しても、OCR完了後にCSVファイルをサーバのElastic Sorterからダウンロードできます（CSVアイコンをクリック）。")
         dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
         dx_standard_layout_v.setContentsMargins(0,0,0,0)
         dx_standard_layout_v.addWidget(self.dx_standard_json_check)
@@ -263,7 +256,7 @@ class OptionDialog(QDialog):
         collision_layout_v.addWidget(self.collision_skip_radio)
         file_process_form_layout.addRow(collision_label, collision_layout_v)
         file_process_group.setLayout(file_process_form_layout)
-        common_layout.addWidget(file_process_group)
+        options_layout.addWidget(file_process_group)
         
         # ログ設定グループ
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
@@ -284,18 +277,18 @@ class OptionDialog(QDialog):
         log_checkbox_layout.addWidget(self.log_level_debug_chk)
         log_checkbox_layout.addStretch(1)
         log_settings_group.setLayout(log_checkbox_layout)
-        common_layout.addWidget(log_settings_group)
+        log_section_layout = QVBoxLayout()
+        log_section_layout.addWidget(log_settings_group)
         error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
         error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        common_layout.addWidget(error_label)
+        log_section_layout.addWidget(error_label)
+        options_layout.addLayout(log_section_layout)
 
-        common_layout.addStretch(1) # 残りのスペースを埋める
+        options_layout.addStretch(1)
+        scroll_area.setWidget(scroll_container)
+        main_layout.addWidget(scroll_area)
 
-        # --- タブをウィジェットに追加 ---
-        self.tabs.addTab(api_options_tab, "API別オプション")
-        self.tabs.addTab(common_settings_tab, "共通設定")
-
-        # --- 保存/キャンセルボタン ---
+        # 保存/キャンセルボタン（スクロールエリアの外に配置）
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
         self.cancel_btn = QPushButton("キャンセル")
@@ -306,8 +299,10 @@ class OptionDialog(QDialog):
         button_layout.addWidget(self.cancel_btn)
         main_layout.addLayout(button_layout)
         
-        self.setMinimumWidth(550)
-        # ★★★ ここまで全面的に修正 ★★★
+        # ダイアログのサイズを画面に合わせて調整
+        screen_height = self.screen().geometry().height() if self.screen() else 800
+        self.resize(600, min(900, int(screen_height * 0.9)))
+        # ★★★ ここまで修正 ★★★
 
     def on_model_changed(self):
         """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
