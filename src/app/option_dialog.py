@@ -97,10 +97,10 @@ class OptionDialog(QDialog):
             dynamic_options_group.setStyleSheet(group_box_style)
             dynamic_form_layout = QFormLayout()
             
-            # (中身のロジックは変更なし)
             for key, schema_item in self.options_schema.items():
                 if key in ["api_key", "base_uri"]: continue
-                label_text = schema_item.get("label", key) + ":"
+                # label_text = schema_item.get("label", key) + ":"
+                label_text = schema_item.get("label", key)
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
                 widget = None
                 tooltip = schema_item.get("tooltip", "")
