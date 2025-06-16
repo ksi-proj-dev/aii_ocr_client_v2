@@ -916,41 +916,18 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rescan_action'):
             self.rescan_action.setEnabled(can_rescan)
         
-        # ★★★ ここからが修正箇所 ★★★
-        # 「仕分け」ボタンの有効/無効を制御するロジック
-        can_start_sort = False
-        # 1. 処理中でない & 2. プロファイルがdx_standard_v2である
-        if not running and self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2':
-            # 3. チェックされたファイルが1つ以上ある
-            if any(f.is_checked for f in self.processed_files_info):
-                can_start_sort = True
-        
-        if hasattr(self, 'start_sort_action'):
-            self.start_sort_action.setEnabled(can_start_sort)
-
-        # 「CSVダウンロード」ボタンの有効/無効を制御するロジック
-        # (ここは元から can_download_csv で制御されているので変更なし)
-        # ★★★ ここまでが修正箇所 ★★★
-
         can_download_csv = False
         if not running and hasattr(self, 'list_view'):
             selected_rows = self.list_view.table.selectionModel().selectedRows()
             if len(selected_rows) == 1:
-                # 画面上の行インデックスから、元のデータリストのインデックスを引く必要がある
-                # ただし、ソートされているため、選択されたアイテムから直接Fileinfoを取得する
-                no_item = self.list_view.table.item(selected_rows[0].row(), 1)
-                if no_item:
-                    try:
-                        file_no = int(no_item.text())
-                        file_info = next((f for f in self.processed_files_info if f.no == file_no), None)
-                        if (file_info and
-                            file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
-                            file_info.job_id and
-                            self.active_api_profile and
-                            self.active_api_profile.get('id') == 'dx_standard_v2'):
-                            can_download_csv = True
-                    except (ValueError, StopIteration):
-                        pass # itemから数値が取れない場合は何もしない
+                selected_row_index = selected_rows[0].row()
+                if 0 <= selected_row_index < len(self.processed_files_info):
+                    file_info = self.processed_files_info[selected_row_index]
+                    if (file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
+                        file_info.job_id and
+                        self.active_api_profile and
+                        self.active_api_profile.get('id') == 'dx_standard_v2'):
+                        can_download_csv = True
         
         if hasattr(self, 'download_csv_action'):
             self.download_csv_action.setEnabled(can_download_csv)
