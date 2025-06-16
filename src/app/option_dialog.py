@@ -46,7 +46,6 @@ class OptionDialog(QDialog):
             self.output_format_widget.setToolTip("")
 
     def init_ui(self):
-        # ★★★ ここから全面的に修正 ★★★
         # メインレイアウト
         main_layout = QVBoxLayout(self)
         self.setLayout(main_layout)
@@ -55,13 +54,13 @@ class OptionDialog(QDialog):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # --- タブ1: API別オプション ---
+        # --- タブページ用のウィジェットを作成 ---
         api_options_tab = QWidget()
+        common_settings_tab = QWidget()
+        
+        # --- 各タブのレイアウトを作成 ---
         api_layout = QVBoxLayout(api_options_tab)
         api_layout.setContentsMargins(5, 10, 5, 10)
-
-        # --- タブ2: 共通設定 ---
-        common_settings_tab = QWidget()
         common_layout = QVBoxLayout(common_settings_tab)
         common_layout.setContentsMargins(5, 10, 5, 10)
 
@@ -81,9 +80,12 @@ class OptionDialog(QDialog):
             }
         """
 
-        # --- 「API別オプション」タブの中身を作成 ---
-        # API接続設定グループ
+        # ===================================================================
+        #  「API別オプション」タブの中身を作成
+        # ===================================================================
+        # 1. API接続設定グループ (変更なし)
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
+        # ... (このグループボックスの作成ロジックは元と同じ)
         api_connection_group.setStyleSheet(group_box_style)
         api_connection_form_layout = QFormLayout()
         current_base_uri = self.current_option_values.get("base_uri", "")
@@ -99,113 +101,12 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
-        # API別OCRオプションのグループ
-        if self.options_schema:
-            dynamic_options_group = QGroupBox("API別 OCRオプション")
-            dynamic_options_group.setStyleSheet(group_box_style)
-            dynamic_form_layout = QFormLayout()
-            
-            for key, schema_item in self.options_schema.items():
-                if key in ["api_key", "base_uri"]: continue
-                label_text = schema_item.get("label", key) + ":"
-                current_value = self.current_option_values.get(key, schema_item.get("default"))
-                widget = None
-                tooltip = schema_item.get("tooltip", "")
-                if schema_item.get("type") == "bool":
-                    widget = QCheckBox(schema_item.get("label", key))
-                    widget.setChecked(bool(current_value))
-                    if tooltip: widget.setToolTip(tooltip)
-                    dynamic_form_layout.addRow(widget)
-                    self.widgets_map[key] = widget
-                elif schema_item.get("type") == "int":
-                    widget = QSpinBox()
-                    if "min" in schema_item: widget.setMinimum(schema_item["min"])
-                    if "max" in schema_item: widget.setMaximum(schema_item["max"])
-                    widget.setValue(int(current_value) if current_value is not None else schema_item.get("default", 0))
-                    if "suffix" in schema_item: widget.setSuffix(schema_item["suffix"])
-                    if tooltip: widget.setToolTip(tooltip)
-                    dynamic_form_layout.addRow(label_text, widget)
-                    self.widgets_map[key] = widget
-                elif key == "classes":
-                    h_layout = QHBoxLayout()
-                    line_edit = QLineEdit(str(current_value) if current_value is not None else "")
-                    line_edit.setReadOnly(True)
-                    line_edit.setToolTip(tooltip)
-                    select_button = QPushButton("クラスを選択...")
-                    select_button.clicked.connect(self.open_class_selection_dialog)
-                    h_layout.addWidget(line_edit)
-                    h_layout.addWidget(select_button)
-                    dynamic_form_layout.addRow(label_text, h_layout)
-                    self.widgets_map[key] = line_edit
-                elif schema_item.get("type") == "string":
-                    if key == "workflowId":
-                        h_layout = QHBoxLayout()
-                        line_edit = QLineEdit(str(current_value) if current_value is not None else "")
-                        if "placeholder" in schema_item: line_edit.setPlaceholderText(schema_item["placeholder"])
-                        if tooltip: line_edit.setToolTip(tooltip)
-                        search_button = QPushButton("検索...")
-                        search_button.setToolTip("利用可能なワークフローを検索してIDを設定します。")
-                        search_button.clicked.connect(self.open_workflow_search_dialog)
-                        h_layout.addWidget(line_edit)
-                        h_layout.addWidget(search_button)
-                        dynamic_form_layout.addRow(label_text, h_layout)
-                        self.widgets_map[key] = line_edit
-                    else:
-                        widget = QLineEdit(str(current_value) if current_value is not None else "")
-                        if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"])
-                        if tooltip: widget.setToolTip(tooltip)
-                        dynamic_form_layout.addRow(label_text, widget)
-                        self.widgets_map[key] = widget
-                elif schema_item.get("type") == "enum":
-                    widget = QComboBox()
-                    if "values" in schema_item and isinstance(schema_item["values"], list):
-                        if schema_item["values"] and isinstance(schema_item["values"][0], dict):
-                            for item_dict in schema_item["values"]:
-                                widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
-                            index = widget.findData(current_value)
-                            if index != -1: widget.setCurrentIndex(index)
-                            else:
-                                default_val = schema_item.get("default")
-                                default_idx = widget.findData(default_val)
-                                if default_idx != -1: widget.setCurrentIndex(default_idx)
-                        else:
-                            widget.addItems(schema_item["values"])
-                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
-                            elif isinstance(current_value, str):
-                                index = widget.findText(current_value)
-                                if index != -1: widget.setCurrentIndex(index)
-                                else:
-                                    short_val_index = widget.findText(current_value.split(" ")[0])
-                                    if short_val_index != -1: widget.setCurrentIndex(short_val_index)
-                                    else:
-                                        default_val = schema_item.get("default")
-                                        if isinstance(default_val, int) and 0 <= default_val < widget.count(): widget.setCurrentIndex(default_val)
-                                        elif isinstance(default_val, str):
-                                            default_idx = widget.findText(str(default_val));
-                                            if default_idx != -1: widget.setCurrentIndex(default_idx)
-                    if tooltip: widget.setToolTip(tooltip)
-                    if key == "model":
-                        widget.currentIndexChanged.connect(self.on_model_changed)
-                    dynamic_form_layout.addRow(label_text, widget)
-                    self.widgets_map[key] = widget
-                if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
-                    if isinstance(widget, QCheckBox):
-                        widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
-
-            if dynamic_form_layout.rowCount() > 0:
-                dynamic_options_group.setLayout(dynamic_form_layout)
-                api_layout.addWidget(dynamic_options_group)
-                self.toggle_dynamic_split_options_enabled_state()
-            else:
-                dynamic_options_group.setVisible(False)
-
-        api_layout.addStretch(1) # 残りのスペースを埋める
-
-        # --- 「共通設定」タブの中身を作成 ---
-        # ファイル処理後設定のグループ
-        file_process_group = QGroupBox("ファイル処理後の出力と移動 (共通設定)")
-        file_process_group.setStyleSheet(group_box_style)
-        file_process_form_layout = QFormLayout()
+        # ★★★ ここからが修正箇所 (1/3) ★★★
+        # 2. 出力形式グループ (共通設定タブから移動)
+        output_format_group = QGroupBox("出力形式")
+        output_format_group.setStyleSheet(group_box_style)
+        output_format_form_layout = QFormLayout()
+        
         file_actions_config = self.global_config.get("file_actions", {})
         
         self.output_format_widget = QWidget()
@@ -222,7 +123,7 @@ class OptionDialog(QDialog):
         output_format_layout_v.addWidget(self.output_format_json_only_radio)
         output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
         output_format_layout_v.addWidget(self.output_format_both_radio)
-        file_process_form_layout.addRow(output_format_label, self.output_format_widget)
+        output_format_form_layout.addRow(output_format_label, self.output_format_widget)
 
         self.dx_standard_output_widget = QWidget()
         dx_standard_output_label = QLabel("出力形式 (dx standard):")
@@ -234,20 +135,109 @@ class OptionDialog(QDialog):
         dx_standard_layout_v.setContentsMargins(0,0,0,0)
         dx_standard_layout_v.addWidget(self.dx_standard_json_check)
         dx_standard_layout_v.addWidget(self.dx_standard_csv_check)
-        file_process_form_layout.addRow(dx_standard_output_label, self.dx_standard_output_widget)
+        output_format_form_layout.addRow(dx_standard_output_label, self.dx_standard_output_widget)
 
+        output_format_group.setLayout(output_format_form_layout)
+        api_layout.addWidget(output_format_group)
+        # ★★★ ここまでが修正箇所 (1/3) ★★★
+        
+        # 3. API別OCRオプションのグループ (変更なし)
+        if self.options_schema:
+            dynamic_options_group = QGroupBox("API別 OCRオプション")
+            # ... (このグループボックスの作成ロジックは元と同じ)
+            dynamic_options_group.setStyleSheet(group_box_style)
+            dynamic_form_layout = QFormLayout()
+            for key, schema_item in self.options_schema.items():
+                if key in ["api_key", "base_uri"]: continue
+                label_text = schema_item.get("label", key) + ":"
+                current_value = self.current_option_values.get(key, schema_item.get("default"))
+                widget = None; tooltip = schema_item.get("tooltip", "")
+                if schema_item.get("type") == "bool":
+                    widget = QCheckBox(schema_item.get("label", key)); widget.setChecked(bool(current_value));
+                    if tooltip: widget.setToolTip(tooltip);
+                    dynamic_form_layout.addRow(widget); self.widgets_map[key] = widget
+                elif schema_item.get("type") == "int":
+                    widget = QSpinBox();
+                    if "min" in schema_item: widget.setMinimum(schema_item["min"]);
+                    if "max" in schema_item: widget.setMaximum(schema_item["max"]);
+                    widget.setValue(int(current_value) if current_value is not None else schema_item.get("default", 0));
+                    if "suffix" in schema_item: widget.setSuffix(schema_item["suffix"]);
+                    if tooltip: widget.setToolTip(tooltip);
+                    dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                elif key == "classes":
+                    h_layout = QHBoxLayout(); line_edit = QLineEdit(str(current_value) if current_value is not None else ""); line_edit.setReadOnly(True); line_edit.setToolTip(tooltip);
+                    select_button = QPushButton("クラスを選択..."); select_button.clicked.connect(self.open_class_selection_dialog);
+                    h_layout.addWidget(line_edit); h_layout.addWidget(select_button);
+                    dynamic_form_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
+                elif schema_item.get("type") == "string":
+                    if key == "workflowId":
+                        h_layout = QHBoxLayout(); line_edit = QLineEdit(str(current_value) if current_value is not None else "");
+                        if "placeholder" in schema_item: line_edit.setPlaceholderText(schema_item["placeholder"]);
+                        if tooltip: line_edit.setToolTip(tooltip);
+                        search_button = QPushButton("検索..."); search_button.setToolTip("利用可能なワークフローを検索してIDを設定します。"); search_button.clicked.connect(self.open_workflow_search_dialog);
+                        h_layout.addWidget(line_edit); h_layout.addWidget(search_button);
+                        dynamic_form_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
+                    else:
+                        widget = QLineEdit(str(current_value) if current_value is not None else "");
+                        if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"]);
+                        if tooltip: widget.setToolTip(tooltip);
+                        dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                elif schema_item.get("type") == "enum":
+                    widget = QComboBox();
+                    if "values" in schema_item and isinstance(schema_item["values"], list):
+                        if schema_item["values"] and isinstance(schema_item["values"][0], dict):
+                            for item_dict in schema_item["values"]: widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""));
+                            index = widget.findData(current_value);
+                            if index != -1: widget.setCurrentIndex(index)
+                            else: default_val = schema_item.get("default"); default_idx = widget.findData(default_val);
+                            if default_idx != -1: widget.setCurrentIndex(default_idx)
+                        else:
+                            widget.addItems(schema_item["values"]);
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
+                            elif isinstance(current_value, str):
+                                index = widget.findText(current_value);
+                                if index != -1: widget.setCurrentIndex(index)
+                                else:
+                                    short_val_index = widget.findText(current_value.split(" ")[0]);
+                                    if short_val_index != -1: widget.setCurrentIndex(short_val_index)
+                                    else: default_val = schema_item.get("default");
+                                    if isinstance(default_val, int) and 0 <= default_val < widget.count(): widget.setCurrentIndex(default_val)
+                                    elif isinstance(default_val, str): default_idx = widget.findText(str(default_val));
+                                    if default_idx != -1: widget.setCurrentIndex(default_idx)
+                    if tooltip: widget.setToolTip(tooltip);
+                    if key == "model": widget.currentIndexChanged.connect(self.on_model_changed);
+                    dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
+                    if isinstance(widget, QCheckBox): widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
+            if dynamic_form_layout.rowCount() > 0:
+                dynamic_options_group.setLayout(dynamic_form_layout); api_layout.addWidget(dynamic_options_group); self.toggle_dynamic_split_options_enabled_state()
+            else:
+                dynamic_options_group.setVisible(False)
+        
+        api_layout.addStretch(1)
+
+        # ===================================================================
+        #  「共通設定」タブの中身を作成
+        # ===================================================================
+        # ★★★ ここからが修正箇所 (2/3) ★★★
+        # 1. ファイル移動と結果フォルダ設定のグループ (旧ファイル処理グループから改名・一部抜粋)
+        file_move_group = QGroupBox("ファイル移動と結果フォルダ (共通設定)")
+        file_move_group.setStyleSheet(group_box_style)
+        file_move_form_layout = QFormLayout()
+        
+        # `file_actions_config` は上で定義済み
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
-        file_process_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
+        file_move_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
         self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")
         self.move_on_success_chk.setChecked(file_actions_config.get("move_on_success_enabled", False))
-        file_process_form_layout.addRow(self.move_on_success_chk)
+        file_move_form_layout.addRow(self.move_on_success_chk)
         self.success_folder_name_edit = QLineEdit(file_actions_config.get("success_folder_name", "OCR成功"))
-        file_process_form_layout.addRow("成功ファイル移動先サブフォルダ名:", self.success_folder_name_edit)
+        file_move_form_layout.addRow("成功ファイル移動先サブフォルダ名:", self.success_folder_name_edit)
         self.move_on_failure_chk = QCheckBox("OCR失敗時にファイルを移動する")
         self.move_on_failure_chk.setChecked(file_actions_config.get("move_on_failure_enabled", False))
-        file_process_form_layout.addRow(self.move_on_failure_chk)
+        file_move_form_layout.addRow(self.move_on_failure_chk)
         self.failure_folder_name_edit = QLineEdit(file_actions_config.get("failure_folder_name", "OCR失敗"))
-        file_process_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
+        file_move_form_layout.addRow("失敗ファイル移動先サブフォルダ名:", self.failure_folder_name_edit)
         
         collision_label = QLabel("ファイル名衝突時の処理 (移動先):")
         self.collision_overwrite_radio = QRadioButton("上書きする")
@@ -261,41 +251,32 @@ class OptionDialog(QDialog):
         collision_layout_v.addWidget(self.collision_overwrite_radio)
         collision_layout_v.addWidget(self.collision_rename_radio)
         collision_layout_v.addWidget(self.collision_skip_radio)
-        file_process_form_layout.addRow(collision_label, collision_layout_v)
-        file_process_group.setLayout(file_process_form_layout)
-        common_layout.addWidget(file_process_group)
-        
-        # ログ設定グループ
+        file_move_form_layout.addRow(collision_label, collision_layout_v)
+        file_move_group.setLayout(file_move_form_layout)
+        common_layout.addWidget(file_move_group)
+        # ★★★ ここまでが修正箇所 (2/3) ★★★
+
+        # 2. ログ設定グループ (変更なし)
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
+        # ... (このグループボックスの作成ロジックは元と同じ)
         log_settings_group.setStyleSheet(group_box_style)
         log_settings_config = self.global_config.get("log_settings", {})
         log_checkbox_layout = QHBoxLayout()
-        self.log_level_info_chk = QCheckBox("INFO")
-        self.log_level_info_chk.setChecked(log_settings_config.get("log_level_info_enabled", True))
-        self.log_level_info_chk.setToolTip("アプリケーションの通常動作に関する情報ログを表示します。")
-        log_checkbox_layout.addWidget(self.log_level_info_chk)
-        self.log_level_warning_chk = QCheckBox("WARNING")
-        self.log_level_warning_chk.setChecked(log_settings_config.get("log_level_warning_enabled", True))
-        self.log_level_warning_chk.setToolTip("軽微な問題や注意喚起に関する警告ログを表示します。")
-        log_checkbox_layout.addWidget(self.log_level_warning_chk)
-        self.log_level_debug_chk = QCheckBox("DEBUG")
-        self.log_level_debug_chk.setChecked(log_settings_config.get("log_level_debug_enabled", False))
-        self.log_level_debug_chk.setToolTip("開発者向けの詳細なデバッグ情報を表示します。")
-        log_checkbox_layout.addWidget(self.log_level_debug_chk)
-        log_checkbox_layout.addStretch(1)
-        log_settings_group.setLayout(log_checkbox_layout)
+        self.log_level_info_chk = QCheckBox("INFO"); self.log_level_info_chk.setChecked(log_settings_config.get("log_level_info_enabled", True)); self.log_level_info_chk.setToolTip("アプリケーションの通常動作に関する情報ログを表示します。"); log_checkbox_layout.addWidget(self.log_level_info_chk)
+        self.log_level_warning_chk = QCheckBox("WARNING"); self.log_level_warning_chk.setChecked(log_settings_config.get("log_level_warning_enabled", True)); self.log_level_warning_chk.setToolTip("軽微な問題や注意喚起に関する警告ログを表示します。"); log_checkbox_layout.addWidget(self.log_level_warning_chk)
+        self.log_level_debug_chk = QCheckBox("DEBUG"); self.log_level_debug_chk.setChecked(log_settings_config.get("log_level_debug_enabled", False)); self.log_level_debug_chk.setToolTip("開発者向けの詳細なデバッグ情報を表示します。"); log_checkbox_layout.addWidget(self.log_level_debug_chk)
+        log_checkbox_layout.addStretch(1); log_settings_group.setLayout(log_checkbox_layout)
         common_layout.addWidget(log_settings_group)
-        error_label = QLabel("注: ERRORレベルのログは常に表示されます。")
-        error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;")
-        common_layout.addWidget(error_label)
-
-        common_layout.addStretch(1) # 残りのスペースを埋める
+        error_label = QLabel("注: ERRORレベルのログは常に表示されます。"); error_label.setStyleSheet("font-style: italic; color: #555; margin-left: 5px;"); common_layout.addWidget(error_label)
+        
+        common_layout.addStretch(1)
 
         # --- タブをウィジェットに追加 ---
         self.tabs.addTab(api_options_tab, "API別オプション")
         self.tabs.addTab(common_settings_tab, "共通設定")
 
-        # --- 保存/キャンセルボタン ---
+        # ★★★ ここからが修正箇所 (3/3) ★★★
+        # --- 保存/キャンセルボタン (変更なし) ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
         self.cancel_btn = QPushButton("キャンセル")
@@ -307,7 +288,7 @@ class OptionDialog(QDialog):
         main_layout.addLayout(button_layout)
         
         self.setMinimumWidth(550)
-        # ★★★ ここまで全面的に修正 ★★★
+        # ★★★ ここまでが修正箇所 (3/3) ★★★
 
     def on_model_changed(self):
         """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
