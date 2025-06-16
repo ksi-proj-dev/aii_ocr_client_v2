@@ -24,6 +24,7 @@ from api_client import OCRApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
+from ui_dialogs import OcrConfirmationDialog, SortConfigDialog
 
 from app_constants import (
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -686,56 +687,49 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "対象ファイルなし", "仕分け対象として選択（チェック）されているファイルがありません。")
             return
 
-        # 1. ポップアップを廃止し、configから仕分けルールIDを取得
-        active_options = ConfigManager.get_active_api_options_values(self.config)
-        sort_config_id = active_options.get("sortConfigId", "").strip()
-
-        # 2. IDが設定されているかチェック
-        if not sort_config_id:
-            QMessageBox.warning(self, "設定エラー", "仕分けルールIDが設定されていません。\n\n「⚙️設定」から仕分けルールIDを設定してください。")
-            self.log_manager.warning("仕分け処理が中止されました。理由: 仕分けルールID未設定", context="SORT_FLOW")
-            return
-        
-        # 3. ご要望のあったCSVダウンロードに関する警告は残す
-        is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
-        if is_dx_standard:
-            file_actions = self.config.get("file_actions", {})
-            auto_download_csv_enabled = file_actions.get("dx_standard_auto_download_csv", False)
+        dialog = SortConfigDialog(self)
+        if dialog.exec():
+            sort_config_id = dialog.get_sort_config_id()
             
-            if not auto_download_csv_enabled:
-                warning_reply = QMessageBox.warning(self, "注意：出力設定の確認",
-                                                    "「OCR完了時にCSVファイルを自動でダウンロードする」設定がオフになっています。\n\n"
-                                                    "このまま処理を続行すると、サーバー上では処理が完了しますが、"
-                                                    "後からこのアプリケーションを使ってCSVを手動でダウンロードすることはできません。\n\n"
-                                                    "よろしいですか？",
-                                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                                                    QMessageBox.StandardButton.Cancel)
+            is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
+            if is_dx_standard:
+                file_actions = self.config.get("file_actions", {})
+                auto_download_csv_enabled = file_actions.get("dx_standard_auto_download_csv", False)
                 
-                if warning_reply == QMessageBox.StandardButton.Cancel:
-                    self.log_manager.info("ユーザーが出力設定の警告後にキャンセルしました。", context="SORT_FLOW")
-                    return
+                if not auto_download_csv_enabled:
+                    warning_reply = QMessageBox.warning(self, "注意：出力設定の確認",
+                                                        "「OCR完了時にCSVファイルを自動でダウンロードする」設定がオフになっています。\n\n"
+                                                        "このまま処理を続行すると、サーバー上では処理が完了しますが、"
+                                                        "後からこのアプリケーションを使ってCSVを手動でダウンロードすることはできません。\n\n"
+                                                        "よろしいですか？",
+                                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                                        QMessageBox.StandardButton.Cancel)
+                    
+                    if warning_reply == QMessageBox.StandardButton.Cancel:
+                        self.log_manager.info("ユーザーが出力設定の警告後にキャンセルしました。", context="SORT_FLOW")
+                        return
 
-        # 4. 最終確認のダイアログで、設定されたIDを表示
-        reply = QMessageBox.question(self, "仕分け実行の確認",
-                                    f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
-                                    f"使用する仕分けルールID:\n{sort_config_id}\n\n"
-                                    "よろしいですか？",
-                                    QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-                                    QMessageBox.StandardButton.Ok)
+            reply = QMessageBox.question(self, "仕分け実行の確認",
+                                        f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
+                                        f"仕分けルールID: {sort_config_id}\n\n"
+                                        "よろしいですか？",
+                                        QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                                        QMessageBox.StandardButton.Ok)
 
-        if reply == QMessageBox.StandardButton.Ok:
-            self.sorting_file_indices = []
-            for i, file_info in enumerate(self.processed_files_info):
-                if file_info.is_checked:
-                    self.sorting_file_indices.append(i)
-                    file_info.status = "仕分け中..."
-                    file_info.ocr_engine_status = OCR_STATUS_PROCESSING
-            self.list_view.update_files(self.processed_files_info, is_running=True)
+            if reply == QMessageBox.StandardButton.Ok:
+                self.sorting_file_indices = []
+                for i, file_info in enumerate(self.processed_files_info):
+                    if file_info.is_checked:
+                        self.sorting_file_indices.append(i)
+                        file_info.status = "仕分け中..."
+                        file_info.ocr_engine_status = OCR_STATUS_PROCESSING
+                self.list_view.update_files(self.processed_files_info, is_running=True)
 
-            self.log_manager.info(f"仕分け処理を開始します。SortConfigID: {sort_config_id}", context="SORT_FLOW")
-            self.ocr_orchestrator.confirm_and_start_sort(files_to_process, sort_config_id, self.input_folder_path)
-        else:
-            self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
+                self.log_manager.info(f"仕分け処理を開始します。SortConfigID: {sort_config_id}", context="SORT_FLOW")
+                self.ocr_orchestrator.confirm_and_start_sort(files_to_process, sort_config_id, self.input_folder_path)
+            else:
+                self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
+
     def on_download_csv_clicked(self):
         if not hasattr(self, 'list_view') or not self.list_view.table.selectedItems():
             return

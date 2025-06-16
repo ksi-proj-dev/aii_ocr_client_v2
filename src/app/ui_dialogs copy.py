@@ -225,3 +225,36 @@ class WorkflowSearchDialog(QDialog):
     def get_selected_workflow(self) -> Optional[Dict[str, str]]:
         """選択されたワークフロー情報を返す"""
         return self.selected_workflow
+
+class SortConfigDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("仕分けルールの選択")
+        self.setMinimumWidth(400)
+        
+        self.sort_config_id = ""
+
+        layout = QVBoxLayout(self)
+        label = QLabel("実行する仕分けルールのIDを入力してください:")
+        layout.addWidget(label)
+
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("仕分けルールID (UUID) をここに貼り付け...")
+        layout.addWidget(self.id_input)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def accept(self):
+        # OKボタンが押されたら、入力されたIDを保存
+        input_text = self.id_input.text().strip()
+        if not input_text:
+            QMessageBox.warning(self, "入力エラー", "仕分けルールIDは必須です。")
+            return
+        self.sort_config_id = input_text
+        super().accept()
+
+    def get_sort_config_id(self) -> str:
+        return self.sort_config_id

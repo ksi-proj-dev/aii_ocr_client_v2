@@ -161,15 +161,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
                 "placeholder": "例: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
                 "tooltip": "DX Suiteの管理画面で確認したワークフローID (UUID) を指定します。（必須）"
             },
-            # ★★★ ここから追加 ★★★
-            "sortConfigId": {
-                "type": "string",
-                "default": "",
-                "label": "仕分けルールID (Elastic Sorter):",
-                "placeholder": "例: yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
-                "tooltip": "仕分け処理で使用する仕分けルールのID (UUID) を指定します。\n（「仕分け」機能を利用する場合に必須）"
-            },
-            # ★★★ ここまで追加 ★★★
             "unitName": {"type": "string", "default": "", "label": "読取ユニット名 (任意):", "placeholder": "例: 2025年6月分請求書", "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"},
             "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},

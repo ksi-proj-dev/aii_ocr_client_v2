@@ -216,10 +216,13 @@ class OptionDialog(QDialog):
 
         self.dx_standard_output_widget = QWidget()
         dx_standard_output_label = QLabel("出力形式 (dx standard):")
+
         self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
         self.dx_standard_json_check.setChecked(file_actions_config.get("dx_standard_output_json", True))
+        self.dx_standard_json_check.setToolTip("OCR完了後、JSONファイルはサーバからダウンロードできません。")
         self.dx_standard_csv_check = QCheckBox("OCR完了時にCSVファイルを自動でダウンロードする")
         self.dx_standard_csv_check.setChecked(file_actions_config.get("dx_standard_auto_download_csv", True))
+        self.dx_standard_csv_check.setToolTip("チェックを外しても、OCR完了後にCSVファイルをサーバのElastic Sorterからダウンロードできます（CSVアイコンをクリック）。")
         dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
         dx_standard_layout_v.setContentsMargins(0,0,0,0)
         dx_standard_layout_v.addWidget(self.dx_standard_json_check)

@@ -231,6 +231,7 @@ class OcrOrchestrator(QObject):
             QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "アクティブなAPIプロファイルが設定されていません。")
             return
 
+        # ★変更箇所: アクティブプロファイルのAPIキーをチェックする
         if self.config.get("api_execution_mode") == "live":
             active_api_key = ConfigManager.get_active_api_key(self.config)
             if not active_api_key or not active_api_key.strip():
@@ -239,6 +240,7 @@ class OcrOrchestrator(QObject):
                 QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
                                     f"LiveモードでOCRを実行するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
                 return
+        # --- ★変更箇所ここまで ---
 
         if not input_folder_path or not os.path.isdir(input_folder_path):
             self.log_manager.warning("OcrOrchestrator: OCR start aborted: Input folder invalid.", context="OCR_ORCH_FLOW")
@@ -254,34 +256,11 @@ class OcrOrchestrator(QObject):
                 item.is_checked
         ]
 
-        # ★★★ ここからが修正箇所 ★★★
-        # dx_standard_v2 プロファイルの場合のみ、出力設定をチェックする
-        if self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2':
-            file_actions = self.config.get("file_actions", {})
-            output_json = file_actions.get("dx_standard_output_json", True)
-            output_csv = file_actions.get("dx_standard_auto_download_csv", True)
-
-            # JSON出力とCSVダウンロードが両方オフの場合に警告を表示
-            if not output_json and not output_csv:
-                warning_message = (
-                    "「OCR結果をJSONファイルに出力する」および「OCR完了時にCSVファイルを自動でダウンロードする」の"
-                    "設定が両方ともオフになっています。\n\n"
-                    "このまま処理を続行すると、サーバー上では処理が完了しますが、"
-                    "後からこのアプリケーションを使ってJSONまたはCSVを手動でダウンロードすることはできません。\n\n"
-                    "よろしいですか？"
-                )
-                reply = QMessageBox.warning(
-                    parent_widget_for_dialog,
-                    "注意：出力設定の確認",
-                    warning_message,
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No
-                )
-
-                if reply == QMessageBox.StandardButton.No:
-                    self.log_manager.info("OCR開始がユーザーによってキャンセルされました（出力設定の警告後）。", context="OCR_ORCH_FLOW")
-                    return # 処理を中止
-        # ★★★ ここまでが修正箇所 ★★★
+        if not files_eligible_for_ocr_info:
+            self.log_manager.info("OcrOrchestrator: OCR start aborted: No eligible and checked files to process.", context="OCR_ORCH_FLOW")
+            QMessageBox.information(parent_widget_for_dialog, "対象ファイルなし", "処理対象として選択（チェック）されているファイル（サイズ上限内）が見つかりませんでした。")
+            self.request_ui_controls_update_signal.emit()
+            return
 
         ocr_already_attempted_in_eligible_list = any(
             item.ocr_engine_status not in [OCR_STATUS_NOT_PROCESSED, None] 
