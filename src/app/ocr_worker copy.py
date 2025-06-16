@@ -410,7 +410,7 @@ class OcrWorker(QThread):
 
                     if initial_ocr_error:
                         part_ocr_api_error_info = initial_ocr_error
-                    elif initial_ocr_response and isinstance(initial_ocr_response, dict) and "registered" in initial_ocr_response.get("status", ""):
+                    elif initial_ocr_response and isinstance(initial_ocr_response, dict) and initial_ocr_response.get("status") == "registered":
                         
                         if initial_ocr_response.get("profile_flow_type") == "dx_atypical_v2_flow":
                             reception_id = initial_ocr_response.get("receptionId")
@@ -619,108 +619,96 @@ class OcrWorker(QThread):
                                 self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True)
                                 all_parts_processed_successfully = False
                                 final_ocr_error_for_main = {"message": msg, "code": "PART_JSON_SAVE_ERROR", "detail": str(e_json_save)}
-                    
-                    # ★★★ ここからが修正範囲 ★★★
+                            
                     should_create_pdf = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                     if should_create_pdf and parts_results_temp_dir:
-                        # OCRテキスト処理に失敗していたら、PDF作成はスキップ
                         if part_ocr_api_error_info:
                             self.log_manager.warning(f"  部品 '{current_part_basename}' のOCRテキスト処理でエラーがあったため、サーチャブルPDF作成はスキップします。", context="WORKER_PART_PDF")
                             if not pdf_error_for_signal: pdf_error_for_signal = {"message": "OCR失敗のためPDF作成スキップ", "code": "PDF_SKIPPED_OCR_FAIL"}
                         else:
                             self.log_manager.info(f"  部品のサーチャブルPDF作成開始: '{current_part_basename}'", context="WORKER_PART_PDF")
-                            
                             options_for_spdf = active_options_for_api.copy()
-                            # dx_fulltext_v2 の場合は、テキスト読み取りに使ったジョブIDを渡す
+                            can_proceed_with_spdf_api_call = True
                             if active_profile_flow_type == "dx_fulltext_v2_flow":
-                                if current_part_full_ocr_job_id:
-                                    options_for_spdf["fullOcrJobId"] = current_part_full_ocr_job_id
-                                else:
-                                    # このケースは、上のロジック修正により発生しなくなるはず
-                                    msg = f"  部品 '{current_part_basename}' のサーチャブルPDF作成に必要なfullOcrJobIdがありません。スキップします。"
-                                    self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
-                                    if not pdf_error_for_signal: pdf_error_for_signal = {"message": "PDF作成内部エラー(fullOcrJobIdなし)", "code": "DXSUITE_SPDF_NO_FULLOCRJOBID_INTERNAL"}
-                                    all_parts_processed_successfully = False
-                                    continue # PDF作成はせず、次の部品処理へ
-
-                            # APIクライアントを呼び出してPDFを作成またはジョブ登録
-                            spdf_response, spdf_error = self.api_client.make_searchable_pdf(
-                                current_processing_path, specific_options=options_for_spdf
-                            )
-
-                            part_pdf_content: Optional[bytes] = None
-                            part_pdf_api_error_info_pdf: Optional[Dict[str, Any]] = None
-
-                            if spdf_error:
-                                part_pdf_api_error_info_pdf = spdf_error
-                            # 非同期PDF作成の場合 (ジョブIDが返ってくる)
-                            elif spdf_response and isinstance(spdf_response, dict) and spdf_response.get("status") == "searchable_pdf_registered":
-                                searchable_pdf_job_id = spdf_response.get("job_id")
-                                if not searchable_pdf_job_id:
-                                    part_pdf_api_error_info_pdf = {"message": "サーチャブルPDFジョブIDが取得できませんでした。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
-                                else:
-                                    # PDF完成までポーリング
-                                    self.log_manager.info(f"  DX Suite サーチャブルPDFジョブ登録成功 (Job ID: {searchable_pdf_job_id})。結果取得を開始します。", context="WORKER_DX_SPDF_POLL")
-                                    for attempt_pdf in range(spdf_max_polling_attempts):
-                                        if not self.is_running:
-                                            part_pdf_api_error_info_pdf = {"message": "サーチャブルPDF結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_SPDF_POLL"}
-                                            break
-                                        self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{spdf_max_polling_attempts})")
-                                        
-                                        pdf_content_poll, pdf_poll_error = self.api_client.get_dx_searchable_pdf_content(searchable_pdf_job_id)
-                                        
-                                        if pdf_poll_error:
-                                            # ポーリング中の場合はリトライ
-                                            if "STATUS_INPROGRESS" in pdf_poll_error.get("code", "").upper():
-                                                if attempt_pdf < spdf_max_polling_attempts - 1:
-                                                    time.sleep(spdf_polling_interval)
-                                                    continue
+                                if self.api_client.api_execution_mode == "live":
+                                    if current_part_full_ocr_job_id:
+                                        options_for_spdf["fullOcrJobId"] = current_part_full_ocr_job_id
+                                    else:
+                                        self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成に必要なfullOcrJobIdがありません (DX Suite Live Mode)。スキップします。", context="WORKER_PART_PDF_ERROR")
+                                        if not pdf_error_for_signal: pdf_error_for_signal = {"message": "PDF作成内部エラー (fullOcrJobIdなし - Live)", "code": "DXSUITE_SPDF_LIVE_NO_FULLOCRJOBID_INTERNAL"}
+                                        all_parts_processed_successfully = False
+                                        can_proceed_with_spdf_api_call = False
+                            
+                            if can_proceed_with_spdf_api_call:
+                                spdf_response, spdf_error = self.api_client.make_searchable_pdf(
+                                    current_processing_path, specific_options=options_for_spdf
+                                )
+                                part_pdf_content: Optional[bytes] = None
+                                part_pdf_api_error_info_pdf: Optional[Dict[str, Any]] = None
+                                if spdf_error:
+                                    part_pdf_api_error_info_pdf = spdf_error
+                                elif spdf_response and isinstance(spdf_response, dict) and spdf_response.get("status") == "searchable_pdf_registered":
+                                    searchable_pdf_job_id = spdf_response.get("job_id")
+                                    if not searchable_pdf_job_id:
+                                        part_pdf_api_error_info_pdf = {"message": "サーチャブルPDFジョブIDが取得できませんでした (DX Suite)。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
+                                    else:
+                                        self.log_manager.info(f"  DX Suite サーチャブルPDFジョブ登録成功 (Job ID: {searchable_pdf_job_id})。部品 '{current_part_basename}' の結果取得を開始します。", context="WORKER_DX_SPDF_POLL")
+                                        for attempt_pdf in range(spdf_max_polling_attempts):
+                                            if not self.is_running:
+                                                part_pdf_api_error_info_pdf = {"message": "サーチャブルPDF結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_SPDF_POLL"}
+                                                break
+                                            self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt_pdf + 1}/{spdf_max_polling_attempts})")
+                                            pdf_content_poll, pdf_poll_error = self.api_client.get_dx_searchable_pdf_content(searchable_pdf_job_id)
+                                            if pdf_poll_error:
+                                                error_code_from_api = pdf_poll_error.get("code", "")
+                                                if error_code_from_api and "STATUS_INPROGRESS" in error_code_from_api.upper():
+                                                    if attempt_pdf < spdf_max_polling_attempts - 1:
+                                                        time.sleep(spdf_polling_interval)
+                                                        continue
+                                                    else:
+                                                        self.log_manager.warning(f"  DX Suite サーチャブルPDF結果取得タイムアウト (Job ID: {searchable_pdf_job_id})。", context="WORKER_DX_SPDF_POLL_TIMEOUT")
+                                                        part_pdf_api_error_info_pdf = {"message": "DX Suite サーチャブルPDF取得がタイムアウトしました。", "code": "DXSUITE_SPDF_TIMEOUT"}
+                                                        break
                                                 else:
-                                                    part_pdf_api_error_info_pdf = {"message": "DX Suite サーチャブルPDF取得がタイムアウトしました。", "code": "DXSUITE_SPDF_TIMEOUT"}
+                                                    part_pdf_api_error_info_pdf = pdf_poll_error
+                                                    break
+                                            elif pdf_content_poll:
+                                                part_pdf_content = pdf_content_poll
+                                                break
                                             else:
-                                                part_pdf_api_error_info_pdf = pdf_poll_error
-                                            break
-                                        elif pdf_content_poll:
-                                            part_pdf_content = pdf_content_poll
-                                            break
-                                        else: # 予期せぬ応答
-                                             part_pdf_api_error_info_pdf = {"message": "DX Suite PDF取得APIが予期しない応答。", "code": "DXSUITE_SPDF_UNEXPECTED_RESPONSE"}
-                                             break
-                            # 同期PDF作成の場合 (直接バイナリが返ってくる)
-                            elif spdf_response:
-                                part_pdf_content = spdf_response
+                                                part_pdf_api_error_info_pdf = {"message": "DX Suite PDF取得APIが予期しない応答。", "code": "DXSUITE_SPDF_UNEXPECTED_RESPONSE"}
+                                                break
+                                elif spdf_response:
+                                    part_pdf_content = spdf_response
 
-                            # PDF処理の結果ハンドリング
-                            if part_pdf_api_error_info_pdf:
-                                self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成API失敗。エラー: {part_pdf_api_error_info_pdf.get('message')}", context="WORKER_PART_PDF_ERROR", detail=part_pdf_api_error_info_pdf)
-                                all_parts_processed_successfully = False
-                                if not pdf_error_for_signal: pdf_error_for_signal = part_pdf_api_error_info_pdf
-                                # 致命的なエラーコードの場合はワーカー全体を停止
-                                if part_pdf_api_error_info_pdf.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "DXSUITE_SPDF_MISSING_FULLOCRJOBID", f"NOT_SUPPORTED_{active_profile_flow_type}_PDF"]:
-                                    self.encountered_fatal_error = True
-                                    self.fatal_error_info = part_pdf_api_error_info_pdf
-                                    self.is_running = False
-                            elif part_pdf_content:
-                                part_pdf_filename = current_part_basename
-                                part_pdf_filepath = os.path.join(parts_results_temp_dir, part_pdf_filename)
-                                try:
-                                    with open(part_pdf_filepath, 'wb') as f_pdf:
-                                        f_pdf.write(part_pdf_content)
-                                    self.log_manager.info(f"  部品用サーチャブルPDF保存完了: '{part_pdf_filepath}'", context="WORKER_PART_IO")
-                                    part_pdf_paths_agg.append(part_pdf_filepath)
-                                except IOError as e_pdf_save:
-                                    msg = f"部品 '{current_part_basename}' のサーチャブルPDF保存に失敗: {e_pdf_save}"
-                                    self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True)
+                                if part_pdf_api_error_info_pdf:
+                                    self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成API失敗。エラー: {part_pdf_api_error_info_pdf.get('message')}", context="WORKER_PART_PDF_ERROR", detail=part_pdf_api_error_info_pdf)
                                     all_parts_processed_successfully = False
-                                    if not pdf_error_for_signal:
-                                        pdf_error_for_signal = {"message": msg, "code": "PART_PDF_SAVE_ERROR", "detail": str(e_pdf_save)}
-                            else: # PDFコンテンツもエラーも得られなかった場合
-                                msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"
-                                self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
-                                all_parts_processed_successfully = False
-                                if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
-                    # ★★★ ここまでが修正範囲 ★★★
-
+                                    if not pdf_error_for_signal: pdf_error_for_signal = part_pdf_api_error_info_pdf
+                                    if part_pdf_api_error_info_pdf.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_API_CALL_DX_SPDF", "DXSUITE_SPDF_MISSING_FULLOCRJOBID", f"NOT_SUPPORTED_{active_profile_flow_type}_PDF"]:
+                                        self.encountered_fatal_error = True
+                                        self.fatal_error_info = part_pdf_api_error_info_pdf
+                                        self.is_running = False
+                                elif part_pdf_content:
+                                    part_pdf_filename = current_part_basename
+                                    part_pdf_filepath = os.path.join(parts_results_temp_dir, part_pdf_filename)
+                                    try:
+                                        with open(part_pdf_filepath, 'wb') as f_pdf:
+                                            f_pdf.write(part_pdf_content)
+                                        self.log_manager.info(f"  部品用サーチャブルPDF保存完了: '{part_pdf_filepath}'", context="WORKER_PART_IO")
+                                        part_pdf_paths_agg.append(part_pdf_filepath)
+                                    except IOError as e_pdf_save:
+                                        msg = f"部品 '{current_part_basename}' のサーチャブルPDF保存に失敗: {e_pdf_save}"
+                                        self.log_manager.error(msg, context="WORKER_PART_IO_ERROR", exc_info=True)
+                                        all_parts_processed_successfully = False
+                                        if not pdf_error_for_signal:
+                                            pdf_error_for_signal = {"message": msg, "code": "PART_PDF_SAVE_ERROR", "detail": str(e_pdf_save)}
+                                else:
+                                    msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"
+                                    self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
+                                    all_parts_processed_successfully = False
+                                    if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
+                    
                     if active_profile_flow_type == "dx_fulltext_v2_flow" and delete_job_after_processing and current_part_full_ocr_job_id:
                         self.log_manager.info(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")
                         deleted_info, delete_error = self.api_client.delete_dx_ocr_job(current_part_full_ocr_job_id)

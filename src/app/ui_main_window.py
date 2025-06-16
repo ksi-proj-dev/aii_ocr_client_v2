@@ -33,7 +33,7 @@ from app_constants import (
     LISTVIEW_UPDATE_INTERVAL_MS
 )
 
-APP_VERSION = "0.0.16"
+APP_VERSION = "0.0.17"
 
 
 class ApiSelectionDialog(QDialog):

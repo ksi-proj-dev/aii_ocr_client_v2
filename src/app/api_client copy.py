@@ -539,45 +539,25 @@ class OCRApiClient:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"make_searchable_pdf用一時ファイルのクローズに失敗: {e_close}", context=log_ctx)
         
-        # ★★★ ここからが修正範囲 ★★★
         elif current_flow_type == "dx_fulltext_v2_flow":
             log_ctx_prefix = "API_DX_FULLTEXT_V2_PDF"
-            # Demoモードは変更なし
             if self.api_execution_mode == "demo":
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Searchable PDF V2 - Simulate Register & GetResult): {file_name}", context=f"{log_ctx_prefix}_DEMO_REGISTER")
                 try: writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
                 except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Suite): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
-            
-            # Live モードのロジックを修正
-            else: 
-                self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2 - Register Only): {file_name}", context=f"{log_ctx_prefix}_LIVE")
-                
-                # OcrWorkerから渡された fullOcrJobId を取得
+            else: # Live モード
+                self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2): {file_name}", context=f"{log_ctx_prefix}_LIVE")
                 full_ocr_job_id = effective_options.get("fullOcrJobId")
-                if not full_ocr_job_id: 
-                    return None, {"message": "サーチャブルPDF作成に必要な全文読取ID(fullOcrJobId)が指定されていません。", "code": "DXSUITE_SPDF_MISSING_FULLOCRJOBID"}
-
+                if not full_ocr_job_id: return None, {"message": "サーチャブルPDF作成に必要な全文読取ID(fullOcrJobId)が指定されていません。", "code": "DXSUITE_SPDF_MISSING_FULLOCRJOBID"}
                 high_res_mode_opt_val = effective_options.get("highResolutionMode", 0)
-                try: 
-                    high_res_mode = int(high_res_mode_opt_val)
-                except (ValueError, TypeError): 
-                    self.log_manager.warning(f"highResolutionModeの値 '{high_res_mode_opt_val}' は不正です。デフォルトの0を使用します。", context=log_ctx_prefix)
-                    high_res_mode = 0
-
-                # PDF作成ジョブを登録し、そのジョブIDを返す (ここでのポーリングはしない)
+                try: high_res_mode = int(high_res_mode_opt_val)
+                except ValueError: self.log_manager.warning(f"highResolutionModeの値 '{high_res_mode_opt_val}' は不正です。デフォルトの0を使用します。", context=log_ctx_prefix); high_res_mode = 0
                 spdf_job_id, error_info_register = self.register_dx_searchable_pdf(full_ocr_job_id, high_res_mode)
-
-                if error_info_register: 
-                    return None, error_info_register
-                if not spdf_job_id: 
-                    return None, {"message": "DX Suite サーチャブルPDFジョブIDの取得に失敗しました。", "code": "DXSUITE_SPDF_JOBID_ACQUISITION_FAIL"}
-
-                self.log_manager.info(f"DX Suite Searchable PDF登録成功。SearchablePdfJobId: {spdf_job_id}。結果取得はWorkerに委ねます。", context=log_ctx_prefix)
-                
-                # Worker側でポーリングするために、ジョブIDと状態を返す
+                if error_info_register: return None, error_info_register
+                if not spdf_job_id: return None, {"message": "DX Suite サーチャブルPDFジョブIDの取得に失敗しました。", "code": "DXSUITE_SPDF_JOBID_ACQUISITION_FAIL"}
+                self.log_manager.info(f"DX Suite Searchable PDF登録成功。SearchablePdfJobId: {spdf_job_id}。結果取得はWorkerのポーリングに委ねます。", context=log_ctx_prefix)
                 return {"job_id": spdf_job_id, "status": "searchable_pdf_registered", "profile_flow_type": current_flow_type}, None
-        # ★★★ ここまでが修正範囲 ★★★
-
+        
         # ★★★ 標準APIはサーチャブルPDFをサポートしないため、エラーを返すようにする ★★★
         elif current_flow_type in ["dx_atypical_v2_flow", "dx_standard_v2_flow"]:
             self.log_manager.warning(f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", context="API_CLIENT_WARN")
