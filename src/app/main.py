@@ -41,7 +41,7 @@ if __name__ == "__main__":
             "有効なプロファイルID指定がない場合、またはプロファイルIDが0個の場合は選択ダイアログを表示します。"
         )
     except Exception as e: # DEFAULT_API_PROFILES の処理中に万が一エラーが起きた場合のフォールバック
-        print(f"ヘルプメッセージ生成中にエラー: {e}") # ログやコンソールへの出力
+        #print(f"ヘルプメッセージ生成中にエラー: {e}") # ログやコンソールへの出力
         api_help_message = (
             "起動時に使用するAPIプロファイルIDを指定します (複数指定可能)。 "
             "例: --api profile_id1 profile_id2 "

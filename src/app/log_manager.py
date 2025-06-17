@@ -8,13 +8,13 @@ from config_manager import APP_NAME, APP_AUTHOR
 try:
     LOG_DIR_PATH = user_log_dir(appname=APP_NAME, appauthor=APP_AUTHOR)
 except Exception as e:
-    print(f"重大な警告: appdirs でのログディレクトリパス取得に失敗しました。エラー: {e}")
+    #print(f"重大な警告: appdirs でのログディレクトリパス取得に失敗しました。エラー: {e}")
     fallback_dir_name = f"{APP_AUTHOR}_{APP_NAME}_logs_error_fallback".replace(" ", "_")
     try:
         LOG_DIR_PATH = os.path.join(os.getcwd(), fallback_dir_name)
-        print(f"フォールバック先のログディレクトリパス: {LOG_DIR_PATH}")
+        #print(f"フォールバック先のログディレクトリパス: {LOG_DIR_PATH}")
     except Exception as fallback_e:
-        print(f"フォールバックログディレクトリパスの設定も失敗しました: {fallback_e}")
+        #print(f"フォールバックログディレクトリパスの設定も失敗しました: {fallback_e}")
         LOG_DIR_PATH = os.path.join(os.getcwd(), "logs_fallback_critical")
 
 
@@ -40,14 +40,16 @@ class LogManager(QObject):
         except Exception as e:
             # フォルダ作成に失敗した場合、エラーをインスタンス変数に保存
             self.initialization_error = e
-            print(f"警告: ログディレクトリの作成に失敗しました: {self.log_dir}, Error: {e}")
+            #print(f"警告: ログディレクトリの作成に失敗しました: {self.log_dir}, Error: {e}")
         
         self.current_log_file_path = ""
         self._update_log_file_path()
 
     def _update_log_file_path(self):
         today_str = datetime.datetime.now().strftime('%Y%m%d')
-        if not self.log_dir: print("エラー: ログディレクトリが未設定のため、ログファイルパスを更新できません。"); return self.current_log_file_path
+        if not self.log_dir:
+            #print("エラー: ログディレクトリが未設定のため、ログファイルパスを更新できません。")
+            return self.current_log_file_path
         new_log_file_path = os.path.join(self.log_dir, f"app_log-{today_str}.jsonl")
         if self.current_log_file_path != new_log_file_path:
             old_file = self.current_log_file_path; self.current_log_file_path = new_log_file_path
