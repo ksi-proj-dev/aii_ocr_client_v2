@@ -2,10 +2,10 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QApplication, QCheckBox, QHBoxLayout
+    QAbstractItemView, QCheckBox, QHBoxLayout
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtGui import QColor, QPalette
 
 from config_manager import ConfigManager
 from file_model import FileInfo
@@ -39,11 +39,9 @@ class ListView(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         
-        # ★★★ ここから修正 ★★★
-        # OSのテーマに依存しないように、固定の色を指定します。
         current_palette = self.palette()
         base_color = current_palette.color(QPalette.ColorRole.Base).name()
-        alternate_base_color = "#f5f5f5"  # 薄いグレーに固定
+        alternate_base_color = "#f5f5f5"
         highlight_color = current_palette.color(QPalette.ColorRole.Highlight).name()
         highlighted_text_color = current_palette.color(QPalette.ColorRole.HighlightedText).name()
         
@@ -72,7 +70,6 @@ class ListView(QWidget):
                 color: {highlighted_text_color};
             }}
         """)
-        # ★★★ ここまで修正 ★★★
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
@@ -180,7 +177,6 @@ class ListView(QWidget):
                 if checkbox and checkbox.isEnabled():
                     checkbox.setChecked(new_check_state)
 
-    # ★★★ チェックボックスの状態変化をハンドルする新しいスロット ★★★
     def on_checkbox_state_changed(self, file_no: int, state: int):
         is_checked = (state == Qt.CheckState.Checked.value)
         
@@ -213,7 +209,6 @@ class ListView(QWidget):
             error_color = QColor("red")
 
             for idx, file_info in enumerate(self.file_list_data):
-                # ★★★ チェックボックス列の作成方法を変更 ★★★
                 cell_widget = QWidget()
                 layout = QHBoxLayout(cell_widget)
                 layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -235,7 +230,6 @@ class ListView(QWidget):
 
                 layout.addWidget(checkbox)
                 self.table.setCellWidget(idx, 0, cell_widget)
-                # ★★★ ここまで ★★★
 
                 no_value = file_info.no
                 no_item = NumericTableWidgetItem(str(no_value), no_value)
@@ -251,12 +245,10 @@ class ListView(QWidget):
                 if "失敗" in file_info.json_status or "エラー" in file_info.json_status or "中断" in file_info.json_status: json_status_item.setForeground(error_color)
                 self.table.setItem(idx, 5, json_status_item)
 
-                # ★★★ ここから自動CSV列の処理を追加 ★★★
                 auto_csv_status_item = QTableWidgetItem(file_info.auto_csv_status)
                 if "失敗" in file_info.auto_csv_status or "エラー" in file_info.auto_csv_status:
                     auto_csv_status_item.setForeground(error_color)
                 self.table.setItem(idx, 6, auto_csv_status_item)
-                # ★★★ ここまで追加 ★★★
 
                 pdf_status_item = QTableWidgetItem(file_info.searchable_pdf_status)
                 if ("失敗" in file_info.searchable_pdf_status or "エラー" in file_info.searchable_pdf_status or "中断" in file_info.searchable_pdf_status) and "部品PDFは結合されません(設定)" not in file_info.searchable_pdf_status and "個の部品PDF出力成功" not in file_info.searchable_pdf_status : 

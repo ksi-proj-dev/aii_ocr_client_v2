@@ -4,7 +4,7 @@ import os
 import time
 import json
 import threading
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -18,14 +18,14 @@ class SortWorker(QThread):
     # 全処理完了を通知するシグナル (bool: 成功/失敗, object: 結果/エラー情報)
     sort_finished = pyqtSignal(bool, object)
 
-    def __init__(self, api_client, file_paths: List[str], sort_config_id: str, log_manager, input_root_folder: str, config: Dict[str, Any]): # ★★★ config 引数を追加
+    def __init__(self, api_client, file_paths: List[str], sort_config_id: str, log_manager, input_root_folder: str, config: Dict[str, Any]):
         super().__init__()
         self.api_client = api_client
         self.file_paths = file_paths
         self.sort_config_id = sort_config_id
         self.log_manager = log_manager
         self.input_root_folder = input_root_folder
-        self.config = config # ★★★ この行を追加 ★★★
+        self.config = config
         self.is_running = True
 
     def stop(self):
@@ -95,7 +95,6 @@ class SortWorker(QThread):
             
             self.log_manager.info("OCR処理への送信が正常に完了しました。後続OCR処理の監視を開始します。", context="SORT_WORKER_SUCCESS")
 
-            # ★★★ ここから変数名を ocr_unit_ids_to_poll に統一 ★★★
             final_sort_status, _ = self.api_client.get_sort_unit_status(sort_unit_id)
             ocr_unit_ids_to_poll = []
             if final_sort_status and "statusList" in final_sort_status:
@@ -185,7 +184,6 @@ class SortWorker(QThread):
             
             final_payload = {"message": final_message, "statusName": "完了"}
             self.sort_finished.emit(True, final_payload)
-            # ★★★ ここまでが修正範囲 ★★★
 
         except Exception as e:
             self.log_manager.error(f"SortWorkerで予期せぬエラー: {e}", context="SORT_WORKER_UNEXPECTED_ERROR", exc_info=True)

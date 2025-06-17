@@ -1,15 +1,14 @@
 # ocr_orchestrator.py
 
 import os
-import csv
 import threading
 from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+from PyQt6.QtCore import QObject, pyqtSignal
 from typing import Optional, Dict, Any, List
 
 from ocr_worker import OcrWorker
 from sort_worker import SortWorker
-from log_manager import LogManager, LogLevel
+from log_manager import LogManager
 from api_client import OCRApiClient
 from ui_dialogs import OcrConfirmationDialog
 from config_manager import ConfigManager
@@ -254,7 +253,6 @@ class OcrOrchestrator(QObject):
                 item.is_checked
         ]
 
-        # ★★★ ここからが修正箇所 ★★★
         # dx_standard_v2 プロファイルの場合のみ、出力設定をチェックする
         if self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2':
             file_actions = self.config.get("file_actions", {})
@@ -281,7 +279,6 @@ class OcrOrchestrator(QObject):
                 if reply == QMessageBox.StandardButton.No:
                     self.log_manager.info("OCR開始がユーザーによってキャンセルされました（出力設定の警告後）。", context="OCR_ORCH_FLOW")
                     return # 処理を中止
-        # ★★★ ここまでが修正箇所 ★★★
 
         ocr_already_attempted_in_eligible_list = any(
             item.ocr_engine_status not in [OCR_STATUS_NOT_PROCESSED, None] 
@@ -316,7 +313,6 @@ class OcrOrchestrator(QObject):
                 item_info.ocr_engine_status = OCR_STATUS_PROCESSING
                 item_info.ocr_result_summary = ""
 
-                # ★★★ ここからステータス設定ロジックを修正 ★★★
                 file_actions = self.config.get("file_actions", {})
                 is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
 
@@ -331,7 +327,6 @@ class OcrOrchestrator(QObject):
                     item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
                     item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
                     item_info.auto_csv_status = "対象外"
-                # ★★★ ここまで修正 ★★★
 
                 files_to_send_to_worker_tuples.append((item_info.path, original_idx))
             updated_processed_files_info_for_start.append(item_info) 
@@ -352,7 +347,6 @@ class OcrOrchestrator(QObject):
             QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "アクティブなAPIプロファイルが設定されていません。")
             return
 
-        # ★変更箇所: アクティブプロファイルのAPIキーをチェックする (resume時も同様に)
         if self.config.get("api_execution_mode") == "live":
             active_api_key = ConfigManager.get_active_api_key(self.config)
             if not active_api_key or not active_api_key.strip():
@@ -361,7 +355,6 @@ class OcrOrchestrator(QObject):
                 QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
                                     f"LiveモードでOCRを再開するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
                 return
-        # --- ★変更箇所ここまで ---
 
         if self.is_ocr_running:
             self.log_manager.info("OcrOrchestrator: OCR resume aborted: OCR is already running.", context="OCR_ORCH_FLOW")
@@ -405,7 +398,6 @@ class OcrOrchestrator(QObject):
                 item_info.status = f"{OCR_STATUS_PROCESSING}(再開)"
                 item_info.ocr_result_summary = "" 
 
-                # ★★★ ここからステータス設定ロジックを修正 ★★★
                 file_actions = self.config.get("file_actions", {})
                 is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
 
@@ -418,7 +410,6 @@ class OcrOrchestrator(QObject):
                     item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
                     item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
                     item_info.auto_csv_status = "対象外"
-                # ★★★ ここまで修正 ★★★
 
             updated_processed_files_info_for_resume.append(item_info)
 
@@ -465,7 +456,7 @@ class OcrOrchestrator(QObject):
             sort_config_id=sort_config_id,
             log_manager=self.log_manager,
             input_root_folder=input_folder_path,
-            config=self.config # ★★★ この行を追加 ★★★
+            config=self.config
         )
         self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update)
         self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
@@ -545,7 +536,6 @@ class OcrOrchestrator(QObject):
         csv_filename = f"{os.path.basename(os.path.normpath(input_root_folder))}.csv"
         output_csv_path = os.path.join(output_dir, csv_filename)
 
-        # ★★★ CSV Exporter に渡す引数を修正 ★★★
         # 使用されたモデルIDを取得して渡す
         active_options = ConfigManager.get_active_api_options_values(self.config)
         model_id = active_options.get("model") if active_options else None

@@ -3,7 +3,7 @@
 import os
 from log_manager import LogManager
 from file_model import FileInfo
-from PyPDF2 import PdfReader, errors # ★ PyPDF2 の PdfReader と errors をインポート
+from PyPDF2 import PdfReader, errors
 
 class FileScanner:
     def __init__(self, log_manager: LogManager, config: dict):
@@ -95,7 +95,6 @@ class FileScanner:
         self.log_manager.info(f"FileScanner: Collection finished. Found {len(unique_sorted_files)} files.", context="FILE_SCANNER", count=len(unique_sorted_files))
         return unique_sorted_files, max_files_reached_info, list(depth_limited_folders)
 
-    # ★★★ create_initial_file_list メソッドの修正 ★★★
     def create_initial_file_list(self, file_paths: list, ocr_status_skipped_size_limit: str, ocr_status_not_processed: str) -> list[FileInfo]:
         """
         収集されたファイルパスのリストから、処理用の初期ファイル情報リストを生成します。
@@ -133,7 +132,7 @@ class FileScanner:
                         except errors.PdfReadError as e_pdf:
                             self.log_manager.warning(f"FileScanner: PDFファイル '{os.path.basename(f_path)}' のページ数読み取りに失敗しました (ファイル破損の可能性)。エラー: {e_pdf}", context="FILE_SCANNER_PDF_ERROR")
                         except Exception as e_generic:
-                             self.log_manager.error(f"FileScanner: PDFファイル '{os.path.basename(f_path)}' の読み取り中に予期せぬエラーが発生しました。エラー: {e_generic}", context="FILE_SCANNER_PDF_ERROR", exc_info=True)
+                            self.log_manager.error(f"FileScanner: PDFファイル '{os.path.basename(f_path)}' の読み取り中に予期せぬエラーが発生しました。エラー: {e_generic}", context="FILE_SCANNER_PDF_ERROR", exc_info=True)
 
 
                     file_info_item = FileInfo(
@@ -146,7 +145,7 @@ class FileScanner:
                         ocr_result_summary=f"ファイルサイズが上限 ({upload_max_size_mb}MB) を超過" if is_skipped_by_size else "",
                         json_status="スキップ" if is_skipped_by_size else initial_json_status_default,
                         searchable_pdf_status="スキップ" if is_skipped_by_size else initial_pdf_status_default,
-                        page_count=page_count, # ★ 読み取ったページ数を設定
+                        page_count=page_count,
                         is_checked=not is_skipped_by_size
                     )
                     if is_skipped_by_size:

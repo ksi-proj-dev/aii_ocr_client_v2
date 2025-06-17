@@ -3,10 +3,10 @@
 import os
 import json
 import csv
-from typing import List, Dict
+from typing import List
 from file_model import FileInfo
 from log_manager import LogManager
-from config_manager import ConfigManager # ★ ConfigManager をインポート
+from config_manager import ConfigManager
 
 def export_atypical_to_csv(successful_files: List[FileInfo], output_csv_path: str, log_manager: LogManager, model_id: str):
     """

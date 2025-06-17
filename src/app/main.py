@@ -7,12 +7,11 @@ import argparse
 from PyQt6.QtWidgets import QApplication
 
 from ui_main_window import MainWindow
-from config_manager import DEFAULT_API_PROFILES # DEFAULT_API_PROFILES をインポート
+from config_manager import DEFAULT_API_PROFILES
 
 if __name__ == "__main__":
     faulthandler.enable()
 
-    # --- ★変更箇所: ヘルプメッセージの生成ロジック ---
     try:
         # 利用可能なプロファイルIDのリストを取得
         available_profile_ids = [p.get("id") for p in DEFAULT_API_PROFILES if p.get("id")]
@@ -35,33 +34,30 @@ if __name__ == "__main__":
             example_str = "例: --api profile_id1 profile_id2"
 
         api_help_message = (
-            "起動時に使用するAPIプロファイルIDを指定します (複数指定可能)。\n" # ★説明を少し分けました
-            f"{choosable_ids_display_part}\n"  # ★指定可能なID一覧を改行して表示
-            f"{example_str}\n"                 # ★具体例も改行して表示
+            "起動時に使用するAPIプロファイルIDを指定します (複数指定可能)。\n"
+            f"{choosable_ids_display_part}\n"
+            f"{example_str}\n"
             "有効なプロファイルID指定がない場合、またはプロファイルIDが0個の場合は選択ダイアログを表示します。"
         )
     except Exception as e: # DEFAULT_API_PROFILES の処理中に万が一エラーが起きた場合のフォールバック
-        #print(f"ヘルプメッセージ生成中にエラー: {e}") # ログやコンソールへの出力
+        print(f"ヘルプメッセージ生成中にエラー: {e}") # ログやコンソールへの出力
         api_help_message = (
             "起動時に使用するAPIプロファイルIDを指定します (複数指定可能)。 "
             "例: --api profile_id1 profile_id2 "
             "有効なプロファイルID指定がない場合、またはプロファイルIDが0個の場合は選択ダイアログを表示します。"
         )
-    # --- ★変更箇所ここまで ---
 
     parser = argparse.ArgumentParser(
         description="AI inside OCR Client",
-        formatter_class=argparse.RawTextHelpFormatter # ★ヘルプメッセージの改行を維持するため追加
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         "--api",
         nargs='*',
         type=str,
         default=None,
-        help=api_help_message # 更新されたヘルプメッセージを使用
+        help=api_help_message
     )
-    # 今後、他のオプションをここに追加
-    # parser.add_argument("--another-option", ...)
 
     args = parser.parse_args()
 

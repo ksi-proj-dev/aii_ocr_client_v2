@@ -2,11 +2,8 @@
 
 import os
 import time
-import json
 import random
-import shutil
 import requests
-from log_manager import LogLevel
 from PyPDF2 import PdfWriter
 import io
 from typing import Optional, Dict, Any, Tuple, List
@@ -197,7 +194,6 @@ class OCRApiClient:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"非定型API用一時ファイルのクローズに失敗: {e_close}", context=log_ctx_prefix)
 
-        # ★★★ ここから dx_standard_v2_flow のブロックを丸ごと置き換え ★★★
         elif current_flow_type == "dx_standard_v2_flow":
             log_ctx_prefix = "API_DX_STANDARD_V2"
             
@@ -286,7 +282,6 @@ class OCRApiClient:
                     return None, {"message": f"ユニット登録APIでエラー: {e}", "code": "DX_STANDARD_REGISTER_FAIL"}
                 finally:
                     if file_obj and not file_obj.closed: file_obj.close()
-        # ★★★ ここまでが置き換え範囲 ★★★
 
         else:
             self.log_manager.error(f"未対応または不明なAPIフロータイプです: {current_flow_type}", context="API_CLIENT_ERROR")
@@ -345,7 +340,6 @@ class OCRApiClient:
     def get_dx_standard_status(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         """DX Suite 標準APIのユニット状態を取得する。"""
         log_ctx_prefix = "API_DX_STANDARD_V2_STATUS"
-        # ★★★ 修正箇所 ★★★
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
         self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - GetStatus): unitId={unit_id}", context=f"{log_ctx_prefix}_LIVE_GETSTATUS")
 
@@ -387,7 +381,6 @@ class OCRApiClient:
     def get_dx_standard_result(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         """DX Suite 標準APIのOCR結果を取得する。"""
         log_ctx_prefix = "API_DX_STANDARD_V2_RESULT"
-        # ★★★ 修正箇所 ★★★
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
         self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - GetResult): unitId={unit_id}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
 
@@ -429,7 +422,6 @@ class OCRApiClient:
     def delete_dx_standard_job(self, unit_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """DX Suite 標準APIのユニットを削除する。"""
         log_ctx_prefix = "API_DX_STANDARD_V2_DELETE"
-        # ★★★ 修正箇所 ★★★
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
         self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - Delete): unitId={unit_id}", context=log_ctx_prefix)
 
@@ -539,7 +531,6 @@ class OCRApiClient:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"make_searchable_pdf用一時ファイルのクローズに失敗: {e_close}", context=log_ctx)
         
-        # ★★★ ここからが修正範囲 ★★★
         elif current_flow_type == "dx_fulltext_v2_flow":
             log_ctx_prefix = "API_DX_FULLTEXT_V2_PDF"
             # Demoモードは変更なし
@@ -576,9 +567,7 @@ class OCRApiClient:
                 
                 # Worker側でポーリングするために、ジョブIDと状態を返す
                 return {"job_id": spdf_job_id, "status": "searchable_pdf_registered", "profile_flow_type": current_flow_type}, None
-        # ★★★ ここまでが修正範囲 ★★★
 
-        # ★★★ 標準APIはサーチャブルPDFをサポートしないため、エラーを返すようにする ★★★
         elif current_flow_type in ["dx_atypical_v2_flow", "dx_standard_v2_flow"]:
             self.log_manager.warning(f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", context="API_CLIENT_WARN")
             return None, {"message": f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", "code": f"NOT_SUPPORTED_{current_flow_type}_PDF"}
@@ -635,7 +624,7 @@ class OCRApiClient:
         if not self.api_key: return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。", "code": "API_KEY_MISSING_LIVE_DX_DELETE"}
 
         headers = {"apikey": self.api_key, "Content-Type": "application/json"}
-        request_body = {"receptionId": reception_id} # ★ API仕様書P.48より、キーは receptionId
+        request_body = {"receptionId": reception_id}
 
         try:
             self.log_manager.debug(f"  POST to {url} with headers: {list(headers.keys())}, body: {request_body}", context=log_ctx_prefix)
@@ -681,12 +670,6 @@ class OCRApiClient:
                 ]
             return dummy_workflows, None
 
-        # Liveモードの処理
-        # ★★★ 仕様書P.10ではエンドポイントが `/workflows` となっています ★★★
-        # config_manager で `search_workflows` のようなキーを新たに追加するか、
-        # 他のエンドポイント定義から類推してパスを構築する必要があります。
-        # ここでは、base_uri直下の `/workflows` を直接使用します。
-        
         base_uri = self._get_full_url("register_ocr").split('/workflows/')[0]
         url = f"{base_uri}/workflows"
 

@@ -620,7 +620,6 @@ class OcrWorker(QThread):
                                 all_parts_processed_successfully = False
                                 final_ocr_error_for_main = {"message": msg, "code": "PART_JSON_SAVE_ERROR", "detail": str(e_json_save)}
                     
-                    # ★★★ ここからが修正範囲 ★★★
                     should_create_pdf = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                     if should_create_pdf and parts_results_temp_dir:
                         # OCRテキスト処理に失敗していたら、PDF作成はスキップ
@@ -684,8 +683,8 @@ class OcrWorker(QThread):
                                             part_pdf_content = pdf_content_poll
                                             break
                                         else: # 予期せぬ応答
-                                             part_pdf_api_error_info_pdf = {"message": "DX Suite PDF取得APIが予期しない応答。", "code": "DXSUITE_SPDF_UNEXPECTED_RESPONSE"}
-                                             break
+                                            part_pdf_api_error_info_pdf = {"message": "DX Suite PDF取得APIが予期しない応答。", "code": "DXSUITE_SPDF_UNEXPECTED_RESPONSE"}
+                                            break
                             # 同期PDF作成の場合 (直接バイナリが返ってくる)
                             elif spdf_response:
                                 part_pdf_content = spdf_response
@@ -719,7 +718,6 @@ class OcrWorker(QThread):
                                 self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
                                 all_parts_processed_successfully = False
                                 if not pdf_error_for_signal: pdf_error_for_signal = {"message": msg, "code": "PART_PDF_NO_VALID_RESPONSE"}
-                    # ★★★ ここまでが修正範囲 ★★★
 
                     if active_profile_flow_type == "dx_fulltext_v2_flow" and delete_job_after_processing and current_part_full_ocr_job_id:
                         self.log_manager.info(f"部品 '{current_part_basename}' (Job ID: {current_part_full_ocr_job_id}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")

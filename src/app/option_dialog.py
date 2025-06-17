@@ -101,7 +101,6 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
-        # ★★★ ここからが修正箇所 (1/3) ★★★
         # 2. 出力形式グループ (共通設定タブから移動)
         output_format_group = QGroupBox("出力形式")
         output_format_group.setStyleSheet(group_box_style)
@@ -139,7 +138,6 @@ class OptionDialog(QDialog):
 
         output_format_group.setLayout(output_format_form_layout)
         api_layout.addWidget(output_format_group)
-        # ★★★ ここまでが修正箇所 (1/3) ★★★
         
         # 3. API別OCRオプションのグループ (変更なし)
         if self.options_schema:
@@ -219,7 +217,6 @@ class OptionDialog(QDialog):
         # ===================================================================
         #  「共通設定」タブの中身を作成
         # ===================================================================
-        # ★★★ ここからが修正箇所 (2/3) ★★★
         # 1. ファイル移動と結果フォルダ設定のグループ (旧ファイル処理グループから改名・一部抜粋)
         file_move_group = QGroupBox("ファイル移動と結果フォルダ (共通設定)")
         file_move_group.setStyleSheet(group_box_style)
@@ -254,7 +251,6 @@ class OptionDialog(QDialog):
         file_move_form_layout.addRow(collision_label, collision_layout_v)
         file_move_group.setLayout(file_move_form_layout)
         common_layout.addWidget(file_move_group)
-        # ★★★ ここまでが修正箇所 (2/3) ★★★
 
         # 2. ログ設定グループ (変更なし)
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
@@ -275,7 +271,6 @@ class OptionDialog(QDialog):
         self.tabs.addTab(api_options_tab, "API別オプション")
         self.tabs.addTab(common_settings_tab, "共通設定")
 
-        # ★★★ ここからが修正箇所 (3/3) ★★★
         # --- 保存/キャンセルボタン (変更なし) ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
@@ -288,7 +283,6 @@ class OptionDialog(QDialog):
         main_layout.addLayout(button_layout)
         
         self.setMinimumWidth(550)
-        # ★★★ ここまでが修正箇所 (3/3) ★★★
 
     def on_model_changed(self):
         """帳票モデルのドロップダウンが変更されたときに呼び出される。"""

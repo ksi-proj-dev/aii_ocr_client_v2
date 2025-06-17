@@ -1,14 +1,13 @@
 # config_manager.py
 
 import os
-import sys
 import json
 import datetime
 import shutil
 from typing import Optional, Dict, Any, List
 from appdirs import user_config_dir
 
-from model_data import MODEL_DEFINITIONS # ★★★ model_data.py から辞書をインポート ★★★
+from model_data import MODEL_DEFINITIONS
 
 CONFIG_FILE_NAME = "config.json"
 APP_NAME = "AI inside OCR Client"
@@ -18,14 +17,14 @@ try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
     CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
 except Exception as e:
-    #print(f"重大な警告: appdirs での設定パス取得に失敗しました。エラー: {e}")
+    print(f"重大な警告: appdirs での設定パス取得に失敗しました。エラー: {e}")
     fallback_dir_name = f"{APP_AUTHOR}_{APP_NAME}_config_error_fallback".replace(" ", "_")
     try:
         CONFIG_DIR = os.path.join(os.getcwd(), fallback_dir_name)
         CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
-        #print(f"フォールバック先のパス: {CONFIG_PATH}")
+        print(f"フォールバック先のパス: {CONFIG_PATH}")
     except Exception as fallback_e:
-        #print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
+        print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
         CONFIG_PATH = None; CONFIG_DIR = None
 
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
@@ -150,7 +149,7 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "register_ocr": "/workflows/{workflowId}/units",
             "get_ocr_status": "/units/status",
             "get_ocr_result": "/units/dataItems",
-            "download_csv": "/units/{unitId}/csv",  # ★★★ この行を追加 ★★★
+            "download_csv": "/units/{unitId}/csv",
             "delete_ocr": "/units/{unitId}/delete"
         },
         "options_schema": {
@@ -161,7 +160,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
                 "placeholder": "例: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
                 "tooltip": "DX Suiteの管理画面で確認したワークフローID (UUID) を指定します。（必須）"
             },
-            # ★★★ ここから追加 ★★★
             "sortConfigId": {
                 "type": "string",
                 "default": "",
@@ -169,7 +167,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
                 "placeholder": "例: yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
                 "tooltip": "仕分け処理で使用する仕分けルールのID (UUID) を指定します。\n（「仕分け」機能を利用する場合に必須）"
             },
-            # ★★★ ここまで追加 ★★★
             "unitName": {"type": "string", "default": "", "label": "読取ユニット名 (任意):", "placeholder": "例: 2025年6月分請求書", "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"},
             "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
             "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)"},
@@ -188,20 +185,19 @@ class ConfigManager:
     @staticmethod
     def _ensure_config_dir_exists():
         if not CONFIG_PATH:
-            #print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。") # LogManagerが使える前なのでprint
+            print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。") # LogManagerが使える前なのでprint
             return False
         try:
             config_dir_for_creation = os.path.dirname(CONFIG_PATH)
             if not os.path.exists(config_dir_for_creation):
                 os.makedirs(config_dir_for_creation, exist_ok=True)
         except Exception as e:
-            #print(f"警告: 設定ディレクトリの作成に失敗しました: {config_dir_for_creation}, Error: {e}")
+            print(f"警告: 設定ディレクトリの作成に失敗しました: {config_dir_for_creation}, Error: {e}")
             return False
         return True
 
     @staticmethod
     def load() -> Dict[str, Any]:
-        # ★★★ JSONファイルの読み込みロジックは不要になったため、loadメソッドはシンプルになります ★★★
         if not ConfigManager._ensure_config_dir_exists():
             return ConfigManager._get_default_config_structure()
 
@@ -211,7 +207,7 @@ class ConfigManager:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     user_config = json.load(f)
             except (json.JSONDecodeError, Exception) as e:
-                #print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
+                print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
                 ConfigManager._backup_corrupted_config()
                 user_config = ConfigManager._get_default_config_structure()
         else:
@@ -223,7 +219,6 @@ class ConfigManager:
     @staticmethod
     def get_class_definitions_for_model(model_id: str) -> List[Dict[str, str]]:
         """指定されたモデルIDに対応するクラス定義のリストを返す。"""
-        # ★★★ インポートした辞書から直接値を取得 ★★★
         return MODEL_DEFINITIONS.get(model_id, [])
 
     @staticmethod
@@ -232,9 +227,9 @@ class ConfigManager:
             try:
                 backup_path = CONFIG_PATH + ".corrupted_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                 shutil.copy2(CONFIG_PATH, backup_path)
-                #print(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。")
+                print(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。")
             except Exception as e_backup:
-                #print(f"破損した設定ファイルのバックアップに失敗: {e_backup}")
+                print(f"破損した設定ファイルのバックアップに失敗: {e_backup}")
                 pass # エラー時は何もしない（printのみ）
 
     @staticmethod
@@ -298,12 +293,10 @@ class ConfigManager:
         file_actions.setdefault("results_folder_name", "OCR結果")
         file_actions.setdefault("output_format", "both")
 
-        # ★★★ ここから新しい設定項目を追加 ★★★
         log_settings = config.setdefault("log_settings", {})
         log_settings.setdefault("log_level_info_enabled", True)    # INFOレベルはデフォルトで表示
         log_settings.setdefault("log_level_warning_enabled", True) # WARNINGレベルはデフォルトで表示
         log_settings.setdefault("log_level_debug_enabled", False)  # DEBUGレベルはデフォルトで非表示
-        # ★★★ ここまで追加 ★★★
 
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
@@ -317,10 +310,10 @@ class ConfigManager:
     @staticmethod
     def save(config: Dict[str, Any]):
         if not ConfigManager._ensure_config_dir_exists():
-            #print("エラー: 設定ディレクトリの準備ができないため、設定を保存できません。")
+            print("エラー: 設定ディレクトリの準備ができないため、設定を保存できません。")
             return
         if not CONFIG_PATH:
-            #print("エラー: CONFIG_PATH が無効なため、設定を保存できません。")
+            print("エラー: CONFIG_PATH が無効なため、設定を保存できません。")
             return
         
         config_to_save = json.loads(json.dumps(config)) 
@@ -334,7 +327,7 @@ class ConfigManager:
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(config_to_save, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            #print(f"エラー: 設定ファイル {CONFIG_PATH} の保存に失敗しました。理由: {e}")
+            print(f"エラー: 設定ファイル {CONFIG_PATH} の保存に失敗しました。理由: {e}")
             pass # エラー時は何もしない（printのみ）
 
     @staticmethod

@@ -139,12 +139,11 @@ class WorkflowSearchDialog(QDialog):
         # --- ボタンボックスの修正 ---
         self.button_box = QDialogButtonBox()
         self.ok_button = self.button_box.addButton("選択", QDialogButtonBox.ButtonRole.AcceptRole)
-        # ★★★ 「選択をクリア」ボタンを追加 ★★★
         self.clear_button = self.button_box.addButton("選択をクリア", QDialogButtonBox.ButtonRole.ResetRole)
         self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
 
         self.ok_button.setEnabled(False)
-        self.clear_button.setEnabled(False) # ★★★ クリアボタンも初期状態は無効 ★★★
+        self.clear_button.setEnabled(False)
         
         main_layout.addWidget(self.button_box)
 
@@ -155,7 +154,7 @@ class WorkflowSearchDialog(QDialog):
         self.results_table.itemDoubleClicked.connect(self.accept_selection)
         self.button_box.accepted.connect(self.accept_selection)
         self.button_box.rejected.connect(self.reject)
-        self.clear_button.clicked.connect(self.clear_selection) # ★★★ クリアボタンのシグナルを接続 ★★★
+        self.clear_button.clicked.connect(self.clear_selection)
         
         QTimer.singleShot(50, self.fetch_all_workflows)
 
@@ -176,7 +175,7 @@ class WorkflowSearchDialog(QDialog):
         search_term = self.search_box.text().strip().lower()
         self.results_table.setRowCount(0)
         self.ok_button.setEnabled(False)
-        self.clear_button.setEnabled(False) # ★★★ 検索時もクリアボタンを無効化 ★★★
+        self.clear_button.setEnabled(False)
 
         if not self.all_workflows_cache:
             return
@@ -204,7 +203,7 @@ class WorkflowSearchDialog(QDialog):
         """テーブルの選択状態が変わったときの処理"""
         is_something_selected = len(self.results_table.selectedItems()) > 0
         self.ok_button.setEnabled(is_something_selected)
-        self.clear_button.setEnabled(is_something_selected) # ★★★ 選択状態に応じてクリアボタンも有効/無効化 ★★★
+        self.clear_button.setEnabled(is_something_selected)
 
     def accept_selection(self):
         """OKボタンが押された、またはダブルクリックされたときの処理"""
@@ -216,7 +215,6 @@ class WorkflowSearchDialog(QDialog):
         self.selected_workflow = first_item.data(Qt.ItemDataRole.UserRole)
         self.accept()
         
-    # ★★★ 新しいメソッドを追加 ★★★
     def clear_selection(self):
         """「選択をクリア」ボタンが押されたときの処理"""
         self.results_table.clearSelection()

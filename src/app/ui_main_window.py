@@ -922,7 +922,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rescan_action'):
             self.rescan_action.setEnabled(can_rescan)
         
-        # ★★★ ここからが修正箇所 ★★★
         # 「仕分け」ボタンの有効/無効を制御するロジック
         can_start_sort = False
         # 1. 処理中でない & 2. プロファイルがdx_standard_v2である
@@ -936,7 +935,6 @@ class MainWindow(QMainWindow):
 
         # 「CSVダウンロード」ボタンの有効/無効を制御するロジック
         # (ここは元から can_download_csv で制御されているので変更なし)
-        # ★★★ ここまでが修正箇所 ★★★
 
         can_download_csv = False
         if not running and hasattr(self, 'list_view'):

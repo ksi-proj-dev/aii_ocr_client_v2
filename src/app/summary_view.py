@@ -1,11 +1,10 @@
 # summary_view.py
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QProgressBar, QFrame, QGridLayout, QSizePolicy,
-                             QSpacerItem)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFontMetrics, QFont
+                            QProgressBar, QFrame, QGridLayout, QSizePolicy)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFontMetrics
 
 class StatusCard(QFrame):
     def __init__(self, title: str, color: str, show_progress_widget: bool = True):
