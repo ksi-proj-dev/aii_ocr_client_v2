@@ -395,6 +395,8 @@ class OcrWorker(QThread):
                     current_part_full_ocr_job_id: Optional[str] = None
                     current_part_atypical_job_id: Optional[str] = None
                     
+                    # For multi-part files, only the first part calls read_document to get a job_id, assuming API supports multi-file upload in one job.
+                    # This assumption may need to be revisited based on API behavior for multi-file jobs.
                     if part_idx == 0:
                         initial_ocr_response, initial_ocr_error = self.api_client.read_document(
                             current_processing_path,
@@ -408,32 +410,110 @@ class OcrWorker(QThread):
 
                     if initial_ocr_error:
                         part_ocr_api_error_info = initial_ocr_error
-                    # === ここからポーリングロジックの修正 ===
-                    elif initial_ocr_response and "registered" in initial_ocr_response.get("status", ""):
+                    elif initial_ocr_response and isinstance(initial_ocr_response, dict) and "registered" in initial_ocr_response.get("status", ""):
                         
-                        flow_type_for_poll = initial_ocr_response.get("profile_flow_type")
-                        unit_id_for_poll = initial_ocr_response.get("unitId")
-                        reception_id_for_poll = initial_ocr_response.get("receptionId")
-                        job_id_for_poll = initial_ocr_response.get("job_id")
+                        if initial_ocr_response.get("profile_flow_type") == "dx_atypical_v2_flow":
+                            reception_id = initial_ocr_response.get("receptionId")
+                            current_part_atypical_job_id = reception_id
 
-                        # --- DX Suite Standard (V1 & V2) ポーリング ---
-                        if flow_type_for_poll in ["dx_standard_v1_flow", "dx_standard_v2_flow"]:
-                            if not unit_id_for_poll:
-                                part_ocr_api_error_info = {"message": "unitIdが取得できませんでした。", "code": "POLL_NO_UNITID"}
+                            if not reception_id:
+                                part_ocr_api_error_info = {"message": "receptionIdが取得できませんでした (DX Suite 非定型)。", "code": "DX_ATYPICAL_NO_RECEPTIONID"}
                             else:
-                                self.log_manager.info(f"  DX Suite 標準 ({flow_type_for_poll}) ジョブ登録成功 (Unit ID: {unit_id_for_poll})。結果取得ポーリングを開始します。", context="WORKER_DX_STANDARD_POLL")
+                                self.log_manager.info(f"  DX Suite 非定型ジョブ登録成功 (receptionId: {reception_id})。結果取得を開始します。", context="WORKER_DX_ATYPICAL_POLL")
+                                for attempt in range(max_polling_attempts):
+                                    if not self.is_running:
+                                        part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}
+                                        break
+                                    self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
+                                    poll_result, poll_error = self.api_client.get_dx_atypical_ocr_result(reception_id)
+                                    
+                                    if poll_error:
+                                        part_ocr_api_error_info = poll_error
+                                        break
+                                    
+                                    if poll_result and isinstance(poll_result, dict):
+                                        api_status = poll_result.get("status")
+                                        if api_status == 2:
+                                            self.log_manager.info(f"  DX Suite 非定型 結果取得成功 (receptionId: {reception_id})。", context="WORKER_DX_ATYPICAL_POLL")
+                                            part_ocr_result_json = poll_result
+                                            break
+                                        elif api_status == 3:
+                                            error_details = poll_result.get("files", [{}])[0].get("ocrResults", [{}])[0].get("status") if poll_result.get("files") else "詳細不明"
+                                            part_ocr_api_error_info = {"message": f"DX Suite 非定型APIがエラーを返しました (receptionId: {reception_id})。", "code": "DX_ATYPICAL_API_ERROR", "detail": error_details}
+                                            break
+                                        elif api_status == 1:
+                                            self.log_manager.debug(f"  DX Suite 非定型 結果ポーリング中 (receptionId: {reception_id}, Attempt: {attempt + 1})。", context="WORKER_DX_ATYPICAL_POLL")
+                                            if attempt < max_polling_attempts - 1:
+                                                time.sleep(polling_interval)
+                                            else:
+                                                part_ocr_api_error_info = {"message": "DX Suite 非定型 結果取得がタイムアウトしました。", "code": "DX_ATYPICAL_OCR_TIMEOUT"}
+                                                break
+                                        else:
+                                            part_ocr_api_error_info = {"message": f"DX Suite 非定型APIが未知のステータス '{api_status}' を返しました。", "code": "DX_ATYPICAL_OCR_UNKNOWN_STATUS"}
+                                            break
+                                    else:
+                                        part_ocr_api_error_info = {"message": "DX Suite 非定型 結果取得APIが予期しない応答。", "code": "DX_ATYPICAL_OCR_UNEXPECTED_RESPONSE"}
+                                        break
+                        
+                        elif initial_ocr_response.get("profile_flow_type") == "dx_fulltext_v2_flow":
+                            job_id_for_ocr_text = initial_ocr_response.get("job_id")
+                            current_part_full_ocr_job_id = job_id_for_ocr_text
 
-                                if str(unit_id_for_poll).startswith("demo-"):
+                            if not job_id_for_ocr_text:
+                                part_ocr_api_error_info = {"message": "OCRジョブIDが取得できませんでした (DX Suite 全文)。", "code": "DXSUITE_NO_JOB_ID"}
+                            else:
+                                self.log_manager.info(f"  DX Suite 全文OCRジョブ登録成功 (Job ID: {job_id_for_ocr_text})。結果取得を開始します。", context="WORKER_DX_FULLTEXT_POLL")
+                                for attempt in range(max_polling_attempts):
+                                    if not self.is_running:
+                                        part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}
+                                        break
+                                    self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
+                                    poll_result, poll_error = self.api_client.get_dx_fulltext_ocr_result(job_id_for_ocr_text)
+                                    if poll_error:
+                                        part_ocr_api_error_info = poll_error
+                                        break
+                                    if poll_result and isinstance(poll_result, dict):
+                                        api_status = poll_result.get("status")
+                                        if api_status == "done":
+                                            self.log_manager.info(f"  DX Suite 全文OCR結果取得成功 (Job ID: {job_id_for_ocr_text})。", context="WORKER_DX_FULLTEXT_POLL")
+                                            part_ocr_result_json = poll_result
+                                            break
+                                        elif api_status == "error":
+                                            dx_error_details = poll_result.get("results", poll_result.get("errors", "詳細不明"))
+                                            part_ocr_api_error_info = {"message": f"DX Suite 全文OCR APIがエラーを返しました。", "code": "DXSUITE_OCR_API_ERROR", "detail": dx_error_details}
+                                            break
+                                        elif api_status == "inprogress":
+                                            self.log_manager.debug(f"  DX Suite 全文OCR結果ポーリング中 (Job ID: {job_id_for_ocr_text}, Attempt: {attempt + 1})。", context="WORKER_DX_FULLTEXT_POLL")
+                                            if attempt < max_polling_attempts - 1:
+                                                time.sleep(polling_interval)
+                                            else:
+                                                part_ocr_api_error_info = {"message": "DX Suite 全文OCR結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}
+                                                break
+                                        else:
+                                            part_ocr_api_error_info = {"message": f"DX Suite 全文OCR APIが未知のステータス '{api_status}' を返しました。", "code": "DXSUITE_OCR_UNKNOWN_STATUS"}
+                                            break
+                                    else:
+                                        part_ocr_api_error_info = {"message": "DX Suite 全文OCR 結果取得APIが予期しない応答。", "code": "DXSUITE_OCR_UNEXPECTED_RESPONSE"}
+                                        break
+                        
+                        elif initial_ocr_response.get("profile_flow_type") == "dx_standard_v2_flow":
+                            unit_id = initial_ocr_response.get("unitId")
+                            if not unit_id:
+                                part_ocr_api_error_info = {"message": "unitIdが取得できませんでした (DX Suite 標準)。", "code": "DX_STANDARD_NO_UNITID"}
+                            else:
+                                self.log_manager.info(f"  DX Suite 標準ジョブ登録成功 (unitId: {unit_id})。結果取得ポーリングを開始します。", context="WORKER_DX_STANDARD_POLL")
+
+                                if str(unit_id).startswith("demo-"):
                                     time.sleep(random.uniform(2, 4))
                                 
+                                final_result_data = None
                                 for attempt in range(max_polling_attempts):
                                     if not self.is_running:
                                         part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}
                                         break
                                     
                                     self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
-                                    # V1, V2 両対応の status メソッドを呼び出す
-                                    poll_result, poll_error = self.api_client.get_dx_standard_status(str(unit_id_for_poll))
+                                    poll_result, poll_error = self.api_client.get_dx_standard_status(unit_id)
 
                                     if poll_error:
                                         part_ocr_api_error_info = poll_error
@@ -443,78 +523,73 @@ class OcrWorker(QThread):
                                         status_info = poll_result[0]
                                         data_status = status_info.get("dataProcessingStatus")
 
-                                        if data_status == 400: # 完了
-                                            self.log_manager.info(f"  DX Suite 標準 ポーリング成功：データ化完了 (unitId: {unit_id_for_poll})。", context="WORKER_DX_STANDARD_POLL")
-                                            # (このTODOは次のステップで実装します)
-                                            part_ocr_result_json = {"status": "ocr_completed_and_polled", "unitId": unit_id_for_poll}
+                                        if data_status == 400:
+                                            self.log_manager.info(f"  DX Suite 標準 ポーリング成功：データ化完了 (unitId: {unit_id})。", context="WORKER_DX_STANDARD_POLL")
+                                            result_data_from_api, result_error = self.api_client.get_dx_standard_result(unit_id)
+                                            if result_error:
+                                                part_ocr_api_error_info = result_error
+                                            else:
+                                                final_result_data = result_data_from_api
                                             break
-                                        # ↓↓↓ このelifブロックを追加 ↓↓↓
-                                        elif data_status == 300: # 手動操作待ち
-                                            self.log_manager.info(f"  DX Suite 標準 ポーリング完了：手動エントリー待ち (unitId: {unit_id_for_poll})。", context="WORKER_DX_STANDARD_POLL")
-                                            # 結果を「手動操作待ち」として設定
-                                            part_ocr_result_json = {"status": "awaiting_manual_action", "unitId": unit_id_for_poll, "message": "サーバー上でエントリー操作が必要です"}
+                                        
+                                        elif data_status == 600:
+                                            part_ocr_api_error_info = {"message": "DX Suite 標準APIが一部データ化失敗を返しました。", "code": "DX_STANDARD_API_PARTIAL_FAILURE", "detail": status_info}
                                             break
-                                        # ↑↑↑ ここまで追加 ↑↑↑
-                                        elif data_status in [0, 200]: # 処理中
-                                            self.log_manager.debug(f"  DX Suite 標準 結果ポーリング中 (unitId: {unit_id_for_poll}, Attempt: {attempt + 1}, Status: {data_status})。", context="WORKER_DX_STANDARD_POLL")
+                                        
+                                        elif data_status in [0, 200]:
+                                            self.log_manager.debug(f"  DX Suite 標準 結果ポーリング中 (unitId: {unit_id}, Attempt: {attempt + 1}, Status: {data_status})。", context="WORKER_DX_STANDARD_POLL")
                                             if attempt < max_polling_attempts - 1:
                                                 time.sleep(polling_interval)
                                             else:
                                                 part_ocr_api_error_info = {"message": "DX Suite 標準 結果取得がタイムアウトしました。", "code": "DX_STANDARD_OCR_TIMEOUT"}
                                                 break
-                                        else: # 未知のステータス
+                                        else:
                                             part_ocr_api_error_info = {"message": f"DX Suite 標準APIが未知のデータ化ステータス '{data_status}' を返しました。", "code": "DX_STANDARD_OCR_UNKNOWN_STATUS"}
                                             break
                                     else:
                                         part_ocr_api_error_info = {"message": "DX Suite 標準 状態取得APIが予期しない応答。", "code": "DX_STANDARD_STATUS_UNEXPECTED_RESPONSE"}
                                         break
-                        
-                        # --- DX Suite Atypical V2 ポーリング ---
-                        elif flow_type_for_poll == "dx_atypical_v2_flow":
-                            current_part_atypical_job_id = reception_id_for_poll
-                            if not reception_id_for_poll:
-                                part_ocr_api_error_info = {"message": "receptionIdが取得できませんでした (DX Suite 非定型)。", "code": "DX_ATYPICAL_NO_RECEPTIONID"}
-                            else:
-                                self.log_manager.info(f"  DX Suite 非定型ジョブ登録成功 (receptionId: {reception_id_for_poll})。結果取得を開始します。", context="WORKER_DX_ATYPICAL_POLL")
-                                for attempt in range(max_polling_attempts):
-                                    if not self.is_running: part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}; break
-                                    self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
-                                    poll_result, poll_error = self.api_client.get_dx_atypical_ocr_result(reception_id_for_poll)
-                                    if poll_error: part_ocr_api_error_info = poll_error; break
-                                    if poll_result and isinstance(poll_result, dict):
-                                        api_status = poll_result.get("status")
-                                        if api_status == 2: self.log_manager.info(f"  DX Suite 非定型 結果取得成功 (receptionId: {reception_id_for_poll})。", context="WORKER_DX_ATYPICAL_POLL"); part_ocr_result_json = poll_result; break
-                                        elif api_status == 3: error_details = poll_result.get("files", [{}])[0].get("ocrResults", [{}])[0].get("status") if poll_result.get("files") else "詳細不明"; part_ocr_api_error_info = {"message": f"DX Suite 非定型APIがエラーを返しました (receptionId: {reception_id_for_poll})。", "code": "DX_ATYPICAL_API_ERROR", "detail": error_details}; break
-                                        elif api_status == 1:
-                                            self.log_manager.debug(f"  DX Suite 非定型 結果ポーリング中 (receptionId: {reception_id_for_poll}, Attempt: {attempt + 1})。", context="WORKER_DX_ATYPICAL_POLL")
-                                            if attempt < max_polling_attempts - 1: time.sleep(polling_interval)
-                                            else: part_ocr_api_error_info = {"message": "DX Suite 非定型 結果取得がタイムアウトしました。", "code": "DX_ATYPICAL_OCR_TIMEOUT"}; break
-                                        else: part_ocr_api_error_info = {"message": f"DX Suite 非定型APIが未知のステータス '{api_status}' を返しました。", "code": "DX_ATYPICAL_OCR_UNKNOWN_STATUS"}; break
-                                    else: part_ocr_api_error_info = {"message": "DX Suite 非定型 結果取得APIが予期しない応答。", "code": "DX_ATYPICAL_OCR_UNEXPECTED_RESPONSE"}; break
-                        
-                        # --- DX Suite Fulltext V2 ポーリング ---
-                        elif flow_type_for_poll == "dx_fulltext_v2_flow":
-                            current_part_full_ocr_job_id = job_id_for_poll
-                            if not job_id_for_poll:
-                                part_ocr_api_error_info = {"message": "OCRジョブIDが取得できませんでした (DX Suite 全文)。", "code": "DXSUITE_NO_JOB_ID"}
-                            else:
-                                self.log_manager.info(f"  DX Suite 全文OCRジョブ登録成功 (Job ID: {job_id_for_poll})。結果取得を開始します。", context="WORKER_DX_FULLTEXT_POLL")
-                                for attempt in range(max_polling_attempts):
-                                    if not self.is_running: part_ocr_api_error_info = {"message": "OCR結果取得ポーリングがユーザーにより中断されました。", "code": "USER_INTERRUPT_POLL"}; break
-                                    self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
-                                    poll_result, poll_error = self.api_client.get_dx_fulltext_ocr_result(job_id_for_poll)
-                                    if poll_error: part_ocr_api_error_info = poll_error; break
-                                    if poll_result and isinstance(poll_result, dict):
-                                        api_status = poll_result.get("status")
-                                        if api_status == "done": self.log_manager.info(f"  DX Suite 全文OCR結果取得成功 (Job ID: {job_id_for_poll})。", context="WORKER_DX_FULLTEXT_POLL"); part_ocr_result_json = poll_result; break
-                                        elif api_status == "error": dx_error_details = poll_result.get("results", poll_result.get("errors", "詳細不明")); part_ocr_api_error_info = {"message": f"DX Suite 全文OCR APIがエラーを返しました。", "code": "DXSUITE_OCR_API_ERROR", "detail": dx_error_details}; break
-                                        elif api_status == "inprogress":
-                                            self.log_manager.debug(f"  DX Suite 全文OCR結果ポーリング中 (Job ID: {job_id_for_poll}, Attempt: {attempt + 1})。", context="WORKER_DX_FULLTEXT_POLL")
-                                            if attempt < max_polling_attempts - 1: time.sleep(polling_interval)
-                                            else: part_ocr_api_error_info = {"message": "DX Suite 全文OCR結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}; break
-                                        else: part_ocr_api_error_info = {"message": f"DX Suite 全文OCR APIが未知のステータス '{api_status}' を返しました。", "code": "DXSUITE_OCR_UNKNOWN_STATUS"}; break
-                                    else: part_ocr_api_error_info = {"message": "DX Suite 全文OCR 結果取得APIが予期しない応答。", "code": "DXSUITE_OCR_UNEXPECTED_RESPONSE"}; break
-                    # === ここまでポーリングロジックの修正 ===
+                                
+                                if final_result_data:
+                                    part_ocr_result_json = final_result_data
+                                    file_actions = self.config.get("file_actions", {})
+
+                                    if file_actions.get("dx_standard_output_json", True):
+                                        json_filename = f"{base_name_for_output_prefix}.json"
+                                        json_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                                        os.makedirs(json_output_dir, exist_ok=True)
+                                        json_filepath = self._get_unique_filepath(json_output_dir, json_filename)
+                                        try:
+                                            with open(json_filepath, 'w', encoding='utf-8') as f_json:
+                                                json.dump(final_result_data, f_json, ensure_ascii=False, indent=2)
+                                            json_status_for_original_file = "JSON作成成功"
+                                        except Exception as e:
+                                            json_status_for_original_file = f"JSON保存失敗: {e}"
+                                    else:
+                                        json_status_for_original_file = "作成しない(設定)"
+
+                                    csv_status_for_signal = None
+                                    if file_actions.get("dx_standard_auto_download_csv", True):
+                                        self.original_file_status_update.emit(original_file_path, "CSVダウンロード中")
+                                        csv_data, csv_error = self.api_client.download_standard_csv(unit_id)
+                                        if csv_error:
+                                            csv_status_for_signal = {"message": f"CSV取得失敗: {csv_error.get('message')}", "code": "CSV_DOWNLOAD_API_ERROR"}
+                                        else:
+                                            csv_filename = f"{base_name_for_output_prefix}.csv"
+                                            csv_output_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                                            os.makedirs(csv_output_dir, exist_ok=True)
+                                            csv_filepath = self._get_unique_filepath(csv_output_dir, csv_filename)
+                                            try:
+                                                with open(csv_filepath, 'wb') as f_csv:
+                                                    f_csv.write(csv_data)
+                                                csv_status_for_signal = {"message": "CSV自動保存成功", "code": "CSV_AUTO_SAVE_SUCCESS"}
+                                            except Exception as e:
+                                                csv_status_for_signal = {"message": f"CSV保存失敗: {e}", "code": "CSV_LOCAL_SAVE_ERROR"}
+                                    else:
+                                        csv_status_for_signal = {"message": "作成しない(設定)", "code": "CSV_NOT_REQUESTED"}
+                                    
+                                    if csv_status_for_signal:
+                                        self.auto_csv_processed.emit(original_file_global_idx, original_file_path, csv_status_for_signal)
                     else:
                         part_ocr_result_json = initial_ocr_response
 
@@ -530,6 +605,7 @@ class OcrWorker(QThread):
 
                     part_ocr_results_agg.append({"path": current_processing_path, "result": part_ocr_result_json})
                     
+                    # This JSON saving part is for non-dx_standard_v2 flows that might be multi-part
                     if active_profile_flow_type != "dx_standard_v2_flow":
                         should_create_json = self.file_actions_config.get("output_format", "both") in ["json_only", "both"]
                         if should_create_json and parts_results_temp_dir and part_ocr_result_json is not None:
@@ -546,6 +622,7 @@ class OcrWorker(QThread):
                     
                     should_create_pdf = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                     if should_create_pdf and parts_results_temp_dir:
+                        # OCRテキスト処理に失敗していたら、PDF作成はスキップ
                         if part_ocr_api_error_info:
                             self.log_manager.warning(f"  部品 '{current_part_basename}' のOCRテキスト処理でエラーがあったため、サーチャブルPDF作成はスキップします。", context="WORKER_PART_PDF")
                             if not pdf_error_for_signal: pdf_error_for_signal = {"message": "OCR失敗のためPDF作成スキップ", "code": "PDF_SKIPPED_OCR_FAIL"}
@@ -553,16 +630,19 @@ class OcrWorker(QThread):
                             self.log_manager.info(f"  部品のサーチャブルPDF作成開始: '{current_part_basename}'", context="WORKER_PART_PDF")
                             
                             options_for_spdf = active_options_for_api.copy()
+                            # dx_fulltext_v2 の場合は、テキスト読み取りに使ったジョブIDを渡す
                             if active_profile_flow_type == "dx_fulltext_v2_flow":
                                 if current_part_full_ocr_job_id:
                                     options_for_spdf["fullOcrJobId"] = current_part_full_ocr_job_id
                                 else:
+                                    # このケースは、上のロジック修正により発生しなくなるはず
                                     msg = f"  部品 '{current_part_basename}' のサーチャブルPDF作成に必要なfullOcrJobIdがありません。スキップします。"
                                     self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
                                     if not pdf_error_for_signal: pdf_error_for_signal = {"message": "PDF作成内部エラー(fullOcrJobIdなし)", "code": "DXSUITE_SPDF_NO_FULLOCRJOBID_INTERNAL"}
                                     all_parts_processed_successfully = False
-                                    continue 
+                                    continue # PDF作成はせず、次の部品処理へ
 
+                            # APIクライアントを呼び出してPDFを作成またはジョブ登録
                             spdf_response, spdf_error = self.api_client.make_searchable_pdf(
                                 current_processing_path, specific_options=options_for_spdf
                             )
@@ -572,11 +652,13 @@ class OcrWorker(QThread):
 
                             if spdf_error:
                                 part_pdf_api_error_info_pdf = spdf_error
+                            # 非同期PDF作成の場合 (ジョブIDが返ってくる)
                             elif spdf_response and isinstance(spdf_response, dict) and spdf_response.get("status") == "searchable_pdf_registered":
                                 searchable_pdf_job_id = spdf_response.get("job_id")
                                 if not searchable_pdf_job_id:
                                     part_pdf_api_error_info_pdf = {"message": "サーチャブルPDFジョブIDが取得できませんでした。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
                                 else:
+                                    # PDF完成までポーリング
                                     self.log_manager.info(f"  DX Suite サーチャブルPDFジョブ登録成功 (Job ID: {searchable_pdf_job_id})。結果取得を開始します。", context="WORKER_DX_SPDF_POLL")
                                     for attempt_pdf in range(spdf_max_polling_attempts):
                                         if not self.is_running:
@@ -587,6 +669,7 @@ class OcrWorker(QThread):
                                         pdf_content_poll, pdf_poll_error = self.api_client.get_dx_searchable_pdf_content(searchable_pdf_job_id)
                                         
                                         if pdf_poll_error:
+                                            # ポーリング中の場合はリトライ
                                             if "STATUS_INPROGRESS" in pdf_poll_error.get("code", "").upper():
                                                 if attempt_pdf < spdf_max_polling_attempts - 1:
                                                     time.sleep(spdf_polling_interval)
@@ -599,16 +682,19 @@ class OcrWorker(QThread):
                                         elif pdf_content_poll:
                                             part_pdf_content = pdf_content_poll
                                             break
-                                        else: 
+                                        else: # 予期せぬ応答
                                             part_pdf_api_error_info_pdf = {"message": "DX Suite PDF取得APIが予期しない応答。", "code": "DXSUITE_SPDF_UNEXPECTED_RESPONSE"}
                                             break
+                            # 同期PDF作成の場合 (直接バイナリが返ってくる)
                             elif spdf_response:
                                 part_pdf_content = spdf_response
 
+                            # PDF処理の結果ハンドリング
                             if part_pdf_api_error_info_pdf:
                                 self.log_manager.error(f"  部品 '{current_part_basename}' のサーチャブルPDF作成API失敗。エラー: {part_pdf_api_error_info_pdf.get('message')}", context="WORKER_PART_PDF_ERROR", detail=part_pdf_api_error_info_pdf)
                                 all_parts_processed_successfully = False
                                 if not pdf_error_for_signal: pdf_error_for_signal = part_pdf_api_error_info_pdf
+                                # 致命的なエラーコードの場合はワーカー全体を停止
                                 if part_pdf_api_error_info_pdf.get("code") in ["NOT_IMPLEMENTED_API_CALL_PDF", "DXSUITE_SPDF_MISSING_FULLOCRJOBID", f"NOT_SUPPORTED_{active_profile_flow_type}_PDF"]:
                                     self.encountered_fatal_error = True
                                     self.fatal_error_info = part_pdf_api_error_info_pdf
@@ -627,7 +713,7 @@ class OcrWorker(QThread):
                                     all_parts_processed_successfully = False
                                     if not pdf_error_for_signal:
                                         pdf_error_for_signal = {"message": msg, "code": "PART_PDF_SAVE_ERROR", "detail": str(e_pdf_save)}
-                            else: 
+                            else: # PDFコンテンツもエラーも得られなかった場合
                                 msg = f"部品 '{current_part_basename}' のサーチャブルPDF APIが有効な応答を返しませんでした。"
                                 self.log_manager.error(msg, context="WORKER_PART_PDF_ERROR")
                                 all_parts_processed_successfully = False
@@ -647,7 +733,7 @@ class OcrWorker(QThread):
                         elif deleted_info and deleted_info.get("receptionId") == current_part_atypical_job_id: self.log_manager.info(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) のサーバー上の情報は正常に削除されました。", context="WORKER_DX_DELETE_SUCCESS")
                         else: self.log_manager.warning(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) の削除APIが予期しない応答: {deleted_info}", context="WORKER_DX_DELETE_WARN")
 
-                    elif active_profile_flow_type in ["dx_standard_v1_flow", "dx_standard_v2_flow"] and delete_job_after_processing and initial_ocr_response and initial_ocr_response.get("unitId"):
+                    elif active_profile_flow_type == "dx_standard_v2_flow" and delete_job_after_processing and initial_ocr_response and initial_ocr_response.get("unitId"):
                         unit_id_to_delete = initial_ocr_response.get("unitId")
                         self.log_manager.info(f"部品 '{current_part_basename}' (Unit ID: {unit_id_to_delete}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")
                         deleted_info, delete_error = self.api_client.delete_dx_standard_job(unit_id_to_delete)
@@ -674,14 +760,7 @@ class OcrWorker(QThread):
                     if is_genuinely_multi_part:
                         final_ocr_result_for_main = {"status": OCR_STATUS_COMPLETED, "num_parts": len(files_to_ocr_for_this_original), "detail": f"{len(files_to_ocr_for_this_original)}部品のOCR完了"}
                     elif part_ocr_results_agg:
-                        # ↓↓↓ このelifブロックの中身を修正 ↓↓↓
-                        result_body = part_ocr_results_agg[0]["result"]
-                        # V1の「手動操作待ち」ステータスをそのままMainWindowに渡す
-                        if result_body and isinstance(result_body, dict) and result_body.get("status") == "awaiting_manual_action":
-                            final_ocr_result_for_main = result_body
-                        else:
-                            final_ocr_result_for_main = result_body
-                        # ↑↑↑ ここまで修正 ↑↑↑
+                        final_ocr_result_for_main = part_ocr_results_agg[0]["result"]
                     else:
                         final_ocr_result_for_main = {"status": OCR_STATUS_COMPLETED, "message": "OCR成功(データ無)", "code": "OCR_NO_DATA"}
                     
@@ -711,6 +790,7 @@ class OcrWorker(QThread):
                         else:
                             json_status_for_original_file = "作成しない(設定)"
                     
+                    # For non-dx_standard_v2 flows, handle PDF creation. For dx_standard_v2, this is now handled differently.
                     if active_profile_flow_type != "dx_standard_v2_flow":
                         should_create_pdf_globally = self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]
                         if should_create_pdf_globally:
@@ -798,6 +878,7 @@ class OcrWorker(QThread):
                 self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, pdf_final_path_for_signal, pdf_error_for_signal)
 
                 move_original_file_succeeded_final = all_parts_processed_successfully
+                # For non-standard flows, check JSON/PDF status for success
                 if active_profile_flow_type != "dx_standard_v2_flow":
                     if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
                         if not (("成功" in json_status_for_original_file or "作成しない" in json_status_for_original_file) and "エラー" not in json_status_for_original_file and "中断" not in json_status_for_original_file):

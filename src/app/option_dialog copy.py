@@ -29,28 +29,19 @@ class OptionDialog(QDialog):
 
         self.init_ui()
 
-        # --- プロファイル別のUI制御 ---
-        is_dx_standard_v1 = self.api_profile and self.api_profile.get("id") == "dx_standard_v1"
-        is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
+        # init_ui の後にプロファイル別のUI制御を追加
+        is_dx_standard = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
+        
+        self.output_format_widget.setVisible(not is_dx_standard)
+        self.dx_standard_output_widget.setVisible(is_dx_standard)
+
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
-
-        # 標準V2の場合、専用のチェックボックスを表示し、従来のラジオボタンは非表示にする
-        self.output_format_widget.setVisible(not is_dx_standard_v2)
-        self.dx_standard_output_widget.setVisible(is_dx_standard_v2)
-
-        # 出力形式ラジオボタンの有効/無効とツールチップを制御
         if is_dx_atypical:
             self.output_format_json_only_radio.setChecked(True)
             self.output_format_widget.setEnabled(False)
-            self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
-        elif is_dx_standard_v1:
-            self.output_format_json_only_radio.setChecked(True)
-            self.output_format_widget.setEnabled(False)
-            self.output_format_widget.setToolTip("標準API V1はJSON出力（パーツ情報取得）のみをサポートしています。")
-        elif is_dx_standard_v2:
-            # V2は専用UIが表示されるため、従来のラジオボタンは操作不要
-            self.output_format_widget.setEnabled(False)
-        else: # Cubeなど、その他のプロファイル
+            tooltip_text = "このプロファイルはJSON出力のみをサポートしています。"
+            self.output_format_widget.setToolTip(tooltip_text)
+        elif not is_dx_standard:
             self.output_format_widget.setEnabled(True)
             self.output_format_widget.setToolTip("")
 
@@ -290,7 +281,7 @@ class OptionDialog(QDialog):
         button_layout.addWidget(self.save_btn)
         button_layout.addWidget(self.cancel_btn)
         main_layout.addLayout(button_layout)
-
+        
         self.setMinimumWidth(550)
 
     def on_model_changed(self):

@@ -736,7 +736,6 @@ class MainWindow(QMainWindow):
             self.ocr_orchestrator.confirm_and_start_sort(files_to_process, sort_config_id, self.input_folder_path)
         else:
             self.log_manager.info("ユーザーによって仕分け処理がキャンセルされました。", context="SORT_FLOW")
-            
     def on_download_csv_clicked(self):
         if not hasattr(self, 'list_view') or not self.list_view.table.selectedItems():
             return
@@ -812,13 +811,7 @@ class MainWindow(QMainWindow):
             target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED
             fulltext = ""
             if isinstance(ocr_result_data_for_original, dict):
-                # ↓↓↓ このif/elifブロックを追加 ↓↓↓
-                if ocr_result_data_for_original.get("status") == "awaiting_manual_action":
-                    target_file_info.status = "手動操作待ち"
-                    target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED # API呼び出しとポーリングは完了しているため
-                    fulltext = ocr_result_data_for_original.get("message", "手動操作待ち")
-                # ↑↑↑ ここまで追加 ↑↑↑
-                elif ocr_result_data_for_original.get("status") == "ocr_registered":
+                if ocr_result_data_for_original.get("status") == "ocr_registered":
                     fulltext = f"(登録成功 Job ID: {target_file_info.job_id or 'N/A'})"
                     target_file_info.status = "OCR登録済 (結果待機中)"
                     target_file_info.ocr_engine_status = OCR_STATUS_PROCESSING

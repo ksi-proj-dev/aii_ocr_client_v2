@@ -6,11 +6,9 @@ import random
 import requests
 from PyPDF2 import PdfWriter
 import io
-import json
 from typing import Optional, Dict, Any, Tuple, List
 
 from config_manager import ConfigManager
-
 
 class OCRApiClient:
     def __init__(self, config: Dict[str, Any], log_manager, api_profile_schema: Optional[Dict[str, Any]]):
@@ -84,40 +82,6 @@ class OCRApiClient:
             self.log_manager.error(err_msg, context="API_CLIENT_CONFIG")
             return None
         return base_uri.rstrip('/') + endpoint_path
-
-    # === ここから追加されたヘルパーメソッド ===
-    def _get_request_headers(self) -> Dict[str, str]:
-        """アクティブなプロファイルのフロータイプに応じて適切な認証ヘッダーを生成する。"""
-        flow_type = self.active_api_profile_schema.get("flow_type")
-        
-        # V1は 'X-ConsoleWeb-ApiKey', V2以降は 'apikey' を使用
-        if flow_type == "dx_standard_v1_flow":
-            header_key = "X-ConsoleWeb-ApiKey"
-        else:
-            header_key = "apikey"
-            
-        if not self.api_key:
-            self.log_manager.warning(f"APIキーが未設定です。ヘッダーキー: {header_key}", context="API_CLIENT_HEADERS")
-            return {}
-            
-        return {header_key: self.api_key}
-
-    def _unwrap_v1_response(self, response: requests.Response) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
-        """V1形式のレスポンス（ステータス情報でラップされている）を解析し、本体とエラー情報を返す。"""
-        try:
-            res_json = response.json()
-            if res_json.get("status") == "success":
-                # 成功時は、レスポンス全体をそのままデータとして返す
-                return res_json, None
-            else:
-                # ボディ内にエラー情報が含まれている場合
-                error_code = res_json.get("errorCode", "V1_UNKNOWN_ERROR")
-                error_message = res_json.get("message", "V1 APIがエラーを返しました。")
-                error_detail = {"v1_response": res_json}
-                return None, {"message": f"V1 APIエラー: {error_message}", "code": f"DXSUITE_V1_API_{error_code}", "detail": error_detail}
-        except json.JSONDecodeError:
-            return None, {"message": "V1 APIのレスポンスがJSON形式ではありません。", "code": "V1_RESPONSE_NOT_JSON", "detail": response.text}
-    # === ここまで追加されたヘルパーメソッド ===
 
     def read_document(self, file_path: str, specific_options: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         file_name = os.path.basename(file_path)
@@ -229,85 +193,6 @@ class OCRApiClient:
                     if file_obj and not file_obj.closed:
                         try: file_obj.close()
                         except Exception as e_close: self.log_manager.warning(f"非定型API用一時ファイルのクローズに失敗: {e_close}", context=log_ctx_prefix)
-
-        # === ここから V1 フローの追加 ===
-        elif current_flow_type == "dx_standard_v1_flow":
-            log_ctx_prefix = "API_DX_STANDARD_V1"
-            
-            # 必須パラメータのチェック (V1ではdocumentId)
-            document_id = effective_options.get("documentId")
-            if not document_id or not str(document_id).strip():
-                return None, {"message": "必須パラメータ 'ドキュメントID' が設定されていません。", "code": "DX_STANDARD_V1_DOCID_MISSING"}
-
-            # Demoモード
-            if self.api_execution_mode == "demo":
-                self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Standard V1): {file_name}", context=f"{log_ctx_prefix}_DEMO")
-                self.log_manager.debug(f"  Simulating Page Add with documentId: {document_id}", context=f"{log_ctx_prefix}_DEMO")
-                
-                # V1は数値のunitIdを返すことを模倣
-                dummy_unit_id = random.randint(10000, 99999)
-                self.log_manager.info(f"  Simulated Page Add success. unitId: {dummy_unit_id}", context=f"{log_ctx_prefix}_DEMO")
-                
-                # OcrWorkerにポーリングを依頼するための情報を返す
-                return {"unitId": dummy_unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
-
-            # Liveモード
-            else:
-                self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Standard V1 - Add Page): {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-                
-                register_url = self._get_full_url("register_ocr") # V1用のエンドポイントパスが取得される
-                if not register_url:
-                    return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard V1 Add Page)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_V1_REG"}
-
-                if not self.api_key:
-                    err_msg = f"APIキーがプロファイル '{profile_name}' に設定されていません (Liveモード)。"
-                    self.log_manager.error(err_msg, context=f"{log_ctx_prefix}_LIVE_REGISTER", error_code="API_KEY_MISSING_LIVE")
-                    return None, {"message": err_msg, "code": "API_KEY_MISSING_LIVE"}
-
-                headers = self._get_request_headers() # V1/V2対応のヘッダーを取得
-                data_payload = {"documentId": document_id}
-                
-                if effective_options.get("unitName"):
-                    data_payload['unitName'] = effective_options.get("unitName")
-
-                file_obj = None
-                try:
-                    file_obj = open(file_path, 'rb')
-                    # V1のパラメータ名は 'file'
-                    files_payload = {'file': (os.path.basename(file_path), file_obj, 'application/octet-stream')}
-                    
-                    self.log_manager.debug(f"  POST to {register_url} with form-data: {data_payload}, file: {file_name}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-                    response_register = requests.post(register_url, headers=headers, data=data_payload, files=files_payload, timeout=self.timeout_seconds)
-                    response_register.raise_for_status() # まずはHTTPレベルのエラーをチェック
-                    
-                    # V1用のレスポンス解析
-                    register_data, register_error = self._unwrap_v1_response(response_register)
-                    
-                    if register_error:
-                        return None, register_error
-
-                    unit_id = register_data.get("unitId")
-                    if not unit_id:
-                        return None, {"message": "V1ユニット登録APIレスポンスにunitIdが含まれていません。", "code": "DX_STANDARD_V1_NO_UNITID", "detail": register_data}
-                    
-                    self.log_manager.info(f"  V1ユニット登録成功。unitId: {unit_id}", context=f"{log_ctx_prefix}_LIVE_REGISTER")
-
-                    # OcrWorkerが解釈できる共通の形式で返す
-                    return {"unitId": unit_id, "status": "registered", "profile_flow_type": current_flow_type}, None
-
-                except requests.exceptions.HTTPError as e_http:
-                    # (このエラーハンドリング部分はV2のものを流用可能)
-                    err_msg = f"DX Suite 標準V1 登録API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text
-                    return None, {"message": err_msg, "code": f"DXSUITE_V1_HTTP_ERROR_{e_http.response.status_code}", "detail": detail_text}
-                except requests.exceptions.RequestException as e_req:
-                    err_msg = f"DX Suite 標準V1 登録APIリクエストエラー: {e_req}"
-                    return None, {"message": err_msg, "code": "DXSUITE_V1_REGISTER_REQUEST_FAIL", "detail": str(e_req)}
-                except Exception as e:
-                    self.log_manager.error(f"V1ユニット登録APIでエラー: {e}", context=f"{log_ctx_prefix}_LIVE_REGISTER_ERROR", exc_info=True)
-                    return None, {"message": f"V1ユニット登録APIでエラー: {e}", "code": "DX_STANDARD_V1_REGISTER_FAIL"}
-                finally:
-                    if file_obj and not file_obj.closed: file_obj.close()
-        # === ここまで V1 フローの追加 ===
 
         elif current_flow_type == "dx_standard_v2_flow":
             log_ctx_prefix = "API_DX_STANDARD_V2"
@@ -423,6 +308,7 @@ class OCRApiClient:
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
         self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Atypical V2 - GetResult): receptionId={reception_id}", context=f"{log_ctx_prefix}_LIVE_GETRESULT")
         
+        # このメソッドはLiveモードでのみ呼び出される想定
         if self.api_execution_mode != "live":
             return None, {"message": "get_dx_atypical_ocr_resultはLiveモード専用です。", "code": "METHOD_LIVE_ONLY_ERROR"}
 
@@ -451,92 +337,46 @@ class OCRApiClient:
         except Exception as e_generic:
             return None, {"message": "DX Suite 非定型 結果取得処理中に予期せぬエラー。", "code": "DXSUITE_ATYPICAL_GET_UNEXPECTED_ERROR", "detail": str(e_generic)}
 
-    # === ここから get_dx_standard_status メソッドの修正 ===
     def get_dx_standard_status(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
-        """DX Suite 標準APIのユニット状態を取得する。V1とV2のフローに対応。"""
-        log_ctx_prefix = "API_DX_STANDARD_STATUS"
+        """DX Suite 標準APIのユニット状態を取得する。"""
+        log_ctx_prefix = "API_DX_STANDARD_V2_STATUS"
         profile_name = self.active_api_profile_schema.get('name', 'N/A') if self.active_api_profile_schema else "UnknownProfile"
-        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (GetStatus): unitId={unit_id}", context=f"{log_ctx_prefix}")
+        self.log_manager.info(f"'{profile_name}' API呼び出し開始 (DX Suite Standard V2 - GetStatus): unitId={unit_id}", context=f"{log_ctx_prefix}_LIVE_GETSTATUS")
 
-        flow_type = self.active_api_profile_schema.get("flow_type")
-
-        # --- Demoモード ---
+        # Demoモードの処理
         if self.api_execution_mode == "demo":
             self.log_manager.debug(f"  Demoモード: '{unit_id}' の状態取得をシミュレートします。", context=log_ctx_prefix)
-            if flow_type == "dx_standard_v1_flow":
-                # V1の完了ステータス(16 or 22)を模倣
-                return [{"status": 16, "id": unit_id}], None
-            else: # V2
-                return [{"unitId": unit_id, "dataProcessingStatus": 400}], None
+            # Demoでは常に完了ステータスを返す（Worker側で遅延をシミュレートするため）
+            return [{"unitId": unit_id, "dataProcessingStatus": 400}], None
 
-        # --- Liveモード ---
-        headers = self._get_request_headers()
-        if not headers:
-            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
-
+        # Liveモードの処理
         url = self._get_full_url("get_ocr_status")
         if not url:
-            return None, {"message": "エンドポイントURL取得失敗 (GetStatus)", "code": "CONFIG_ENDPOINT_URL_FAIL_STATUS"}
-
-        # --- V1とV2でパラメータとレスポンス形式が異なるため分岐 ---
-        if flow_type == "dx_standard_v1_flow":
-            params = {"readingUnitId": unit_id} # V1のパラメータ名は readingUnitId
-            try:
-                self.log_manager.debug(f"  V1 GET from {url} with params: {params}", context=log_ctx_prefix)
-                response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
-                response.raise_for_status()
-                
-                # V1はレスポンスがラップされているので、ヘルパーで解析
-                data, error = self._unwrap_v1_response(response)
-
-                self.log_manager.info(f"  [DEBUG] Raw V1 Status Response: {data}", context=log_ctx_prefix)
-
-                if error:
-                    return None, error
-                
-                # V2の形式に変換して返すことで、OcrWorkerのロジックを共通化する
-                v1_units = data.get("readingUnits", [])
-                v2_formatted_units = []
-                for v1_unit in v1_units:
-                    v1_status = v1_unit.get("status")
-                    v2_status = 200 # デフォルトは「処理中」
-                    
-                    # V1仕様書 p.45 のステータスコードに基づく判断
-                    if v1_status in [16, 22]: # 16:ベリファイ完了, 22:CSV出力完了
-                        v2_status = 400 # V2の「完了」にマッピング
-                    elif v1_status in [9, 13, 15]: # 9:パーツ生成完了, 13:エントリー中, 15:エントリー完了(仮入力)
-                        v2_status = 300 # 「手動操作待ち」を示す独自コード
-                    
-                    v2_formatted_units.append({
-                        "unitId": v1_unit.get("id"),
-                        "dataProcessingStatus": v2_status,
-                        "v1_status_name": v1_unit.get("name", "") 
-                    })
-                self.log_manager.info(f"  DX Suite Standard V1 GetStatus API success. Status: {[u.get('dataProcessingStatus') for u in v2_formatted_units]}", context=log_ctx_prefix)
-                return v2_formatted_units, None
-
-            except Exception as e:
-                return None, {"message": f"DX Suite 標準V1 状態取得で予期せぬエラー: {e}", "code": "DXSUITE_V1_STATUS_UNEXPECTED_ERROR", "detail": str(e)}
-
-        elif flow_type == "dx_standard_v2_flow":
-            params = {"unitId": unit_id}
-            try:
-                self.log_manager.debug(f"  V2 GET from {url} with params: {params}", context=log_ctx_prefix)
-                response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
-                response.raise_for_status()
-                response_json = response.json()
-                if isinstance(response_json, list) and response_json:
-                    self.log_manager.info(f"  DX Suite Standard V2 GetStatus API success. Status: {response_json[0].get('dataProcessingStatus')}", context=log_ctx_prefix)
-                return response_json, None
-            except requests.exceptions.HTTPError as e_http:
-                err_msg = f"DX Suite 標準V2 状態取得API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
-                return None, {"message": err_msg, "code": "DXSUITE_V2_STATUS_HTTP_ERROR", "detail": detail_text}
-            except Exception as e:
-                return None, {"message": f"DX Suite 標準V2 状態取得で予期せぬエラー: {e}", "code": "DXSUITE_V2_STATUS_UNEXPECTED_ERROR", "detail": str(e)}
+            return None, {"message": "エンドポイントURL取得失敗 (DX Suite Standard GetStatus)", "code": "CONFIG_ENDPOINT_URL_FAIL_STANDARD_STATUS"}
         
-        else:
-            return None, {"message": f"GetStatusで未対応のフロータイプ: {flow_type}", "code": "UNSUPPORTED_FLOW_TYPE_STATUS"}
-    # === ここまで get_dx_standard_status メソッドの修正 ===
+        if not self.api_key:
+            return None, {"message": f"APIキーがプロファイル '{profile_name}' に設定されていません。", "code": "API_KEY_MISSING_LIVE"}
+
+        headers = {"apikey": self.api_key}
+        params = {"unitId": unit_id}
+        
+        try:
+            self.log_manager.debug(f"  GET from {url} with params: {params}", context=log_ctx_prefix)
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            response_json = response.json()
+            # 正常な応答はリスト形式 [ { ... } ]
+            if isinstance(response_json, list) and response_json:
+                self.log_manager.info(f"  DX Suite Standard GetStatus API success. Status: {response_json[0].get('dataProcessingStatus')}", context=log_ctx_prefix)
+            return response_json, None
+        except requests.exceptions.HTTPError as e_http:
+            # (エラーハンドリングは他のメソッドと同様)
+            err_msg = f"DX Suite 標準 状態取得API HTTPエラー: {e_http.response.status_code}"; detail_text = e_http.response.text;
+            return None, {"message": err_msg, "code": "DXSUITE_STANDARD_STATUS_HTTP_ERROR", "detail": detail_text}
+        except Exception as e:
+            return None, {"message": f"DX Suite 標準 状態取得で予期せぬエラー: {e}", "code": "DXSUITE_STANDARD_STATUS_UNEXPECTED_ERROR", "detail": str(e)}
+
+# api_client.py 内
 
     def get_dx_standard_result(self, unit_id: str) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         """DX Suite 標準APIのOCR結果を取得する。"""
@@ -693,14 +533,17 @@ class OCRApiClient:
         
         elif current_flow_type == "dx_fulltext_v2_flow":
             log_ctx_prefix = "API_DX_FULLTEXT_V2_PDF"
+            # Demoモードは変更なし
             if self.api_execution_mode == "demo":
                 self.log_manager.info(f"'{profile_name}' Demoモード呼び出し開始 (DX Suite Searchable PDF V2 - Simulate Register & GetResult): {file_name}", context=f"{log_ctx_prefix}_DEMO_REGISTER")
                 try: writer = PdfWriter(); writer.add_blank_page(width=595, height=842); bio = io.BytesIO(); writer.write(bio); return bio.getvalue(), None
                 except Exception as e_pdf_dummy: self.log_manager.error(f"Demo PDF生成エラー (DX Suite): {e_pdf_dummy}", exc_info=True); return None, {"message": f"Demo DX Suite PDF生成エラー: {e_pdf_dummy}", "code": "DUMMY_DX_PDF_GEN_ERROR", "detail": str(e_pdf_dummy)}
             
+            # Live モードのロジックを修正
             else: 
                 self.log_manager.info(f"'{profile_name}' LiveモードAPI呼び出し開始 (DX Suite Searchable PDF V2 - Register Only): {file_name}", context=f"{log_ctx_prefix}_LIVE")
                 
+                # OcrWorkerから渡された fullOcrJobId を取得
                 full_ocr_job_id = effective_options.get("fullOcrJobId")
                 if not full_ocr_job_id: 
                     return None, {"message": "サーチャブルPDF作成に必要な全文読取ID(fullOcrJobId)が指定されていません。", "code": "DXSUITE_SPDF_MISSING_FULLOCRJOBID"}
@@ -712,6 +555,7 @@ class OCRApiClient:
                     self.log_manager.warning(f"highResolutionModeの値 '{high_res_mode_opt_val}' は不正です。デフォルトの0を使用します。", context=log_ctx_prefix)
                     high_res_mode = 0
 
+                # PDF作成ジョブを登録し、そのジョブIDを返す (ここでのポーリングはしない)
                 spdf_job_id, error_info_register = self.register_dx_searchable_pdf(full_ocr_job_id, high_res_mode)
 
                 if error_info_register: 
@@ -721,13 +565,8 @@ class OCRApiClient:
 
                 self.log_manager.info(f"DX Suite Searchable PDF登録成功。SearchablePdfJobId: {spdf_job_id}。結果取得はWorkerに委ねます。", context=log_ctx_prefix)
                 
+                # Worker側でポーリングするために、ジョブIDと状態を返す
                 return {"job_id": spdf_job_id, "status": "searchable_pdf_registered", "profile_flow_type": current_flow_type}, None
-
-        # === ここから V1 フローのPDF非対応処理を追加 ===
-        elif current_flow_type == "dx_standard_v1_flow":
-            self.log_manager.warning(f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", context="API_CLIENT_WARN")
-            return None, {"message": f"このAPIプロファイル({profile_name})では、サーチャブルPDF作成はサポートされていません。", "code": f"NOT_SUPPORTED_{current_flow_type}_PDF"}
-        # === ここまで追加 ===
 
         elif current_flow_type in ["dx_atypical_v2_flow", "dx_standard_v2_flow"]:
             self.log_manager.warning(f"このAPIプロファイル({profile_name})は、サーチャブルPDF作成をサポートしていません。", context="API_CLIENT_WARN")
