@@ -141,39 +141,6 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
         }
     },
     {
-        "id": "dx_standard_v1",
-        "name": "DX Suite (標準OCR V1)",
-        "base_uri": "https://{組織固有}.dx-suite.com/", # V1はAPIカテゴリ毎にパスが異なるためルートまで
-        "flow_type": "dx_standard_v1_flow", # V1用の新しいフロータイプ
-        "endpoints": {
-            "register_ocr": "/ConsoleWeb/api/v1/reading/pages/add",
-            "get_ocr_status": "/ConsoleWeb/api/v1/reading/units", # 状態取得はユニット検索APIを利用
-            "get_ocr_result": "/ConsoleWeb/api/v1/reading/parts", # V1ではパーツ情報取得が結果取得に相当
-            "download_csv": "/ConsoleWeb/api/v1/reading/units/{unitId}/export", # V1のIDプレースホルダは{id}ですが、後続処理のため{unitId}で統一
-            "delete_ocr": "/ConsoleWeb/api/v1/reading/units/{unitId}/delete"  # 同上
-        },
-        "options_schema": {
-            "documentId": {
-                "type": "string",
-                "default": "",
-                "label": "ドキュメントID (DX Suite V1):",
-                "placeholder": "例: 12345",
-                "tooltip": "DX Suiteの管理画面で確認したドキュメントID (数字) を指定します。（必須）"
-            },
-            "unitName": {
-                "type": "string", 
-                "default": "", 
-                "label": "読取ユニット名 (任意):", 
-                "placeholder": "例: 2025年6月分請求書", 
-                "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"
-            },
-            # V2と同様の非同期フローを想定し、ポーリングと後処理オプションを追加
-            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "suffix": " 秒"},
-            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "suffix": " 回"},
-            "delete_job_after_processing": {"type": "bool", "default": True, "label": "処理後、サーバーから読取ユニットを削除する"}
-        }
-    },
-    {
         "id": "dx_standard_v2",
         "name": "DX Suite (標準OCR V2)",
         "base_uri": "https://{組織固有}.dx-suite.com/wf/api/standard/v2/",
