@@ -48,7 +48,7 @@ if __name__ == "__main__":
         )
 
     parser = argparse.ArgumentParser(
-        description="AI inside OCR Client",
+        description="AI inside OCR API V2対応：OCR Client",
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(

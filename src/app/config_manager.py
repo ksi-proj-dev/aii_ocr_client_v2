@@ -10,7 +10,7 @@ from appdirs import user_config_dir
 from model_data import MODEL_DEFINITIONS
 
 CONFIG_FILE_NAME = "config.json"
-APP_NAME = "AI inside OCR Client"
+APP_NAME = "AI inside OCR API V2対応：OCR Client"
 APP_AUTHOR = "KSI"
 
 try:
