@@ -1,7 +1,7 @@
 # main.py
 
 import sys
-import faulthandler
+# import faulthandler
 import argparse
 
 from PyQt6.QtWidgets import QApplication
@@ -10,7 +10,7 @@ from ui_main_window import MainWindow
 from config_manager import DEFAULT_API_PROFILES
 
 if __name__ == "__main__":
-    faulthandler.enable()
+    # faulthandler.enable()
 
     try:
         # 利用可能なプロファイルIDのリストを取得
