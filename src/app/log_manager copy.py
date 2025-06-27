@@ -3,7 +3,7 @@ import json
 import datetime
 from PyQt6.QtCore import QObject, pyqtSignal
 from appdirs import user_log_dir
-from app_constants import APP_NAME, APP_AUTHOR
+from config_manager import APP_NAME, APP_AUTHOR
 
 try:
     LOG_DIR_PATH = user_log_dir(appname=APP_NAME, appauthor=APP_AUTHOR)

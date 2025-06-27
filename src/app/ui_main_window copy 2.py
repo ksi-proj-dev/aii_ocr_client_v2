@@ -1,5 +1,3 @@
-# ui_main_window.py
-
 import sys
 import os
 import platform
@@ -27,12 +25,13 @@ from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
 
 from app_constants import (
-    APP_VERSION,
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
     OCR_STATUS_FAILED, OCR_STATUS_SKIPPED_SIZE_LIMIT, OCR_STATUS_SPLITTING,
     OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING,
     LISTVIEW_UPDATE_INTERVAL_MS
 )
+
+APP_VERSION = "0.0.17"
 
 
 class ApiSelectionDialog(QDialog):
