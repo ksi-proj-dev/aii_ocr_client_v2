@@ -1,4 +1,4 @@
-pyinstaller --name=dx_client main.py --onefile  --noconsole
+pyinstaller --name=dx_suite_client main.py --icon=../images/dx_suite_client.ico --onefile --noconsole
 
 # corporate.cerをmain.pyと同じフォルダに置いた場合
 # Windowsでは区切り文字に ; を使います

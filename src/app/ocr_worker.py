@@ -95,12 +95,14 @@ class OcrWorker(QThread):
         elif total_parts_estimate >= 100: num_digits = 3
         return f"{base}.split#{str(part_num).zfill(num_digits)}{original_ext}"
 
+    # 【★★修正箇所★★】ボトルネックだったPDF分割ロジックを全面的に改善
     def _split_pdf_by_size(self, original_filepath: str, chunk_size_bytes: int, temp_dir_for_parts: str,
                             split_by_page_count_enabled: bool, max_pages_per_part: int) -> Tuple[List[str], Optional[Dict[str, Any]]]:
         split_files: List[str] = []
         original_basename = os.path.basename(original_filepath)
         original_ext = os.path.splitext(original_basename)[1]
         part_counter = 1
+        
         try:
             reader = PdfReader(original_filepath)
             total_pages = len(reader.pages)
@@ -111,13 +113,15 @@ class OcrWorker(QThread):
 
             original_size_bytes = os.path.getsize(original_filepath)
 
-            if total_pages == 1 and not (split_by_page_count_enabled and 1 >= max_pages_per_part):
-                self.log_manager.info(f"PDF '{original_basename}' は単一ページであり、ページ数上限による分割も不要なため、このメソッドでは分割しません。", context="WORKER_PDF_SPLIT")
-                return [], None
-
             self.log_manager.info(f"PDF '{original_basename}' ({total_pages}ページ, {original_size_bytes / (1024*1024):.2f}MB) を分割します。", context="WORKER_PDF_SPLIT")
             self.log_manager.info(f"  分割条件: サイズ目安={(chunk_size_bytes / (1024*1024)):.2f}MB, "
                                 f"ページ数上限による分割={'有効' if split_by_page_count_enabled else '無効'} (上限={max_pages_per_part}ページ)", context="WORKER_PDF_SPLIT")
+
+            # 【新ロジック】1ページあたりの平均サイズを計算
+            average_page_size_bytes = original_size_bytes / total_pages if total_pages > 0 else 0
+            
+            # 推定値なので、少し早めに分割するためのマージンを設定 (90%)
+            chunk_size_with_margin = chunk_size_bytes * 0.9
 
             estimated_total_parts = 1
             if chunk_size_bytes > 0:
@@ -126,22 +130,28 @@ class OcrWorker(QThread):
                 estimated_total_parts = max(estimated_total_parts, -(-total_pages // max_pages_per_part))
 
             current_writer = PdfWriter()
+            current_estimated_size = 0
+
             for i in range(total_pages):
                 if not self.is_running: break
 
-                if len(current_writer.pages) > 0:
+                # 【新ロジック】まずページを追加してから、分割が必要かチェック
+                current_writer.add_page(reader.pages[i])
+                current_estimated_size += average_page_size_bytes
+
+                # 分割チェック (現在の部品の最終ページでない場合のみ)
+                is_last_page_of_original = (i == total_pages - 1)
+                if not is_last_page_of_original:
                     must_cut = False
+                    # ページ数上限に達したら分割
                     if split_by_page_count_enabled and len(current_writer.pages) >= max_pages_per_part:
                         must_cut = True
-                        self.log_manager.debug(f"部品 {part_counter} がページ数上限 ({max_pages_per_part}) に達しました。現在のページ数: {len(current_writer.pages)}", context="WORKER_PDF_SPLIT_CHECK")
+                        self.log_manager.debug(f"部品 {part_counter} がページ数上限 ({max_pages_per_part}) に達しました。", context="WORKER_PDF_SPLIT_CHECK")
                     
-                    if not must_cut and chunk_size_bytes > 0 :
-                        with io.BytesIO() as temp_buffer_check:
-                            current_writer.write(temp_buffer_check)
-                            current_writer_size = temp_buffer_check.tell()
-                        if current_writer_size >= chunk_size_bytes * 0.85 :
-                            must_cut = True
-                            self.log_manager.debug(f"部品 {part_counter} がサイズ上限目安 ({chunk_size_bytes * 0.85} バイト) に達しました (現在 {current_writer_size} バイト)。", context="WORKER_PDF_SPLIT_CHECK")
+                    # 推定サイズ上限に達したら分割
+                    if not must_cut and chunk_size_bytes > 0 and current_estimated_size >= chunk_size_with_margin:
+                        must_cut = True
+                        self.log_manager.debug(f"部品 {part_counter} が推定サイズ上限 ({chunk_size_with_margin / (1024*1024):.2f}MB) に達しました。", context="WORKER_PDF_SPLIT_CHECK")
 
                     if must_cut:
                         part_filename = self._get_part_filename(original_basename, part_counter, estimated_total_parts, original_ext)
@@ -149,16 +159,18 @@ class OcrWorker(QThread):
                         try:
                             with open(part_filepath, "wb") as f_out: current_writer.write(f_out)
                             split_files.append(part_filepath)
-                            self.log_manager.info(f"PDF部品保存: {part_filepath} ({len(current_writer.pages)} ページ, サイズ: {os.path.getsize(part_filepath)} バイト)", context="WORKER_PDF_SPLIT")
+                            self.log_manager.info(f"PDF部品保存: {part_filepath} ({len(current_writer.pages)} ページ)", context="WORKER_PDF_SPLIT")
                         except IOError as e_io_write:
                             msg = f"PDF部品 '{part_filename}' の書き出しに失敗: {e_io_write}"
                             self.log_manager.error(msg, context="WORKER_PDF_SPLIT_IO_ERROR", exc_info=True)
                             return [], {"message": msg, "code": "SPLIT_PART_WRITE_ERROR", "detail": str(e_io_write)}
+                        
+                        # 次の部品のためにリセット
                         part_counter += 1
                         current_writer = PdfWriter()
-                
-                current_writer.add_page(reader.pages[i])
-
+                        current_estimated_size = 0
+            
+            # ループ終了後、最後の部品を保存
             if len(current_writer.pages) > 0 and self.is_running:
                 part_filename = self._get_part_filename(original_basename, part_counter, estimated_total_parts, original_ext)
                 part_filepath = os.path.join(temp_dir_for_parts, part_filename)
@@ -170,7 +182,7 @@ class OcrWorker(QThread):
                     msg = f"最終PDF部品 '{part_filename}' の書き出しに失敗: {e_io_write_final}"
                     self.log_manager.error(msg, context="WORKER_PDF_SPLIT_IO_ERROR", exc_info=True)
                     return [], {"message": msg, "code": "SPLIT_FINAL_PART_WRITE_ERROR", "detail": str(e_io_write_final)}
-            
+
             if not self.is_running:
                 self.log_manager.info("PDF分割処理が中断されました。", context="WORKER_PDF_SPLIT")
                 return [], {"message": "PDF分割処理が中断されました", "code": "SPLIT_INTERRUPTED"}
@@ -179,7 +191,9 @@ class OcrWorker(QThread):
             msg = f"PDF '{original_basename}' の分割中にエラー発生: {e}"
             self.log_manager.error(msg, context="WORKER_PDF_SPLIT_ERROR", exc_info=True)
             return [], {"message": msg, "code": "SPLIT_PDF_EXCEPTION", "detail": str(e)}
+        
         return split_files, None
+
 
     def _split_file(self, original_filepath: str, base_temp_dir_for_parts: str) -> Tuple[List[str], Optional[Dict[str, Any]]]:
         split_master_enabled = self.current_api_options_values.get("split_large_files_enabled", False)
@@ -415,8 +429,6 @@ class OcrWorker(QThread):
                         reception_id_for_poll = initial_ocr_response.get("receptionId")
                         job_id_for_poll = initial_ocr_response.get("job_id")
 
-                        # --- DX Suite Standard (V2) ポーリング ---
-                        # 【修正箇所】'dx_standard_v1_flow' のチェックを削除
                         if flow_type_for_poll == "dx_standard_v2_flow":
                             if not unit_id_for_poll:
                                 part_ocr_api_error_info = {"message": "unitIdが取得できませんでした。", "code": "POLL_NO_UNITID"}
@@ -432,7 +444,6 @@ class OcrWorker(QThread):
                                         break
                                     
                                     self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
-                                    # V2専用になった status メソッドを呼び出す
                                     poll_result, poll_error = self.api_client.get_dx_standard_status(str(unit_id_for_poll))
 
                                     if poll_error:
@@ -465,7 +476,6 @@ class OcrWorker(QThread):
                                         part_ocr_api_error_info = {"message": "DX Suite 標準 状態取得APIが予期しない応答。", "code": "DX_STANDARD_STATUS_UNEXPECTED_RESPONSE"}
                                         break
                         
-                        # --- DX Suite Atypical V2 ポーリング ---
                         elif flow_type_for_poll == "dx_atypical_v2_flow":
                             current_part_atypical_job_id = reception_id_for_poll
                             if not reception_id_for_poll:
@@ -488,7 +498,6 @@ class OcrWorker(QThread):
                                         else: part_ocr_api_error_info = {"message": f"DX Suite 非定型APIが未知のステータス '{api_status}' を返しました。", "code": "DX_ATYPICAL_OCR_UNKNOWN_STATUS"}; break
                                     else: part_ocr_api_error_info = {"message": "DX Suite 非定型 結果取得APIが予期しない応答。", "code": "DX_ATYPICAL_OCR_UNEXPECTED_RESPONSE"}; break
                         
-                        # --- DX Suite Fulltext V2 ポーリング ---
                         elif flow_type_for_poll == "dx_fulltext_v2_flow":
                             current_part_full_ocr_job_id = job_id_for_poll
                             if not job_id_for_poll:
@@ -642,7 +651,6 @@ class OcrWorker(QThread):
                         elif deleted_info and deleted_info.get("receptionId") == current_part_atypical_job_id: self.log_manager.info(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) のサーバー上の情報は正常に削除されました。", context="WORKER_DX_DELETE_SUCCESS")
                         else: self.log_manager.warning(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) の削除APIが予期しない応答: {deleted_info}", context="WORKER_DX_DELETE_WARN")
 
-                    # 【修正箇所】'dx_standard_v1_flow' のチェックを削除
                     elif active_profile_flow_type == "dx_standard_v2_flow" and delete_job_after_processing and initial_ocr_response and initial_ocr_response.get("unitId"):
                         unit_id_to_delete = initial_ocr_response.get("unitId")
                         self.log_manager.info(f"部品 '{current_part_basename}' (Unit ID: {unit_id_to_delete}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")
