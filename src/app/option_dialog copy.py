@@ -30,6 +30,7 @@ class OptionDialog(QDialog):
         self.init_ui()
 
         # --- プロファイル別のUI制御 ---
+        is_dx_standard_v1 = self.api_profile and self.api_profile.get("id") == "dx_standard_v1"
         is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
 
@@ -42,11 +43,14 @@ class OptionDialog(QDialog):
             self.output_format_json_only_radio.setChecked(True)
             self.output_format_widget.setEnabled(False)
             self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
-        # 【修正】 is_dx_standard_v1 のチェックを削除
+        elif is_dx_standard_v1:
+            self.output_format_json_only_radio.setChecked(True)
+            self.output_format_widget.setEnabled(False)
+            self.output_format_widget.setToolTip("標準API V1はJSON出力（パーツ情報取得）のみをサポートしています。")
         elif is_dx_standard_v2:
             # V2は専用UIが表示されるため、従来のラジオボタンは操作不要
             self.output_format_widget.setEnabled(False)
-        else: # 全文OCRなど、その他のプロファイル
+        else: # Cubeなど、その他のプロファイル
             self.output_format_widget.setEnabled(True)
             self.output_format_widget.setToolTip("")
 
@@ -90,11 +94,12 @@ class OptionDialog(QDialog):
         # ===================================================================
         # 1. API接続設定グループ (変更なし)
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
+        # ... (このグループボックスの作成ロジックは元と同じ)
         api_connection_group.setStyleSheet(group_box_style)
         api_connection_form_layout = QFormLayout()
         current_base_uri = self.current_option_values.get("base_uri", "")
         self.profile_base_uri_edit = QLineEdit(current_base_uri)
-        self.profile_base_uri_edit.setPlaceholderText("このプロファイル用のベースURIを入力 (例: https://xxx.dx-suite.com/wf/api/fullocr/v2/)")
+        self.profile_base_uri_edit.setPlaceholderText("このプロファイル用のベースURIを入力 (例: https://example.com/api/v1)")
         self.profile_base_uri_edit.setToolTip("APIの接続先となる基本URLです。末尾のスラッシュは任意です。")
         api_connection_form_layout.addRow("ベースURI:", self.profile_base_uri_edit)
         current_api_key = self.current_option_values.get("api_key", "")
@@ -105,7 +110,7 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
-        # 2. 出力形式グループ
+        # 2. 出力形式グループ (共通設定タブから移動)
         output_format_group = QGroupBox("出力形式")
         output_format_group.setStyleSheet(group_box_style)
         output_format_form_layout = QFormLayout()
@@ -143,9 +148,10 @@ class OptionDialog(QDialog):
         output_format_group.setLayout(output_format_form_layout)
         api_layout.addWidget(output_format_group)
         
-        # 3. API別OCRオプションのグループ
+        # 3. API別OCRオプションのグループ (変更なし)
         if self.options_schema:
             dynamic_options_group = QGroupBox("API別 OCRオプション")
+            # ... (このグループボックスの作成ロジックは元と同じ)
             dynamic_options_group.setStyleSheet(group_box_style)
             dynamic_form_layout = QFormLayout()
             for key, schema_item in self.options_schema.items():
@@ -183,39 +189,35 @@ class OptionDialog(QDialog):
                         if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"]);
                         if tooltip: widget.setToolTip(tooltip);
                         dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
-                
-                # 【修正】 enumの処理を簡略化。v1でしか使われなかった単純な文字列リストのロジックを削除
                 elif schema_item.get("type") == "enum":
-                    widget = QComboBox()
-                    if "values" in schema_item and isinstance(schema_item["values"], list) and schema_item["values"]:
-                        # 辞書リストから display と value を読み込む（v2プロファイル用）
-                        if isinstance(schema_item["values"][0], dict):
-                            for item_dict in schema_item["values"]:
-                                widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
-                            
-                            index = widget.findData(current_value)
-                            if index != -1:
-                                widget.setCurrentIndex(index)
-                            else:
-                                # 現在値が見つからない場合はデフォルト値を設定
-                                default_val = schema_item.get("default")
-                                default_idx = widget.findData(default_val)
-                                if default_idx != -1:
-                                    widget.setCurrentIndex(default_idx)
-                        # v1で使っていた単純な文字列リストのロジックは不要になったため削除
-                    
-                    if tooltip: widget.setToolTip(tooltip)
-                    if key == "model": widget.currentIndexChanged.connect(self.on_model_changed)
-                    dynamic_form_layout.addRow(label_text, widget)
-                    self.widgets_map[key] = widget
-
+                    widget = QComboBox();
+                    if "values" in schema_item and isinstance(schema_item["values"], list):
+                        if schema_item["values"] and isinstance(schema_item["values"][0], dict):
+                            for item_dict in schema_item["values"]: widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""));
+                            index = widget.findData(current_value);
+                            if index != -1: widget.setCurrentIndex(index)
+                            else: default_val = schema_item.get("default"); default_idx = widget.findData(default_val);
+                            if default_idx != -1: widget.setCurrentIndex(default_idx)
+                        else:
+                            widget.addItems(schema_item["values"]);
+                            if isinstance(current_value, int) and 0 <= current_value < widget.count(): widget.setCurrentIndex(current_value)
+                            elif isinstance(current_value, str):
+                                index = widget.findText(current_value);
+                                if index != -1: widget.setCurrentIndex(index)
+                                else:
+                                    short_val_index = widget.findText(current_value.split(" ")[0]);
+                                    if short_val_index != -1: widget.setCurrentIndex(short_val_index)
+                                    else: default_val = schema_item.get("default");
+                                    if isinstance(default_val, int) and 0 <= default_val < widget.count(): widget.setCurrentIndex(default_val)
+                                    elif isinstance(default_val, str): default_idx = widget.findText(str(default_val));
+                                    if default_idx != -1: widget.setCurrentIndex(default_idx)
+                    if tooltip: widget.setToolTip(tooltip);
+                    if key == "model": widget.currentIndexChanged.connect(self.on_model_changed);
+                    dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox): widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
-            
             if dynamic_form_layout.rowCount() > 0:
-                dynamic_options_group.setLayout(dynamic_form_layout)
-                api_layout.addWidget(dynamic_options_group)
-                self.toggle_dynamic_split_options_enabled_state()
+                dynamic_options_group.setLayout(dynamic_form_layout); api_layout.addWidget(dynamic_options_group); self.toggle_dynamic_split_options_enabled_state()
             else:
                 dynamic_options_group.setVisible(False)
         
@@ -224,11 +226,12 @@ class OptionDialog(QDialog):
         # ===================================================================
         #  「共通設定」タブの中身を作成
         # ===================================================================
-        # 1. ファイル移動と結果フォルダ設定のグループ
+        # 1. ファイル移動と結果フォルダ設定のグループ (旧ファイル処理グループから改名・一部抜粋)
         file_move_group = QGroupBox("ファイル移動と結果フォルダ (共通設定)")
         file_move_group.setStyleSheet(group_box_style)
         file_move_form_layout = QFormLayout()
         
+        # `file_actions_config` は上で定義済み
         self.results_folder_name_edit = QLineEdit(file_actions_config.get("results_folder_name", "OCR結果"))
         file_move_form_layout.addRow("OCR結果サブフォルダ名:", self.results_folder_name_edit)
         self.move_on_success_chk = QCheckBox("OCR成功時にファイルを移動する")
@@ -260,6 +263,7 @@ class OptionDialog(QDialog):
 
         # 2. ログ設定グループ (変更なし)
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
+        # ... (このグループボックスの作成ロジックは元と同じ)
         log_settings_group.setStyleSheet(group_box_style)
         log_settings_config = self.global_config.get("log_settings", {})
         log_checkbox_layout = QHBoxLayout()
@@ -276,7 +280,7 @@ class OptionDialog(QDialog):
         self.tabs.addTab(api_options_tab, "API別オプション")
         self.tabs.addTab(common_settings_tab, "共通設定")
 
-        # --- 保存/キャンセルボタン ---
+        # --- 保存/キャンセルボタン (変更なし) ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
         self.cancel_btn = QPushButton("キャンセル")
@@ -382,12 +386,13 @@ class OptionDialog(QDialog):
                     elif schema_item.get("type") == "string" and isinstance(widget, QLineEdit):
                         updated_profile_options[key] = widget.text().strip()
                     elif schema_item.get("type") == "enum" and isinstance(widget, QComboBox):
-                        # 【修正】v1のロジックを削除し、v2（辞書リスト）専用のロジックに
                         if schema_item.get("values") and isinstance(schema_item["values"][0], dict):
                             updated_profile_options[key] = widget.currentData()
                         else:
-                            # このパスはv2プロファイルでは通らないはずだが、念のため残す
-                            updated_profile_options[key] = widget.currentText()
+                            if key == "fulltext_output_mode": 
+                                updated_profile_options[key] = widget.currentIndex()
+                            else: 
+                                updated_profile_options[key] = widget.currentText().split(" ")[0] 
         
         upload_max_size = updated_profile_options.get("upload_max_size_mb")
         split_enabled = updated_profile_options.get("split_large_files_enabled")

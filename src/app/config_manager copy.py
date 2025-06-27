@@ -10,7 +10,7 @@ from appdirs import user_config_dir
 from model_data import MODEL_DEFINITIONS
 
 CONFIG_FILE_NAME = "config.json"
-APP_NAME = "AI inside OCR DX Suite Client for API-V2"
+APP_NAME = "AI inside OCR API V2対応：OCR Client"
 APP_AUTHOR = "KSI"
 
 try:
@@ -27,8 +27,32 @@ except Exception as e:
         print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
         CONFIG_PATH = None; CONFIG_DIR = None
 
-# 【修正箇所】'cube_fullocr_v1'と'dx_standard_v1'の定義を削除
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
+    {
+        "id": "cube_fullocr_v1",
+        "name": "Cube (全文OCR V1)",
+        "base_uri": "http://localhost/api/v1/domains/aiinside/endpoints/",
+        "flow_type": "cube_fullocr_single_call",
+        "endpoints": {
+            "read_document": "/fullocr-read-document",
+            "make_searchable_pdf": "/make-searchable-pdf"
+        },
+        "options_schema": {
+            "adjust_rotation": {"type": "bool", "default": 0, "label": "回転補正を行う", "tooltip": "0=OFF, 1=ON. 90度単位および±5度程度の傾きを補正します。"},
+            "character_extraction": {"type": "bool", "default": 0, "label": "文字ごとの情報を抽出する (文字尤度など)", "tooltip": "0=OFF, 1=ON. ONにすると結果JSONに1文字ずつの情報が追加されます。"},
+            "concatenate": {"type": "bool", "default": 1, "label": "強制結合を行う (LLM用途推奨)", "tooltip": "0=単語区切り, 1=文章として結合. LLM用途ではONを推奨。"},
+            "enable_checkbox": {"type": "bool", "default": 0, "label": "チェックボックスを認識する", "tooltip": "0=OFF, 1=ON. ONにするとチェックボックスを認識しますが処理時間が増加します。"},
+            "fulltext_output_mode": {"type": "enum", "values": ["詳細情報を取得 (bbox, 表など)", "全文テキストのみ取得"], "default": 0, "label": "テキスト出力モード:", "tooltip": "0=詳細情報 (bbox, 表などを含む), 1=全文テキスト(fulltext)のみを返却。"},
+            "fulltext_linebreak_char": {"type": "bool", "default": 0, "label": "全文テキストにグループ区切り文字(\\n)を付加", "tooltip": "0=区切り文字なし, 1=fulltextにもグループ区切り文字として改行(\\n)を付加。"},
+            "ocr_model": {"type": "enum", "values": ["katsuji (印刷活字)", "all (手書き含む)", "mix (縦横混合モデル)"], "default": "katsuji", "label": "OCRモデル選択:", "tooltip": "OCRモデルを選択します。\n katsuji: 印刷活字\n all: 手書き文字を含む汎用\n mix: 縦書き横書き混在文書用"},
+            "upload_max_size_mb": {"type": "int", "default": 1000, "min": 1, "max": 9999, "suffix": " MB", "label": "アップロード対象として認識する最大ファイルサイズ:", "tooltip":"OCR対象としてアップロードするファイルサイズの上限値。\nこれを超過するファイルは処理対象外となります。"},
+            "split_large_files_enabled": {"type": "bool", "default": False, "label": "大きなファイルを自動分割する (PDFのみ)", "tooltip": "PDFファイルが「アップロード対象として認識する最大ファイルサイズ」を超える場合、\nまたは「ページ数上限での分割」が有効で「部品あたりの最大ページ数」を超える場合に分割します。"},
+            "split_chunk_size_mb": {"type": "int", "default": 10, "min": 1, "max":50, "suffix": " MB", "label": "分割サイズ目安 (1部品あたり):", "tooltip": "ファイルサイズで分割する場合の、分割後の各ファイルサイズの上限の目安。\n「アップロード対象として認識する最大ファイルサイズ」を超えない値を指定してください。"},
+            "split_by_page_count_enabled": {"type": "bool", "default": False, "label": "ページ数上限で分割する (PDF分割時)", "tooltip": "「大きなファイルを自動分割する」が有効な場合に、\nさらにページ数でも分割トリガーとするか設定します。"},
+            "split_max_pages_per_part": {"type": "int", "default": 100, "min": 1, "max": 100, "label": "部品あたりの最大ページ数 (PDF分割時):", "tooltip": "ページ数で分割する場合の、1部品あたりの最大ページ数を指定します。"},
+            "merge_split_pdf_parts": {"type": "bool", "default": True, "label": "分割した場合、サーチャブルPDF部品を1つのファイルに結合する", "tooltip": "「大きなファイルを自動分割する」が有効な場合のみ適用されます。\nオフの場合、部品ごとのサーチャブルPDFがそれぞれ出力されます。"}
+        }
+    },
     {
         "id": "dx_fulltext_v2",
         "name": "DX Suite (全文OCR V2)",
@@ -114,6 +138,39 @@ DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
             "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "suffix": " 秒"},
             "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "suffix": " 回"},
             "delete_job_after_processing": {"type": "bool", "default": 1, "label": "処理後、サーバーからOCRジョブ情報を削除する (DX Suite)", "tooltip": "有効な場合、各ファイルのOCR処理完了後、関連するジョブ情報をDX Suiteサーバーから削除します。"}
+        }
+    },
+    {
+        "id": "dx_standard_v1",
+        "name": "DX Suite (標準OCR V1)",
+        "base_uri": "https://{組織固有}.dx-suite.com/", # V1はAPIカテゴリ毎にパスが異なるためルートまで
+        "flow_type": "dx_standard_v1_flow", # V1用の新しいフロータイプ
+        "endpoints": {
+            "register_ocr": "/ConsoleWeb/api/v1/reading/pages/add",
+            "get_ocr_status": "/ConsoleWeb/api/v1/reading/units", # 状態取得はユニット検索APIを利用
+            "get_ocr_result": "/ConsoleWeb/api/v1/reading/parts", # V1ではパーツ情報取得が結果取得に相当
+            "download_csv": "/ConsoleWeb/api/v1/reading/units/{unitId}/export", # V1のIDプレースホルダは{id}ですが、後続処理のため{unitId}で統一
+            "delete_ocr": "/ConsoleWeb/api/v1/reading/units/{unitId}/delete"  # 同上
+        },
+        "options_schema": {
+            "documentId": {
+                "type": "string",
+                "default": "",
+                "label": "ドキュメントID (DX Suite V1):",
+                "placeholder": "例: 12345",
+                "tooltip": "DX Suiteの管理画面で確認したドキュメントID (数字) を指定します。（必須）"
+            },
+            "unitName": {
+                "type": "string", 
+                "default": "", 
+                "label": "読取ユニット名 (任意):", 
+                "placeholder": "例: 2025年6月分請求書", 
+                "tooltip": "DX Suite上で表示される読取ユニットの名前を指定します。"
+            },
+            # V2と同様の非同期フローを想定し、ポーリングと後処理オプションを追加
+            "polling_interval_seconds": {"type": "int", "default": 3, "min": 1, "max": 60, "label": "ポーリング間隔 (秒):", "suffix": " 秒"},
+            "polling_max_attempts": {"type": "int", "default": 60, "min": 5, "max": 300, "label": "最大ポーリング試行回数:", "suffix": " 回"},
+            "delete_job_after_processing": {"type": "bool", "default": True, "label": "処理後、サーバーから読取ユニットを削除する"}
         }
     },
     {

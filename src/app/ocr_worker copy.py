@@ -408,6 +408,7 @@ class OcrWorker(QThread):
 
                     if initial_ocr_error:
                         part_ocr_api_error_info = initial_ocr_error
+                    # === ここからポーリングロジックの修正 ===
                     elif initial_ocr_response and "registered" in initial_ocr_response.get("status", ""):
                         
                         flow_type_for_poll = initial_ocr_response.get("profile_flow_type")
@@ -415,9 +416,8 @@ class OcrWorker(QThread):
                         reception_id_for_poll = initial_ocr_response.get("receptionId")
                         job_id_for_poll = initial_ocr_response.get("job_id")
 
-                        # --- DX Suite Standard (V2) ポーリング ---
-                        # 【修正箇所】'dx_standard_v1_flow' のチェックを削除
-                        if flow_type_for_poll == "dx_standard_v2_flow":
+                        # --- DX Suite Standard (V1 & V2) ポーリング ---
+                        if flow_type_for_poll in ["dx_standard_v1_flow", "dx_standard_v2_flow"]:
                             if not unit_id_for_poll:
                                 part_ocr_api_error_info = {"message": "unitIdが取得できませんでした。", "code": "POLL_NO_UNITID"}
                             else:
@@ -432,7 +432,7 @@ class OcrWorker(QThread):
                                         break
                                     
                                     self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})")
-                                    # V2専用になった status メソッドを呼び出す
+                                    # V1, V2 両対応の status メソッドを呼び出す
                                     poll_result, poll_error = self.api_client.get_dx_standard_status(str(unit_id_for_poll))
 
                                     if poll_error:
@@ -445,12 +445,16 @@ class OcrWorker(QThread):
 
                                         if data_status == 400: # 完了
                                             self.log_manager.info(f"  DX Suite 標準 ポーリング成功：データ化完了 (unitId: {unit_id_for_poll})。", context="WORKER_DX_STANDARD_POLL")
+                                            # (このTODOは次のステップで実装します)
                                             part_ocr_result_json = {"status": "ocr_completed_and_polled", "unitId": unit_id_for_poll}
                                             break
+                                        # ↓↓↓ このelifブロックを追加 ↓↓↓
                                         elif data_status == 300: # 手動操作待ち
                                             self.log_manager.info(f"  DX Suite 標準 ポーリング完了：手動エントリー待ち (unitId: {unit_id_for_poll})。", context="WORKER_DX_STANDARD_POLL")
+                                            # 結果を「手動操作待ち」として設定
                                             part_ocr_result_json = {"status": "awaiting_manual_action", "unitId": unit_id_for_poll, "message": "サーバー上でエントリー操作が必要です"}
                                             break
+                                        # ↑↑↑ ここまで追加 ↑↑↑
                                         elif data_status in [0, 200]: # 処理中
                                             self.log_manager.debug(f"  DX Suite 標準 結果ポーリング中 (unitId: {unit_id_for_poll}, Attempt: {attempt + 1}, Status: {data_status})。", context="WORKER_DX_STANDARD_POLL")
                                             if attempt < max_polling_attempts - 1:
@@ -510,6 +514,7 @@ class OcrWorker(QThread):
                                             else: part_ocr_api_error_info = {"message": "DX Suite 全文OCR結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}; break
                                         else: part_ocr_api_error_info = {"message": f"DX Suite 全文OCR APIが未知のステータス '{api_status}' を返しました。", "code": "DXSUITE_OCR_UNKNOWN_STATUS"}; break
                                     else: part_ocr_api_error_info = {"message": "DX Suite 全文OCR 結果取得APIが予期しない応答。", "code": "DXSUITE_OCR_UNEXPECTED_RESPONSE"}; break
+                    # === ここまでポーリングロジックの修正 ===
                     else:
                         part_ocr_result_json = initial_ocr_response
 
@@ -642,8 +647,7 @@ class OcrWorker(QThread):
                         elif deleted_info and deleted_info.get("receptionId") == current_part_atypical_job_id: self.log_manager.info(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) のサーバー上の情報は正常に削除されました。", context="WORKER_DX_DELETE_SUCCESS")
                         else: self.log_manager.warning(f"部品 '{current_part_basename}' (Reception ID: {current_part_atypical_job_id}) の削除APIが予期しない応答: {deleted_info}", context="WORKER_DX_DELETE_WARN")
 
-                    # 【修正箇所】'dx_standard_v1_flow' のチェックを削除
-                    elif active_profile_flow_type == "dx_standard_v2_flow" and delete_job_after_processing and initial_ocr_response and initial_ocr_response.get("unitId"):
+                    elif active_profile_flow_type in ["dx_standard_v1_flow", "dx_standard_v2_flow"] and delete_job_after_processing and initial_ocr_response and initial_ocr_response.get("unitId"):
                         unit_id_to_delete = initial_ocr_response.get("unitId")
                         self.log_manager.info(f"部品 '{current_part_basename}' (Unit ID: {unit_id_to_delete}) の処理後削除オプションが有効なため、削除APIを呼び出します。", context="WORKER_DX_DELETE")
                         deleted_info, delete_error = self.api_client.delete_dx_standard_job(unit_id_to_delete)
@@ -670,11 +674,14 @@ class OcrWorker(QThread):
                     if is_genuinely_multi_part:
                         final_ocr_result_for_main = {"status": OCR_STATUS_COMPLETED, "num_parts": len(files_to_ocr_for_this_original), "detail": f"{len(files_to_ocr_for_this_original)}部品のOCR完了"}
                     elif part_ocr_results_agg:
+                        # ↓↓↓ このelifブロックの中身を修正 ↓↓↓
                         result_body = part_ocr_results_agg[0]["result"]
+                        # V1の「手動操作待ち」ステータスをそのままMainWindowに渡す
                         if result_body and isinstance(result_body, dict) and result_body.get("status") == "awaiting_manual_action":
                             final_ocr_result_for_main = result_body
                         else:
                             final_ocr_result_for_main = result_body
+                        # ↑↑↑ ここまで修正 ↑↑↑
                     else:
                         final_ocr_result_for_main = {"status": OCR_STATUS_COMPLETED, "message": "OCR成功(データ無)", "code": "OCR_NO_DATA"}
                     
