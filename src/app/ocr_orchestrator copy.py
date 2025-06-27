@@ -3,11 +3,13 @@
 import os
 import threading
 from PyQt6.QtWidgets import QMessageBox
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 from typing import Optional, Dict, Any, List
 
+from ocr_worker import OcrWorker
 from sort_worker import SortWorker
 from log_manager import LogManager
+from api_client import OCRApiClient
 from ui_dialogs import OcrConfirmationDialog
 from config_manager import ConfigManager
 from file_model import FileInfo
@@ -35,62 +37,22 @@ class OcrOrchestrator(QObject):
     request_ui_controls_update_signal = pyqtSignal()
     request_list_view_update_signal = pyqtSignal(list)
 
-    def __init__(self, log_manager: LogManager, config: Dict[str, Any], api_profile: Optional[Dict[str, Any]]):
+    def __init__(self, api_client: OCRApiClient, log_manager: LogManager, config: Dict[str, Any], api_profile: Optional[Dict[str, Any]]):
         super().__init__()
+        self.api_client = api_client
         self.log_manager = log_manager
         self.config = config
-        self.active_api_profile = api_profile
-        self.is_ocr_running = False
+        self.active_api_profile = api_profile 
+        self.is_ocr_running = False # OCR or Sort
         self.user_stopped = False
         self.fatal_error_occurred_info: Optional[Dict[str, Any]] = None
         self.thread_lock = threading.Lock()
         self.input_root_folder = ""
-        self.ocr_worker: Optional[QThread] = None # 型を汎用的に
+        self.ocr_worker: Optional[OcrWorker] = None
         self.sort_worker: Optional[SortWorker] = None
-
-        self.api_client_class = None
-        self.worker_class = None
-        self.api_client = None
 
         if not self.active_api_profile:
             self.log_manager.critical("OcrOrchestrator: APIプロファイルが提供されませんでした。処理は続行できません。", context="OCR_ORCH_INIT_ERROR")
-        else:
-            self._set_classes_by_profile()
-
-    def _set_classes_by_profile(self):
-        """アクティブなプロファイルに応じて、使用するApiClientとOcrWorkerのクラスを動的に設定する"""
-        profile_id = self.active_api_profile.get("id") if self.active_api_profile else None
-        self.log_manager.info(f"Orchestrator: プロファイル '{profile_id}' に基づいてコンポーネントを設定します。", context="OCR_ORCH_SETUP")
-
-        if profile_id == 'dx_atypical_v2':
-            from api_client_atypical import OCRApiClientAtypical
-            from ocr_worker_atypical import OcrWorkerAtypical
-            self.api_client_class = OCRApiClientAtypical
-            self.worker_class = OcrWorkerAtypical
-        elif profile_id == 'dx_fulltext_v2':
-            from api_client_fulltext import OCRApiClientFulltext
-            from ocr_worker_fulltext import OcrWorkerFulltext
-            self.api_client_class = OCRApiClientFulltext
-            self.worker_class = OcrWorkerFulltext
-        elif profile_id == 'dx_standard_v2':
-            from api_client_standard import OCRApiClientStandard
-            from ocr_worker_standard import OcrWorkerStandard
-            self.api_client_class = OCRApiClientStandard
-            self.worker_class = OcrWorkerStandard
-        else:
-            self.log_manager.critical(f"不明またはサポートされていないAPIプロファイルIDです: {profile_id}", context="OCR_ORCH_SETUP_ERROR")
-            self.api_client_class = None
-            self.worker_class = None
-            return
-
-        if self.api_client_class:
-            self.api_client = self.api_client_class(
-                config=self.config,
-                log_manager=self.log_manager,
-                api_profile_schema=self.active_api_profile
-            )
-        else:
-            self.api_client = None
 
     def _create_confirmation_summary(self, files_to_process_count: int, input_folder_path: str, parent_widget_for_dialog) -> str:
         if not self.active_api_profile:
@@ -139,6 +101,8 @@ class OcrOrchestrator(QObject):
         recursion_depth_val = active_options_values.get("recursion_depth", options_schema.get("recursion_depth", {}).get("default", 5))
         
         summary_lines.append("<strong>【ファイル検索設定 (現在アクティブなAPIプロファイルより)】</strong>")
+        # max_files_to_process と recursion_depth はオプションスキーマに存在しない可能性があるので、
+        # active_options_values (ユーザー設定値) を優先し、なければスキーマのデフォルト、それもなければ固定デフォルト
         summary_lines.append(f"最大処理ファイル数: {active_options_values.get('max_files_to_process', options_schema.get('max_files_to_process', {}).get('default', '未設定'))}")
         summary_lines.append(f"再帰検索の深さ (入力フォルダ自身を0): {active_options_values.get('recursion_depth', options_schema.get('recursion_depth', {}).get('default', '未設定'))}")
 
@@ -169,7 +133,9 @@ class OcrOrchestrator(QObject):
             if schema_item.get("type") == "bool":
                 display_value = "ON" if value == 1 else "OFF"
             elif schema_item.get("type") == "enum":
-                if isinstance(value, str): 
+                if isinstance(value, int) and "values" in schema_item and 0 <= value < len(schema_item["values"]):
+                    display_value = schema_item["values"][value]
+                elif isinstance(value, str): 
                     display_value = value 
                 else:
                     display_value = str(value)
@@ -189,15 +155,15 @@ class OcrOrchestrator(QObject):
         self.log_manager.info(f"OcrOrchestrator: Instantiating OcrWorker for {len(files_to_send_to_worker_tuples)} files.", context="OCR_ORCH_WORKER_INIT")
         self.fatal_error_occurred_info = None
         
-        if not self.api_client or not self.active_api_profile or not self.worker_class:
-            error_msg = "APIクライアント、プロファイル、またはワーカークラスが未設定です。"
+        if not self.api_client or not self.active_api_profile:
+            error_msg = "APIクライアントまたはプロファイルが未設定です。"
             self.log_manager.error(f"OcrOrchestrator: {error_msg} Cannot start OCR worker.", context="OCR_ORCH_ERROR")
             self.is_ocr_running = False
             self.ocr_process_finished_signal.emit(True, {"message": error_msg, "code": "ORCH_CONFIG_ERROR"})
             self.request_ui_controls_update_signal.emit()
             return
 
-        self.ocr_worker = self.worker_class(
+        self.ocr_worker = OcrWorker(
             api_client=self.api_client,
             files_to_process_tuples=files_to_send_to_worker_tuples,
             input_root_folder=input_folder_path,
@@ -228,7 +194,7 @@ class OcrOrchestrator(QObject):
         self.file_auto_csv_processed_signal.emit(original_idx, path, status_info)
 
     def _handle_worker_file_ocr_processed(self, original_idx: int, path: str, ocr_result: Any, ocr_error: Any, json_status: Any, job_id: Any):
-        if ocr_error and isinstance(ocr_error, dict) and ocr_error.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API", "API_KEY_MISSING_LIVE", "DXSUITE_BASE_URI_NOT_CONFIGURED"]:
+        if ocr_error and isinstance(ocr_error, dict) and ocr_error.get("code") in ["NOT_IMPLEMENTED_API_CALL", "NOT_IMPLEMENTED_LIVE_API"]:
             self.fatal_error_occurred_info = ocr_error
             self.log_manager.error(f"OcrOrchestrator: Fatal OCR error detected: {ocr_error.get('message')}. Worker will stop.", context="OCR_ORCH_FATAL_ERROR", error_code=ocr_error.get("code"))
         
@@ -269,7 +235,8 @@ class OcrOrchestrator(QObject):
             if not active_api_key or not active_api_key.strip():
                 active_profile_name = self.active_api_profile.get("name", "不明なプロファイル")
                 self.log_manager.warning(f"OcrOrchestrator: API Key for profile '{active_profile_name}' is not set for Live mode. OCR cannot start.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
-                QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)", f"LiveモードでOCRを実行するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
+                QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
+                                    f"LiveモードでOCRを実行するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
                 return
 
         if not input_folder_path or not os.path.isdir(input_folder_path):
@@ -280,20 +247,60 @@ class OcrOrchestrator(QObject):
             self.log_manager.info("OcrOrchestrator: OCR start aborted: Already running.", context="OCR_ORCH_FLOW")
             return
 
-        files_eligible_for_ocr_info = [ item for item in processed_files_info if item.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT and item.is_checked ]
+        files_eligible_for_ocr_info = [
+            item for item in processed_files_info
+            if item.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT and \
+                item.is_checked
+        ]
+
+        # dx_standard_v2 プロファイルの場合のみ、出力設定をチェックする
         if self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2':
             file_actions = self.config.get("file_actions", {})
-            if not file_actions.get("dx_standard_output_json", True) and not file_actions.get("dx_standard_auto_download_csv", True):
-                reply = QMessageBox.warning(parent_widget_for_dialog, "注意：出力設定の確認", "「JSON出力」と「CSV自動ダウンロード」が両方オフです。\nこのまま処理すると、後から結果をダウンロードできません。\nよろしいですか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-                if reply == QMessageBox.StandardButton.No: return
-        
-        if any(item.ocr_engine_status not in [OCR_STATUS_NOT_PROCESSED, None] for item in files_eligible_for_ocr_info):
-            reply = QMessageBox.question(parent_widget_for_dialog, "OCR再実行の確認", "選択されたファイルの中に、既に処理が試みられたファイルが含まれています。\nこれらのファイルのOCR処理状態がリセットされ、最初から処理されます。\nよろしいですか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.No: return
+            output_json = file_actions.get("dx_standard_output_json", True)
+            output_csv = file_actions.get("dx_standard_auto_download_csv", True)
+
+            # JSON出力とCSVダウンロードが両方オフの場合に警告を表示
+            if not output_json and not output_csv:
+                warning_message = (
+                    "「OCR結果をJSONファイルに出力する」および「OCR完了時にCSVファイルを自動でダウンロードする」の"
+                    "設定が両方ともオフになっています。\n\n"
+                    "このまま処理を続行すると、サーバー上では処理が完了しますが、"
+                    "後からこのアプリケーションを使ってJSONまたはCSVを手動でダウンロードすることはできません。\n\n"
+                    "よろしいですか？"
+                )
+                reply = QMessageBox.warning(
+                    parent_widget_for_dialog,
+                    "注意：出力設定の確認",
+                    warning_message,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+
+                if reply == QMessageBox.StandardButton.No:
+                    self.log_manager.info("OCR開始がユーザーによってキャンセルされました（出力設定の警告後）。", context="OCR_ORCH_FLOW")
+                    return # 処理を中止
+
+        ocr_already_attempted_in_eligible_list = any(
+            item.ocr_engine_status not in [OCR_STATUS_NOT_PROCESSED, None] 
+            for item in files_eligible_for_ocr_info
+        )
+
+        if ocr_already_attempted_in_eligible_list:
+            message = "選択されたファイルの中に、既に処理が試みられた（未処理ではない）ファイルが含まれています。\n" \
+                        "これらのファイルのOCR処理状態がリセットされ、最初から処理されます。\n\n" \
+                        "よろしいですか？"
+            reply = QMessageBox.question(parent_widget_for_dialog, "OCR再実行の確認", message,
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                self.log_manager.info("OcrOrchestrator: OCR re-execution cancelled by user.", context="OCR_ORCH_FLOW")
+                return
 
         confirmation_summary = self._create_confirmation_summary(len(files_eligible_for_ocr_info), input_folder_path, parent_widget_for_dialog)
         confirm_dialog = OcrConfirmationDialog(confirmation_summary, parent_widget_for_dialog)
-        if not confirm_dialog.exec(): return
+        if not confirm_dialog.exec():
+            self.log_manager.info("OcrOrchestrator: OCR start cancelled by user (final confirmation dialog).", context="OCR_ORCH_FLOW")
+            return
 
         self.log_manager.info(f"OcrOrchestrator: User confirmed. Starting OCR process for {len(files_eligible_for_ocr_info)} files using API '{self.active_api_profile.get('name')}'...", context="OCR_ORCH_FLOW")
         
@@ -302,9 +309,98 @@ class OcrOrchestrator(QObject):
         for original_idx, item_info_orig in enumerate(processed_files_info):
             item_info = item_info_orig 
             if item_info.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT and item_info.is_checked:
-                item_info.status = OCR_STATUS_PROCESSING; item_info.ocr_engine_status = OCR_STATUS_PROCESSING; item_info.ocr_result_summary = ""
+                item_info.status = OCR_STATUS_PROCESSING
+                item_info.ocr_engine_status = OCR_STATUS_PROCESSING
+                item_info.ocr_result_summary = ""
+
                 file_actions = self.config.get("file_actions", {})
                 is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
+
+                if is_dx_standard:
+                    # dx_standard の場合は専用チェックボックスから判断
+                    item_info.json_status = "処理待ち" if file_actions.get("dx_standard_output_json", False) else "作成しない(設定)"
+                    item_info.auto_csv_status = "処理待ち" if file_actions.get("dx_standard_auto_download_csv", False) else "作成しない(設定)"
+                    item_info.searchable_pdf_status = "対象外"
+                else:
+                    # それ以外のプロファイルでは従来のラジオボタンから判断
+                    output_format_cfg = file_actions.get("output_format", "both")
+                    item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
+                    item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
+                    item_info.auto_csv_status = "対象外"
+
+                files_to_send_to_worker_tuples.append((item_info.path, original_idx))
+            updated_processed_files_info_for_start.append(item_info) 
+        
+        self.ocr_process_started_signal.emit(len(files_to_send_to_worker_tuples), updated_processed_files_info_for_start)
+        
+        self._prepare_and_start_ocr_worker(files_to_send_to_worker_tuples, input_folder_path)
+        self.request_ui_controls_update_signal.emit()
+
+    def confirm_and_resume_ocr(self, processed_files_info: List[FileInfo], input_folder_path: str, parent_widget_for_dialog):
+        self.log_manager.debug("OcrOrchestrator: Confirming OCR resume...", context="OCR_ORCH_FLOW")
+        if not self.api_client:
+            self.log_manager.error("OcrOrchestrator: ApiClient is not initialized. Cannot resume OCR.", context="OCR_ORCH_ERROR", error_code="NO_API_CLIENT")
+            QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "APIクライアントが初期化されていません。")
+            return
+        if not self.active_api_profile:
+            self.log_manager.error("OcrOrchestrator: Active API profile not set. Cannot resume OCR.", context="OCR_ORCH_ERROR", error_code="NO_ACTIVE_PROFILE")
+            QMessageBox.critical(parent_widget_for_dialog, "設定エラー", "アクティブなAPIプロファイルが設定されていません。")
+            return
+
+        if self.config.get("api_execution_mode") == "live":
+            active_api_key = ConfigManager.get_active_api_key(self.config)
+            if not active_api_key or not active_api_key.strip():
+                active_profile_name = self.active_api_profile.get("name", "不明なプロファイル")
+                self.log_manager.warning(f"OcrOrchestrator: API Key for profile '{active_profile_name}' is not set for Live mode. OCR cannot resume.", context="OCR_ORCH_CONFIG_ERROR", error_code="API_KEY_MISSING_LIVE")
+                QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)",
+                                    f"LiveモードでOCRを再開するには、プロファイル「{active_profile_name}」のAPIキーを設定してください。")
+                return
+
+        if self.is_ocr_running:
+            self.log_manager.info("OcrOrchestrator: OCR resume aborted: OCR is already running.", context="OCR_ORCH_FLOW")
+            return
+
+        files_to_resume_tuples = []
+        for original_idx, item_info in enumerate(processed_files_info):
+            if item_info.is_checked and \
+                item_info.ocr_engine_status in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and \
+                item_info.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT:
+                files_to_resume_tuples.append((item_info.path, original_idx))
+
+        if not files_to_resume_tuples:
+            self.log_manager.info("OcrOrchestrator: OCR resume: No checked files found with 'Not Processed' or 'Failed' OCR status.", context="OCR_ORCH_FLOW")
+            QMessageBox.information(parent_widget_for_dialog, "再開対象なし", "OCR未処理または失敗状態で、かつチェックされているファイル（サイズ上限内）が見つかりませんでした。")
+            self.request_ui_controls_update_signal.emit()
+            return
+
+        message = f"{len(files_to_resume_tuples)} 件の選択されたファイルに対してOCR処理を再開します。\n" \
+                    f"(APIプロファイル: {self.active_api_profile.get('name', 'N/A')})\n\n" \
+                    "よろしいですか？"
+        reply = QMessageBox.question(parent_widget_for_dialog, "OCR再開の確認", message,
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                    QMessageBox.StandardButton.Yes)
+        if reply == QMessageBox.StandardButton.No:
+            self.log_manager.info("OcrOrchestrator: OCR resume cancelled by user.", context="OCR_ORCH_FLOW")
+            return
+
+        self.log_manager.info(f"OcrOrchestrator: User confirmed. Resuming OCR process for {len(files_to_resume_tuples)} files using API '{self.active_api_profile.get('name')}'...", context="OCR_ORCH_FLOW")
+        
+        updated_processed_files_info_for_resume = []
+        output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
+        initial_json_status_ui = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
+        initial_pdf_status_ui = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
+
+        for original_idx, item_info_orig in enumerate(processed_files_info):
+            item_info = item_info_orig
+            is_target_for_resume = any(orig_idx == original_idx for path, orig_idx in files_to_resume_tuples)
+            if is_target_for_resume:
+                item_info.ocr_engine_status = OCR_STATUS_PROCESSING
+                item_info.status = f"{OCR_STATUS_PROCESSING}(再開)"
+                item_info.ocr_result_summary = "" 
+
+                file_actions = self.config.get("file_actions", {})
+                is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
+
                 if is_dx_standard:
                     item_info.json_status = "処理待ち" if file_actions.get("dx_standard_output_json", False) else "作成しない(設定)"
                     item_info.auto_csv_status = "処理待ち" if file_actions.get("dx_standard_auto_download_csv", False) else "作成しない(設定)"
@@ -314,103 +410,137 @@ class OcrOrchestrator(QObject):
                     item_info.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"
                     item_info.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"
                     item_info.auto_csv_status = "対象外"
-                files_to_send_to_worker_tuples.append((item_info.path, original_idx))
-            updated_processed_files_info_for_start.append(item_info) 
+
+            updated_processed_files_info_for_resume.append(item_info)
+
+        self.ocr_process_started_signal.emit(len(files_to_resume_tuples), updated_processed_files_info_for_resume)
         
-        self.ocr_process_started_signal.emit(len(files_to_send_to_worker_tuples), updated_processed_files_info_for_start)
-        self._prepare_and_start_ocr_worker(files_to_send_to_worker_tuples, input_folder_path)
-        self.request_ui_controls_update_signal.emit()
-
-    def confirm_and_resume_ocr(self, processed_files_info: List[FileInfo], input_folder_path: str, parent_widget_for_dialog):
-        self.log_manager.debug("OcrOrchestrator: Confirming OCR resume...", context="OCR_ORCH_FLOW")
-        if not self.api_client or not self.active_api_profile: return
-        if self.config.get("api_execution_mode") == "live" and not ConfigManager.get_active_api_key(self.config):
-            QMessageBox.warning(parent_widget_for_dialog, "APIキー未設定 (Liveモード)", f"LiveモードでOCRを再開するには、プロファイル「{self.active_api_profile.get('name', 'N/A')}」のAPIキーを設定してください。"); return
-        if self.is_ocr_running: return
-
-        files_to_resume_tuples = [(item.path, idx) for idx, item in enumerate(processed_files_info) if item.is_checked and item.ocr_engine_status in [OCR_STATUS_NOT_PROCESSED, OCR_STATUS_FAILED] and item.ocr_engine_status != OCR_STATUS_SKIPPED_SIZE_LIMIT]
-        if not files_to_resume_tuples:
-            QMessageBox.information(parent_widget_for_dialog, "再開対象なし", "OCR未処理または失敗状態で、かつチェックされているファイルが見つかりませんでした。"); self.request_ui_controls_update_signal.emit(); return
-
-        reply = QMessageBox.question(parent_widget_for_dialog, "OCR再開の確認", f"{len(files_to_resume_tuples)} 件のファイルに対してOCR処理を再開しますか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
-        if reply == QMessageBox.StandardButton.No: return
-
-        self.log_manager.info(f"OcrOrchestrator: Resuming OCR process for {len(files_to_resume_tuples)} files.", context="OCR_ORCH_FLOW")
-        
-        updated_files_info = []
-        for idx, item in enumerate(processed_files_info):
-            if any(orig_idx == idx for _, orig_idx in files_to_resume_tuples):
-                item.ocr_engine_status = OCR_STATUS_PROCESSING; item.status = f"{OCR_STATUS_PROCESSING}(再開)"; item.ocr_result_summary = ""
-                # statusリセットロジックは上記 confirm_and_start_ocr と同じ
-                file_actions = self.config.get("file_actions", {}); is_dx_standard = self.active_api_profile.get('id') == 'dx_standard_v2'
-                if is_dx_standard:
-                    item.json_status = "処理待ち" if file_actions.get("dx_standard_output_json", False) else "作成しない(設定)"; item.auto_csv_status = "処理待ち" if file_actions.get("dx_standard_auto_download_csv", False) else "作成しない(設定)"; item.searchable_pdf_status = "対象外"
-                else:
-                    output_format_cfg = file_actions.get("output_format", "both"); item.json_status = "処理待ち" if output_format_cfg in ["json_only", "both"] else "作成しない(設定)"; item.searchable_pdf_status = "処理待ち" if output_format_cfg in ["pdf_only", "both"] else "作成しない(設定)"; item.auto_csv_status = "対象外"
-            updated_files_info.append(item)
-
-        self.ocr_process_started_signal.emit(len(files_to_resume_tuples), updated_files_info)
         self._prepare_and_start_ocr_worker(files_to_resume_tuples, input_folder_path)
         self.request_ui_controls_update_signal.emit()
+
 
     def confirm_and_stop_ocr(self, parent_widget_for_dialog):
         self.log_manager.debug("OcrOrchestrator: Confirming process stop...", context="OCR_ORCH_FLOW_STOP")
         worker_to_stop = self.ocr_worker if self.ocr_worker and self.ocr_worker.isRunning() else self.sort_worker
+        
         if worker_to_stop and worker_to_stop.isRunning():
-            reply = QMessageBox.question(parent_widget_for_dialog, "処理中止確認", "現在の処理を中止しますか？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            reply = QMessageBox.question(parent_widget_for_dialog, "処理中止確認", "現在の処理を中止しますか？",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
                 self.log_manager.info("OcrOrchestrator: User confirmed process stop. Requesting worker to stop.", context="OCR_ORCH_FLOW_STOP")
-                worker_to_stop.stop(); self.user_stopped = True
+                if hasattr(worker_to_stop, 'stop'):
+                    worker_to_stop.stop()
+                self.user_stopped = True
+            else:
+                self.log_manager.info("OcrOrchestrator: User cancelled process stop.", context="OCR_ORCH_FLOW_STOP")
         else:
             if self.is_ocr_running:
                 self.log_manager.warning(f"OcrOrchestrator: is_ocr_running was True but no active worker found. Resetting state.", context="OCR_ORCH_STATE_MISMATCH")
-                self.is_ocr_running = False; self.ocr_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"}); self.sort_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
+                self.is_ocr_running = False
+                self.ocr_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
+                self.sort_process_finished_signal.emit(True, {"message": "処理状態の不整合により停止", "code": "STATE_INCONSISTENCY_STOP"})
             self.request_ui_controls_update_signal.emit()
 
     def confirm_and_start_sort(self, processed_files_info: List[FileInfo], sort_config_id: str, input_folder_path: str):
         self.log_manager.debug("OcrOrchestrator: Starting sort process...", context="SORT_ORCH_FLOW")
-        self.is_ocr_running = True; self.user_stopped = False; self.request_ui_controls_update_signal.emit()
+        self.is_ocr_running = True
+        self.user_stopped = False
+        self.request_ui_controls_update_signal.emit()
+
         file_paths_to_sort = [f.path for f in processed_files_info if f.is_checked]
-        self.sort_worker = SortWorker(api_client=self.api_client, file_paths=file_paths_to_sort, sort_config_id=sort_config_id, log_manager=self.log_manager, input_root_folder=input_folder_path, config=self.config)
-        self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update); self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
-        self.sort_process_started_signal.emit(f"{len(file_paths_to_sort)}件のファイルで仕分け処理を開始します..."); self.sort_worker.start()
+
+        self.sort_worker = SortWorker(
+            api_client=self.api_client,
+            file_paths=file_paths_to_sort,
+            sort_config_id=sort_config_id,
+            log_manager=self.log_manager,
+            input_root_folder=input_folder_path,
+            config=self.config
+        )
+        self.sort_worker.sort_status_update.connect(self._handle_sort_worker_status_update)
+        self.sort_worker.sort_finished.connect(self._handle_sort_worker_finished)
+        
+        self.sort_process_started_signal.emit(f"{len(file_paths_to_sort)}件のファイルで仕分け処理を開始します...")
+        self.sort_worker.start()
 
     def _handle_sort_worker_status_update(self, message: str):
         self.log_manager.info(message, context="SORT_STATUS_UPDATE")
 
     def _handle_sort_worker_finished(self, success: bool, result_or_error: object):
-        self.log_manager.info(f"Orchestrator: Sort worker finished. Success: {success}", context="SORT_ORCH_FLOW"); self.is_ocr_running = False; self.sort_worker = None
-        self.sort_process_finished_signal.emit(success, result_or_error); self.request_ui_controls_update_signal.emit()
+        self.log_manager.info(f"Orchestrator: Sort worker finished. Success: {success}", context="SORT_ORCH_FLOW")
+        self.is_ocr_running = False
+        self.sort_worker = None
+        
+        self.sort_process_finished_signal.emit(success, result_or_error)
+        self.request_ui_controls_update_signal.emit()
 
-    def get_is_ocr_running(self) -> bool: return self.is_ocr_running
-    def set_is_ocr_running(self, is_running: bool): self.is_ocr_running = is_running
+    def get_is_ocr_running(self) -> bool:
+        return self.is_ocr_running
 
-    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]):
+    def set_is_ocr_running(self, is_running: bool): 
+        self.is_ocr_running = is_running
+
+    def update_config(self, new_config: dict, new_api_profile_schema: Optional[Dict[str, Any]]): # new_api_profile -> new_api_profile_schema
         self.log_manager.info("OcrOrchestrator: 設定更新中...", context="OCR_ORCH_CONFIG")
         self.config = new_config
         if new_api_profile_schema:
-            self.active_api_profile = new_api_profile_schema
+            self.active_api_profile_schema = new_api_profile_schema
             self.log_manager.info(f"OcrOrchestrator: アクティブAPIプロファイルスキーマを '{new_api_profile_schema.get('name')}' に更新しました。", context="OCR_ORCH_CONFIG")
         else: 
-            current_profile_id = new_config.get("current_api_profile_id"); active_profile_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id) 
-            if active_profile_from_cfg: self.active_api_profile = active_profile_from_cfg
-            elif new_config.get("api_profiles"): self.active_api_profile = new_config["api_profiles"][0]; self.log_manager.warning("プロファイルが見つからずフォールバックしました。", context="OCR_ORCH_CONFIG")
-            else: self.log_manager.error("有効なAPIプロファイルが見つかりません。", context="OCR_ORCH_CONFIG"); self.active_api_profile = {}
-        
-        self._set_classes_by_profile()
+            current_profile_id = new_config.get("current_api_profile_id")
+            active_profile_schema_from_cfg = ConfigManager.get_api_profile(new_config, current_profile_id) 
+            if active_profile_schema_from_cfg:
+                self.active_api_profile_schema = active_profile_schema_from_cfg
+            elif new_config.get("api_profiles") and len(new_config.get("api_profiles")) > 0: # フォールバック
+                self.active_api_profile_schema = new_config["api_profiles"][0]
+                self.log_manager.warning(f"OcrOrchestrator: update_config で current_api_profile_id '{current_profile_id}' に対応するプロファイルスキーマが見つからず、最初のプロファイルを使用します。", context="OCR_ORCH_CONFIG")
+            else:
+                self.log_manager.error("OcrOrchestrator: update_configで有効なAPIプロファイルスキーマが見つかりません。", context="OCR_ORCH_CONFIG")
+                self.active_api_profile_schema = {} # 空の辞書にフォールバック
+
+        if self.api_client: 
+            self.api_client.update_config(new_config, self.active_api_profile_schema)
 
     def export_results_to_csv(self, processed_files: List[FileInfo], input_root_folder: str):
-        if not self.active_api_profile or self.active_api_profile.get("id") != "dx_atypical_v2": return
+        """
+        MainWindowから呼び出されるCSVエクスポートのメインメソッド。
+        """
+        # 現在のプロファイルが dx_atypical_v2 でない場合は何もしない
+        if not self.active_api_profile or self.active_api_profile.get("id") != "dx_atypical_v2":
+            return
+
         self.log_manager.info("OCR処理完了。CSVエクスポートの準備をします。", context="CSV_EXPORT")
+
+        # 引数で渡されたリストを使用する
         successful_files = [f for f in processed_files if f.ocr_engine_status == OCR_STATUS_COMPLETED]
-        if not successful_files: return
-        if not input_root_folder or not os.path.isdir(input_root_folder): return
+
+        if not successful_files:
+            self.log_manager.info("CSVエクスポート対象の成功ファイルがありません。", context="CSV_EXPORT")
+            return
+
+        # 引数で渡されたパスを使用する
+        if not input_root_folder or not os.path.isdir(input_root_folder):
+            self.log_manager.error("CSV出力先となるルート入力フォルダが無効です。", context="CSV_EXPORT_ERROR")
+            return
+            
         results_folder_name = self.config.get("file_actions", {}).get("results_folder_name", "OCR結果")
         output_dir = os.path.join(input_root_folder, results_folder_name)
-        os.makedirs(output_dir, exist_ok=True)
+        
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except OSError as e:
+            self.log_manager.error(f"CSV出力先フォルダの作成に失敗しました: {output_dir}, エラー: {e}", context="CSV_EXPORT_ERROR")
+            return
+
         csv_filename = f"{os.path.basename(os.path.normpath(input_root_folder))}.csv"
         output_csv_path = os.path.join(output_dir, csv_filename)
+
+        # 使用されたモデルIDを取得して渡す
         active_options = ConfigManager.get_active_api_options_values(self.config)
         model_id = active_options.get("model") if active_options else None
-        if not model_id: return
+        if not model_id:
+            self.log_manager.error("CSVエクスポートに必要なモデルIDが取得できませんでした。", context="CSV_EXPORT_ERROR")
+            return
+
         export_atypical_to_csv(successful_files, output_csv_path, self.log_manager, model_id)

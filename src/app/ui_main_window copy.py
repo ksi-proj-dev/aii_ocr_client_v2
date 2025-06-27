@@ -20,6 +20,7 @@ from option_dialog import OptionDialog
 from summary_view import SummaryView
 from config_manager import ConfigManager, CONFIG_DIR
 from log_manager import LogManager, LogLevel, LOG_DIR_PATH
+from api_client import OCRApiClient
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
@@ -270,9 +271,14 @@ class MainWindow(QMainWindow):
             self.log_manager.critical("アクティブAPIプロファイルが未設定でコンポーネント初期化不可。", context="MAINWIN_LIFECYCLE_CRITICAL")
             return
 
+        self.api_client = OCRApiClient(
+            config=self.config,
+            log_manager=self.log_manager,
+            api_profile_schema=self.active_api_profile
+        )
         self.file_scanner = FileScanner(self.log_manager, self.config)
-        
         self.ocr_orchestrator = OcrOrchestrator(
+            api_client=self.api_client,
             log_manager=self.log_manager,
             config=self.config,
             api_profile=self.active_api_profile
@@ -624,57 +630,29 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'log_container'): visible = self.log_container.isVisible(); self.log_container.setVisible(not visible); self.log_manager.info(f"Log display toggled: {'Hidden' if visible else 'Shown'}", context="UI_ACTION"); self.log_toggle_action.setText("📄ログ非表示" if not visible else "📄ログ表示")
 
     def show_option_dialog(self):
-        self.log_manager.debug("Opening options dialog.", context="UI_ACTION")
-        active_profile_id = self.config.get("current_api_profile_id")
-        options_schema = ConfigManager.get_active_api_options_schema(self.config)
-        current_option_values = ConfigManager.get_active_api_options_values(self.config)
-        
-        if options_schema is None:
-            QMessageBox.warning(self, "設定エラー", f"現在アクティブなAPIプロファイル '{active_profile_id}' のオプション定義の取得に失敗しました。\n設定ファイルが破損しているか、プロファイル定義に問題がある可能性があります。")
-            self.log_manager.error(f"オプションスキーマの取得に失敗 (None)。Profile ID: {active_profile_id}", context="CONFIG_ERROR")
-            return
-        
-        if current_option_values is None:
-            self.log_manager.warning(f"アクティブプロファイル '{active_profile_id}' のオプション値が取得できませんでした。空のオプションでダイアログを開きます。", context="CONFIG_WARN")
-            current_option_values = {}
-
+        self.log_manager.debug("Opening options dialog.", context="UI_ACTION"); active_profile_id = self.config.get("current_api_profile_id"); options_schema = ConfigManager.get_active_api_options_schema(self.config); current_option_values = ConfigManager.get_active_api_options_values(self.config)
+        if options_schema is None: QMessageBox.warning(self, "設定エラー", f"現在アクティブなAPIプロファイル '{active_profile_id}' のオプション定義の取得に失敗しました。\n設定ファイルが破損しているか、プロファイル定義に問題がある可能性があります。"); self.log_manager.error(f"オプションスキーマの取得に失敗 (None)。Profile ID: {active_profile_id}", context="CONFIG_ERROR"); return
+        if current_option_values is None: self.log_manager.warning(f"アクティブプロファイル '{active_profile_id}' のオプション値(current_option_values)が取得できませんでした。空のオプションでダイアログを開きます。", context="CONFIG_WARN"); current_option_values = {}
         dialog = OptionDialog(
             options_schema=options_schema,
             current_option_values=current_option_values,
             global_config=self.config,
             api_profile=self.active_api_profile,
-            api_client=self.ocr_orchestrator.api_client, # この行を修正
+            api_client=self.api_client,
             parent=self
         )
-        
         if dialog.exec():
             updated_profile_specific_options, updated_global_config = dialog.get_saved_settings()
-            if active_profile_id and updated_profile_specific_options is not None:
-                self.config["options_values_by_profile"][active_profile_id] = updated_profile_specific_options
-            
+            if active_profile_id and updated_profile_specific_options is not None: self.config["options_values_by_profile"][active_profile_id] = updated_profile_specific_options
             if updated_global_config is not None:
                 if "file_actions" in updated_global_config: self.config["file_actions"] = updated_global_config["file_actions"]
                 if "log_settings" in updated_global_config: self.config["log_settings"] = updated_global_config["log_settings"]
-            
-            ConfigManager.save(self.config)
-            self.log_manager.info("Options saved.", context="CONFIG_EVENT")
-            
-            # ★【修正】Orchestratorに設定更新を通知します。これによりOrchestrator内部のapi_clientも更新されます。
-            self.active_api_profile = ConfigManager.get_active_api_profile(self.config)
-            self.ocr_orchestrator.update_config(self.config, self.active_api_profile)
-            self.file_scanner.config = self.config
-            
-            self._update_window_title()
-            self._update_api_mode_toggle_button_display()
+            ConfigManager.save(self.config); self.log_manager.info("Options saved.", context="CONFIG_EVENT")
+            self.active_api_profile = ConfigManager.get_active_api_profile(self.config); self.api_client.update_config(self.config, self.active_api_profile); self.ocr_orchestrator.update_config(self.config, self.active_api_profile); self.file_scanner.config = self.config
+            self._update_window_title(); self._update_api_mode_toggle_button_display()
             self.log_manager.info(f"Settings changed. Re-evaluating file statuses based on new options.", context="CONFIG_EVENT")
-            
-            # 設定変更によるファイルリストの再評価ロジック (変更なし)
-            new_upload_max_mb = ConfigManager.get_active_api_options_values(self.config).get("upload_max_size_mb", 60)
-            new_upload_max_bytes = new_upload_max_mb * 1024 * 1024
-            new_file_actions_cfg = self.config.get("file_actions", {})
-            new_output_format = new_file_actions_cfg.get("output_format", "both")
-            default_json_status = "-" if new_output_format in ["json_only", "both"] else "作成しない(設定)"
-            default_pdf_status = "-" if new_output_format in ["pdf_only", "both"] else "作成しない(設定)"
+            new_upload_max_mb = ConfigManager.get_active_api_options_values(self.config).get("upload_max_size_mb", 60); new_upload_max_bytes = new_upload_max_mb * 1024 * 1024; new_file_actions_cfg = self.config.get("file_actions", {}); new_output_format = new_file_actions_cfg.get("output_format", "both")
+            default_json_status = "-" if new_output_format in ["json_only", "both"] else "作成しない(設定)"; default_pdf_status = "-" if new_output_format in ["pdf_only", "both"] else "作成しない(設定)"
             items_updated = False
             for file_info in self.processed_files_info:
                 prev_engine_status = file_info.ocr_engine_status; prev_checked = file_info.is_checked; orig_status = file_info.status; orig_json = file_info.json_status; orig_pdf = file_info.searchable_pdf_status
@@ -687,8 +665,7 @@ class MainWindow(QMainWindow):
                 if (file_info.ocr_engine_status != prev_engine_status or file_info.status != orig_status or file_info.json_status != orig_json or file_info.searchable_pdf_status != orig_pdf or file_info.is_checked != prev_checked): items_updated = True
             if items_updated: self.list_view.update_files(self.processed_files_info, self.is_ocr_running)
             self.update_all_status_displays(); self.update_ocr_controls()
-        else:
-            self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
+        else: self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
 
     def confirm_start_ocr(self):
         if hasattr(self, 'ocr_orchestrator'): sorted_list_to_process = self.list_view.get_sorted_file_info_list(); self.ocr_orchestrator.confirm_and_start_ocr(sorted_list_to_process, self.input_folder_path, self)

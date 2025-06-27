@@ -1,5 +1,10 @@
 # app_constants.py
 
+# --- アプリケーション情報 ---
+APP_NAME = "AI inside OCR DX Suite Client for API-V2"
+APP_AUTHOR = "KSI"
+APP_VERSION = "0.0.17"
+
 # --- OCRエンジン処理状態の定数 ---
 OCR_STATUS_NOT_PROCESSED = "未処理"
 OCR_STATUS_PROCESSING = "処理中"
