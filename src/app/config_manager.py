@@ -1,4 +1,4 @@
-# config_manager.py
+# config_manager.py (修正版)
 
 import os
 import json
@@ -6,6 +6,11 @@ import datetime
 import shutil
 from typing import Optional, Dict, Any, List
 from appdirs import user_config_dir
+
+# --- 修正箇所 ---
+# LogManagerをインポートします
+from log_manager import LogManager
+# --- 修正箇所 ---
 
 from app_constants import APP_NAME, APP_AUTHOR
 from model_data import MODEL_DEFINITIONS
@@ -16,16 +21,24 @@ try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
     CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
 except Exception as e:
-    print(f"重大な警告: appdirs での設定パス取得に失敗しました。エラー: {e}")
-    fallback_dir_name = f"{APP_AUTHOR}_{APP_NAME}_config_error_fallback".replace(" ", "_")
+    # --- 修正箇所 ---
+    # printをLogManager.warningに置き換えます
+    LogManager().warning(f"appdirsでの設定パス取得に失敗しました。ローカルフォルダにフォールバックします。エラー: {e}", context="CONFIG_PATH")
+    # --- 修正箇所 ---
+    fallback_dir_name = f"{APP_AUTHOR}_{APP_NAME}_config_fallback".replace(" ", "_")
     try:
         CONFIG_DIR = os.path.join(os.getcwd(), fallback_dir_name)
         CONFIG_PATH = os.path.join(CONFIG_DIR, CONFIG_FILE_NAME)
-        print(f"フォールバック先のパス: {CONFIG_PATH}")
+        # --- 修正箇所 ---
+        LogManager().info(f"フォールバック先のパス: {CONFIG_PATH}", context="CONFIG_PATH")
+        # --- 修正箇所 ---
     except Exception as fallback_e:
-        print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
+        # --- 修正箇所 ---
+        LogManager().critical(f"フォールバックパスの設定も失敗しました: {fallback_e}", context="CONFIG_PATH")
+        # --- 修正箇所 ---
         CONFIG_PATH = None; CONFIG_DIR = None
 
+# (DEFAULT_API_PROFILES の定義は変更ないため省略)
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "dx_fulltext_v2",
@@ -159,14 +172,18 @@ class ConfigManager:
     @staticmethod
     def _ensure_config_dir_exists():
         if not CONFIG_PATH:
-            print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。")
+            # --- 修正箇所 ---
+            LogManager().error("CONFIG_PATHが設定されていないため、設定ディレクトリを作成できません。", context="CONFIG_SAVE")
+            # --- 修正箇所 ---
             return False
         try:
             config_dir_for_creation = os.path.dirname(CONFIG_PATH)
             if not os.path.exists(config_dir_for_creation):
                 os.makedirs(config_dir_for_creation, exist_ok=True)
         except Exception as e:
-            print(f"警告: 設定ディレクトリの作成に失敗しました: {config_dir_for_creation}, Error: {e}")
+            # --- 修正箇所 ---
+            LogManager().warning(f"設定ディレクトリの作成に失敗しました: {config_dir_for_creation}, Error: {e}", context="CONFIG_SAVE")
+            # --- 修正箇所 ---
             return False
         return True
 
@@ -181,7 +198,9 @@ class ConfigManager:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     user_config = json.load(f)
             except (json.JSONDecodeError, Exception) as e:
-                print(f"警告: {CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。")
+                # --- 修正箇所 ---
+                LogManager().warning(f"{CONFIG_PATH} の読み込みに失敗しました: {e}。バックアップを作成し、デフォルト設定で続行します。", context="CONFIG_LOAD")
+                # --- 修正箇所 ---
                 ConfigManager._backup_corrupted_config()
                 user_config = ConfigManager._get_default_config_structure()
         else:
@@ -200,11 +219,16 @@ class ConfigManager:
             try:
                 backup_path = CONFIG_PATH + ".corrupted_" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                 shutil.copy2(CONFIG_PATH, backup_path)
-                print(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。")
+                # --- 修正箇所 ---
+                LogManager().info(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。", context="CONFIG_BACKUP")
+                # --- 修正箇所 ---
             except Exception as e_backup:
-                print(f"破損した設定ファイルのバックアップに失敗: {e_backup}")
+                # --- 修正箇所 ---
+                LogManager().error(f"破損した設定ファイルのバックアップに失敗: {e_backup}", context="CONFIG_BACKUP")
+                # --- 修正箇所 ---
                 pass
-
+    
+    # (残りのメソッドは変更ないため省略)
     @staticmethod
     def _get_default_config_structure() -> Dict[str, Any]:
         config: Dict[str, Any] = {}
@@ -283,10 +307,14 @@ class ConfigManager:
     @staticmethod
     def save(config: Dict[str, Any]):
         if not ConfigManager._ensure_config_dir_exists():
-            print("エラー: 設定ディレクトリの準備ができないため、設定を保存できません。")
+            # --- 修正箇所 ---
+            LogManager().error("設定ディレクトリの準備ができないため、設定を保存できません。", context="CONFIG_SAVE")
+            # --- 修正箇所 ---
             return
         if not CONFIG_PATH:
-            print("エラー: CONFIG_PATH が無効なため、設定を保存できません。")
+            # --- 修正箇所 ---
+            LogManager().error("CONFIG_PATH が無効なため、設定を保存できません。", context="CONFIG_SAVE")
+            # --- 修正箇所 ---
             return
         
         config_to_save = json.loads(json.dumps(config)) 
@@ -300,7 +328,9 @@ class ConfigManager:
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(config_to_save, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"エラー: 設定ファイル {CONFIG_PATH} の保存に失敗しました。理由: {e}")
+            # --- 修正箇所 ---
+            LogManager().error(f"設定ファイル {CONFIG_PATH} の保存に失敗しました。理由: {e}", context="CONFIG_SAVE")
+            # --- 修正箇所 ---
             pass
 
     @staticmethod

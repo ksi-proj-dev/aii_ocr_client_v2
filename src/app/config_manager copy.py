@@ -7,11 +7,10 @@ import shutil
 from typing import Optional, Dict, Any, List
 from appdirs import user_config_dir
 
+from app_constants import APP_NAME, APP_AUTHOR
 from model_data import MODEL_DEFINITIONS
 
 CONFIG_FILE_NAME = "config.json"
-APP_NAME = "AI inside OCR DX Suite Client for API-V2"
-APP_AUTHOR = "KSI"
 
 try:
     CONFIG_DIR = user_config_dir(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
@@ -27,7 +26,6 @@ except Exception as e:
         print(f"フォールバックパスの設定も失敗しました: {fallback_e}")
         CONFIG_PATH = None; CONFIG_DIR = None
 
-# 【修正箇所】'cube_fullocr_v1'と'dx_standard_v1'の定義を削除
 DEFAULT_API_PROFILES: List[Dict[str, Any]] = [
     {
         "id": "dx_fulltext_v2",
@@ -161,7 +159,7 @@ class ConfigManager:
     @staticmethod
     def _ensure_config_dir_exists():
         if not CONFIG_PATH:
-            print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。") # LogManagerが使える前なのでprint
+            print("エラー: CONFIG_PATH が設定されていないため、設定ディレクトリを作成できません。")
             return False
         try:
             config_dir_for_creation = os.path.dirname(CONFIG_PATH)
@@ -194,7 +192,6 @@ class ConfigManager:
 
     @staticmethod
     def get_class_definitions_for_model(model_id: str) -> List[Dict[str, str]]:
-        """指定されたモデルIDに対応するクラス定義のリストを返す。"""
         return MODEL_DEFINITIONS.get(model_id, [])
 
     @staticmethod
@@ -206,7 +203,7 @@ class ConfigManager:
                 print(f"破損した可能性のある設定ファイルを {backup_path} にバックアップしました。")
             except Exception as e_backup:
                 print(f"破損した設定ファイルのバックアップに失敗: {e_backup}")
-                pass # エラー時は何もしない（printのみ）
+                pass
 
     @staticmethod
     def _get_default_config_structure() -> Dict[str, Any]:
@@ -220,13 +217,13 @@ class ConfigManager:
             config["api_profiles"] = json.loads(json.dumps(DEFAULT_API_PROFILES))
         else:
             existing_profile_ids = {p.get("id") for p in config["api_profiles"]}
-            for default_profile_schema in DEFAULT_API_PROFILES: # default_profile -> default_profile_schema
+            for default_profile_schema in DEFAULT_API_PROFILES:
                 if default_profile_schema["id"] not in existing_profile_ids:
                     config["api_profiles"].append(json.loads(json.dumps(default_profile_schema)))
                 else:
-                    cfg_profile_schema = next((p for p in config["api_profiles"] if p.get("id") == default_profile_schema["id"]), None) # cfg_profile -> cfg_profile_schema
+                    cfg_profile_schema = next((p for p in config["api_profiles"] if p.get("id") == default_profile_schema["id"]), None)
                     if cfg_profile_schema:
-                        for key, val_schema in default_profile_schema.items(): # val -> val_schema
+                        for key, val_schema in default_profile_schema.items():
                             if key not in cfg_profile_schema:
                                 cfg_profile_schema[key] = json.loads(json.dumps(val_schema))
                             elif isinstance(val_schema, dict) and isinstance(cfg_profile_schema.get(key), dict):
@@ -235,13 +232,13 @@ class ConfigManager:
                                         if ep_key not in cfg_profile_schema[key]:
                                             cfg_profile_schema[key][ep_key] = ep_val
                                 elif key == "options_schema":
-                                    for opt_key, opt_val_item_schema in val_schema.items(): # opt_val_schema -> opt_val_item_schema
+                                    for opt_key, opt_val_item_schema in val_schema.items():
                                         if opt_key not in cfg_profile_schema[key]:
                                             cfg_profile_schema[key][opt_key] = json.loads(json.dumps(opt_val_item_schema))
 
         config.setdefault("current_api_profile_id", DEFAULT_API_PROFILES[0]["id"] if DEFAULT_API_PROFILES else "")
         
-        current_profile_id = config.get("current_api_profile_id") # 変数名変更なし
+        current_profile_id = config.get("current_api_profile_id")
         profile_ids = [p.get("id") for p in config.get("api_profiles", [])]
         if current_profile_id not in profile_ids and profile_ids:
             config["current_api_profile_id"] = profile_ids[0]
@@ -257,7 +254,7 @@ class ConfigManager:
                 profile_options_values.setdefault("api_key", "")
                 
                 if "options_schema" in profile_schema:
-                    for opt_key, opt_schema_item in profile_schema["options_schema"].items(): # key, schema -> opt_key, opt_schema_item
+                    for opt_key, opt_schema_item in profile_schema["options_schema"].items():
                         profile_options_values.setdefault(opt_key, opt_schema_item.get("default"))
         
         file_actions = config.setdefault("file_actions", {})
@@ -270,9 +267,9 @@ class ConfigManager:
         file_actions.setdefault("output_format", "both")
 
         log_settings = config.setdefault("log_settings", {})
-        log_settings.setdefault("log_level_info_enabled", True)    # INFOレベルはデフォルトで表示
-        log_settings.setdefault("log_level_warning_enabled", True) # WARNINGレベルはデフォルトで表示
-        log_settings.setdefault("log_level_debug_enabled", False)  # DEBUGレベルはデフォルトで非表示
+        log_settings.setdefault("log_level_info_enabled", True)
+        log_settings.setdefault("log_level_warning_enabled", True)
+        log_settings.setdefault("log_level_debug_enabled", False)
 
         config.setdefault("window_size", {"width": 1000, "height": 700})
         config.setdefault("window_state", "normal")
@@ -304,17 +301,17 @@ class ConfigManager:
                 json.dump(config_to_save, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"エラー: 設定ファイル {CONFIG_PATH} の保存に失敗しました。理由: {e}")
-            pass # エラー時は何もしない（printのみ）
+            pass
 
     @staticmethod
-    def get_api_profile(config: dict, profile_id: str) -> Optional[Dict[str, Any]]: # これはスキーマ部分を返す
+    def get_api_profile(config: dict, profile_id: str) -> Optional[Dict[str, Any]]:
         for profile_schema in config.get("api_profiles", []):
             if profile_schema.get("id") == profile_id:
                 return profile_schema
         return None
 
     @staticmethod
-    def get_active_api_profile(config: dict) -> Optional[Dict[str, Any]]: # これはスキーマ部分を返す
+    def get_active_api_profile(config: dict) -> Optional[Dict[str, Any]]:
         profile_id = config.get("current_api_profile_id")
         if profile_id:
             return ConfigManager.get_api_profile(config, profile_id)
@@ -330,7 +327,7 @@ class ConfigManager:
         return None
 
     @staticmethod
-    def get_active_api_options_values(config: dict) -> Optional[Dict[str, Any]]: # これがユーザ設定値（APIキー、BaseURI含む）
+    def get_active_api_options_values(config: dict) -> Optional[Dict[str, Any]]:
         active_profile_id = config.get("current_api_profile_id")
         if active_profile_id:
             return config.get("options_values_by_profile", {}).get(active_profile_id)
@@ -353,8 +350,7 @@ class ConfigManager:
         return None
     
     @staticmethod
-    def get_active_base_uri(config: dict) -> Optional[str]: # 新規追加の可能性
-        """アクティブプロファイルの有効なベースURIを取得（ユーザー設定値を優先）"""
+    def get_active_base_uri(config: dict) -> Optional[str]:
         active_options_values = ConfigManager.get_active_api_options_values(config)
         active_profile_schema = ConfigManager.get_active_api_profile(config)
         
@@ -362,8 +358,8 @@ class ConfigManager:
         if active_options_values:
             user_set_uri = active_options_values.get("base_uri")
         
-        if user_set_uri: # ユーザー設定値があればそれを優先
+        if user_set_uri:
             return user_set_uri
-        elif active_profile_schema: # なければスキーマのデフォルト
+        elif active_profile_schema:
             return active_profile_schema.get("base_uri")
         return None

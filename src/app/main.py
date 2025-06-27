@@ -1,16 +1,25 @@
-# main.py
+# main.py (修正版)
 
 import sys
-# import faulthandler
 import argparse
 
 from PyQt6.QtWidgets import QApplication
+
+# --- 修正箇所 ---
+# LogManagerをインポートします
+from log_manager import LogManager
+# --- 修正箇所 ---
 
 from ui_main_window import MainWindow
 from config_manager import DEFAULT_API_PROFILES
 
 if __name__ == "__main__":
     # faulthandler.enable()
+    
+    # --- 修正箇所 ---
+    # LogManagerのインスタンスを作成します
+    log_manager = LogManager()
+    # --- 修正箇所 ---
 
     try:
         # 利用可能なプロファイルIDのリストを取得
@@ -39,8 +48,11 @@ if __name__ == "__main__":
             f"{example_str}\n"
             "有効なプロファイルID指定がない場合、またはプロファイルIDが0個の場合は選択ダイアログを表示します。"
         )
-    except Exception as e: # DEFAULT_API_PROFILES の処理中に万が一エラーが起きた場合のフォールバック
-        print(f"ヘルプメッセージ生成中にエラー: {e}") # ログやコンソールへの出力
+    except Exception as e:
+        # --- 修正箇所 ---
+        # printをlog_manager.errorに置き換えます
+        log_manager.error(f"ヘルプメッセージ生成中にエラー: {e}", context="SYSTEM_INIT")
+        # --- 修正箇所 ---
         api_help_message = (
             "起動時に使用するAPIプロファイルIDを指定します (複数指定可能)。 "
             "例: --api profile_id1 profile_id2 "
@@ -63,6 +75,8 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
+    # MainWindowにはlog_managerを渡す必要はありません。
+    # MainWindow自身が新しいインスタンスを生成するためです。
     window = MainWindow(cli_args=args)
     window.show()
     sys.exit(app.exec())
