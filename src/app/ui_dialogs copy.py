@@ -1,20 +1,12 @@
-# ui_dialogs.py (完全なソースコード)
+# ui_dialogs.py
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QTextEdit, QScrollArea, QWidget,
     QHBoxLayout, QPushButton, QDialogButtonBox, QCheckBox,
-    QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QComboBox
+    QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
 )
-from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt, QTimer
 from typing import List, Dict, Optional, Any
-
-# app_constantsから必要な定数をインポート
-from app_constants import (
-    APP_NAME, APP_VERSION, APP_COPYRIGHT, APP_WEBSITE_URL, APP_ICON_PATH
-)
-from log_manager import LogManager
-
 
 class OcrConfirmationDialog(QDialog):
     def __init__(self, settings_summary, parent=None):
@@ -56,10 +48,12 @@ class ClassSelectionDialog(QDialog):
 
         main_layout = QVBoxLayout(self)
 
+        # 全選択/全解除チェックボックス
         self.select_all_checkbox = QCheckBox("すべて選択 / すべて解除")
         self.select_all_checkbox.stateChanged.connect(self.toggle_all_checkboxes)
         main_layout.addWidget(self.select_all_checkbox)
 
+        # クラス一覧のスクロールエリア
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         container_widget = QWidget()
@@ -78,6 +72,7 @@ class ClassSelectionDialog(QDialog):
         scroll_area.setWidget(container_widget)
         main_layout.addWidget(scroll_area)
 
+        # OK/キャンセルボタン
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept_selection)
         button_box.rejected.connect(self.reject)
@@ -112,6 +107,7 @@ class WorkflowSearchDialog(QDialog):
         self.selected_workflow: Optional[Dict[str, str]] = None
         self.all_workflows_cache: List[Dict[str, str]] = []
 
+        # --- UI要素の作成 ---
         main_layout = QVBoxLayout(self)
 
         search_layout = QHBoxLayout()
@@ -140,6 +136,7 @@ class WorkflowSearchDialog(QDialog):
         """)
         main_layout.addWidget(self.results_table)
         
+        # --- ボタンボックスの修正 ---
         self.button_box = QDialogButtonBox()
         self.ok_button = self.button_box.addButton("選択", QDialogButtonBox.ButtonRole.AcceptRole)
         self.clear_button = self.button_box.addButton("選択をクリア", QDialogButtonBox.ButtonRole.ResetRole)
@@ -150,6 +147,7 @@ class WorkflowSearchDialog(QDialog):
         
         main_layout.addWidget(self.button_box)
 
+        # --- シグナル接続 ---
         self.search_button.clicked.connect(self.fetch_all_workflows)
         self.search_box.textChanged.connect(self.filter_and_display_workflows)
         self.results_table.itemSelectionChanged.connect(self.on_selection_changed)
@@ -161,6 +159,7 @@ class WorkflowSearchDialog(QDialog):
         QTimer.singleShot(50, self.fetch_all_workflows)
 
     def fetch_all_workflows(self):
+        """APIから全ワークフローリストを取得し、キャッシュする"""
         results, error = self.api_client.search_workflows(workflow_name=None)
 
         if error:
@@ -172,6 +171,7 @@ class WorkflowSearchDialog(QDialog):
         self.filter_and_display_workflows()
 
     def filter_and_display_workflows(self):
+        """キャッシュされたリストを検索語句でフィルタリングして表示する"""
         search_term = self.search_box.text().strip().lower()
         self.results_table.setRowCount(0)
         self.ok_button.setEnabled(False)
@@ -200,11 +200,13 @@ class WorkflowSearchDialog(QDialog):
             self.results_table.setItem(row, 1, id_item)
 
     def on_selection_changed(self):
+        """テーブルの選択状態が変わったときの処理"""
         is_something_selected = len(self.results_table.selectedItems()) > 0
         self.ok_button.setEnabled(is_something_selected)
         self.clear_button.setEnabled(is_something_selected)
 
     def accept_selection(self):
+        """OKボタンが押された、またはダブルクリックされたときの処理"""
         selected_items = self.results_table.selectedItems()
         if not selected_items:
             return
@@ -214,94 +216,10 @@ class WorkflowSearchDialog(QDialog):
         self.accept()
         
     def clear_selection(self):
+        """「選択をクリア」ボタンが押されたときの処理"""
         self.results_table.clearSelection()
         self.selected_workflow = None
 
     def get_selected_workflow(self) -> Optional[Dict[str, str]]:
+        """選択されたワークフロー情報を返す"""
         return self.selected_workflow
-
-class ProfileSelectionDialog(QDialog):
-    def __init__(self, api_profiles: list[dict], current_profile_id: Optional[str], parent=None, initial_selection_filter: Optional[List[str]] = None):
-        super().__init__(parent)
-        self.setWindowTitle("APIプロファイル選択")
-        self.selected_profile_id: Optional[str] = None
-        self.log_manager = LogManager()
-
-        layout = QVBoxLayout(self)
-        label = QLabel("使用するAPIプロファイルを選択してください:")
-        layout.addWidget(label)
-
-        self.combo_box = QComboBox()
-
-        profiles_to_display = []
-        if initial_selection_filter:
-            temp_ids_in_dialog = set()
-            for profile_id_to_filter in initial_selection_filter:
-                if profile_id_to_filter in temp_ids_in_dialog:
-                    continue
-                profile = next((p for p in api_profiles if p.get("id") == profile_id_to_filter), None)
-                if profile:
-                    profiles_to_display.append(profile)
-                    temp_ids_in_dialog.add(profile_id_to_filter)
-            
-            if not profiles_to_display:
-                self.log_manager.warning(f"ProfileSelectionDialog: initial_selection_filterで有効なプロファイルが見つかりませんでした。全プロファイルを表示します。Filter: {initial_selection_filter}", context="UI_DIALOG_WARN")
-                profiles_to_display = api_profiles
-        else:
-            profiles_to_display = api_profiles
-
-        selected_text_to_set = None
-        if initial_selection_filter and profiles_to_display:
-            selected_text_to_set = profiles_to_display[0].get("name", profiles_to_display[0].get("id"))
-        elif not initial_selection_filter and current_profile_id:
-            profile = next((p for p in profiles_to_display if p.get("id") == current_profile_id), None)
-            if profile:
-                selected_text_to_set = profile.get("name", profile.get("id"))
-
-        for profile in profiles_to_display:
-            profile_id = profile.get("id")
-            profile_name = profile.get("name", profile_id)
-            if profile_id:
-                self.combo_box.addItem(profile_name, userData=profile_id)
-        
-        if selected_text_to_set:
-            self.combo_box.setCurrentText(selected_text_to_set)
-        elif self.combo_box.count() > 0 :
-            self.combo_box.setCurrentIndex(0)
-
-        layout.addWidget(self.combo_box)
-
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-    def accept(self):
-        self.selected_profile_id = self.combo_box.currentData()
-        super().accept()
-
-def show_about_dialog(parent=None):
-    """
-    アプリケーションのバージョン情報を表示するダイアログを作成して表示します。
-    """
-    dialog = QMessageBox(parent)
-    dialog.setWindowTitle(f"{APP_NAME} のバージョン情報")
-    
-    # アプリケーションアイコンを設定
-    icon_pixmap = QPixmap(APP_ICON_PATH)
-    if not icon_pixmap.isNull():
-        dialog.setIconPixmap(icon_pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-
-    # 表示するテキストをHTML形式で作成
-    about_text = f"""
-    <p style='font-size: 16px;'><b>{APP_NAME}</b></p>
-    <p>バージョン: {APP_VERSION}</p>
-    <p>AI inside社のOCRエンジン「DX Suite」をより便利に利用するための<br>Windowsデスクトップアプリケーションです。</p>
-    <p><a href='{APP_WEBSITE_URL}'>{APP_WEBSITE_URL}</a></p>
-    <p>{APP_COPYRIGHT}</p>
-    """
-    
-    dialog.setText(about_text)
-    dialog.setTextFormat(Qt.TextFormat.RichText)
-    dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
-    dialog.exec()

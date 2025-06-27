@@ -1,4 +1,4 @@
-# ui_main_window.py (完全なソースコード)
+# ui_main_window.py
 
 import sys
 import os
@@ -17,14 +17,15 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QAction, QFontMetrics, QIcon
 from PyQt6.QtCore import Qt, QTimer, QSize
 
-from ui_dialogs import ProfileSelectionDialog, OcrConfirmationDialog, show_about_dialog
 from list_view import ListView
+from option_dialog import OptionDialog
 from summary_view import SummaryView
 from config_manager import ConfigManager, CONFIG_DIR
 from log_manager import LogManager, LogLevel, LOG_DIR_PATH
 from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
+
 from app_constants import (
     APP_VERSION,
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
@@ -32,7 +33,67 @@ from app_constants import (
     OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING,
     LISTVIEW_UPDATE_INTERVAL_MS
 )
-from option_dialog import OptionDialog
+
+
+class ApiSelectionDialog(QDialog):
+    def __init__(self, api_profiles: list[dict], current_profile_id: Optional[str], parent=None, initial_selection_filter: Optional[List[str]] = None):
+        super().__init__(parent)
+        self.setWindowTitle("APIプロファイル選択")
+        self.selected_profile_id: Optional[str] = None
+        self.log_manager = LogManager()
+
+        layout = QVBoxLayout(self)
+        label = QLabel("使用するAPIプロファイルを選択してください:")
+        layout.addWidget(label)
+
+        self.combo_box = QComboBox()
+
+        profiles_to_display = []
+        if initial_selection_filter:
+            temp_ids_in_dialog = set()
+            for profile_id_to_filter in initial_selection_filter:
+                if profile_id_to_filter in temp_ids_in_dialog:
+                    continue
+                profile = next((p for p in api_profiles if p.get("id") == profile_id_to_filter), None)
+                if profile:
+                    profiles_to_display.append(profile)
+                    temp_ids_in_dialog.add(profile_id_to_filter)
+            
+            if not profiles_to_display:
+                self.log_manager.warning(f"ApiSelectionDialog: initial_selection_filterで有効なプロファイルが見つかりませんでした。全プロファイルを表示します。Filter: {initial_selection_filter}", context="UI_DIALOG_WARN")
+                profiles_to_display = api_profiles
+        else:
+            profiles_to_display = api_profiles
+
+        selected_text_to_set = None
+        if initial_selection_filter and profiles_to_display:
+            selected_text_to_set = profiles_to_display[0].get("name", profiles_to_display[0].get("id"))
+        elif not initial_selection_filter and current_profile_id:
+            profile = next((p for p in profiles_to_display if p.get("id") == current_profile_id), None)
+            if profile:
+                selected_text_to_set = profile.get("name", profile.get("id"))
+
+        for profile in profiles_to_display:
+            profile_id = profile.get("id")
+            profile_name = profile.get("name", profile_id)
+            if profile_id:
+                self.combo_box.addItem(profile_name, userData=profile_id)
+        
+        if selected_text_to_set:
+            self.combo_box.setCurrentText(selected_text_to_set)
+        elif self.combo_box.count() > 0 :
+            self.combo_box.setCurrentIndex(0)
+
+        layout.addWidget(self.combo_box)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def accept(self):
+        self.selected_profile_id = self.combo_box.currentData()
+        super().accept()
 
 class MainWindow(QMainWindow):
     def __init__(self, cli_args: Optional[argparse.Namespace] = None):
@@ -181,7 +242,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(None, "設定エラー", "選択可能なAPIプロファイルがありません。")
                 sys.exit(1)
 
-            dialog = ProfileSelectionDialog(profiles_for_dialog_display, initial_dialog_selection_id, self)
+            dialog = ApiSelectionDialog(profiles_for_dialog_display, initial_dialog_selection_id, self)
             if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_profile_id:
                 selected_id = dialog.selected_profile_id
                 self.active_api_profile = ConfigManager.get_api_profile(self.config, selected_id)
@@ -382,7 +443,6 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
-        self.about_action = QAction("🛈バージョン", self); self.about_action.triggered.connect(self._show_about_dialog); toolbar.addAction(self.about_action)
         spacer = QWidget(); spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred); toolbar.addWidget(spacer)
         self.api_mode_toggle_button = QPushButton(); self.api_mode_toggle_button.setCheckable(False); self.api_mode_toggle_button.clicked.connect(self._toggle_api_mode); self.api_mode_toggle_button.setMinimumWidth(120)
         self.api_mode_toggle_button.setStyleSheet("""
@@ -584,7 +644,7 @@ class MainWindow(QMainWindow):
             current_option_values=current_option_values,
             global_config=self.config,
             api_profile=self.active_api_profile,
-            api_client=self.ocr_orchestrator.api_client,
+            api_client=self.ocr_orchestrator.api_client, # この行を修正
             parent=self
         )
         
@@ -600,6 +660,7 @@ class MainWindow(QMainWindow):
             ConfigManager.save(self.config)
             self.log_manager.info("Options saved.", context="CONFIG_EVENT")
             
+            # ★【修正】Orchestratorに設定更新を通知します。これによりOrchestrator内部のapi_clientも更新されます。
             self.active_api_profile = ConfigManager.get_active_api_profile(self.config)
             self.ocr_orchestrator.update_config(self.config, self.active_api_profile)
             self.file_scanner.config = self.config
@@ -608,6 +669,7 @@ class MainWindow(QMainWindow):
             self._update_api_mode_toggle_button_display()
             self.log_manager.info(f"Settings changed. Re-evaluating file statuses based on new options.", context="CONFIG_EVENT")
             
+            # 設定変更によるファイルリストの再評価ロジック (変更なし)
             new_upload_max_mb = ConfigManager.get_active_api_options_values(self.config).get("upload_max_size_mb", 60)
             new_upload_max_bytes = new_upload_max_mb * 1024 * 1024
             new_file_actions_cfg = self.config.get("file_actions", {})
@@ -629,9 +691,6 @@ class MainWindow(QMainWindow):
         else:
             self.log_manager.info("Options dialog cancelled.", context="UI_ACTION")
 
-    def _show_about_dialog(self):
-        show_about_dialog(self)
-
     def confirm_start_ocr(self):
         if hasattr(self, 'ocr_orchestrator'): sorted_list_to_process = self.list_view.get_sorted_file_info_list(); self.ocr_orchestrator.confirm_and_start_ocr(sorted_list_to_process, self.input_folder_path, self)
 
@@ -651,14 +710,17 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "対象ファイルなし", "仕分け対象として選択（チェック）されているファイルがありません。")
             return
 
+        # 1. ポップアップを廃止し、configから仕分けルールIDを取得
         active_options = ConfigManager.get_active_api_options_values(self.config)
         sort_config_id = active_options.get("sortConfigId", "").strip()
 
+        # 2. IDが設定されているかチェック
         if not sort_config_id:
             QMessageBox.warning(self, "設定エラー", "仕分けルールIDが設定されていません。\n\n「⚙️設定」から仕分けルールIDを設定してください。")
             self.log_manager.warning("仕分け処理が中止されました。理由: 仕分けルールID未設定", context="SORT_FLOW")
             return
         
+        # 3. ご要望のあったCSVダウンロードに関する警告は残す
         is_dx_standard = self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2'
         if is_dx_standard:
             file_actions = self.config.get("file_actions", {})
@@ -677,6 +739,7 @@ class MainWindow(QMainWindow):
                     self.log_manager.info("ユーザーが出力設定の警告後にキャンセルしました。", context="SORT_FLOW")
                     return
 
+        # 4. 最終確認のダイアログで、設定されたIDを表示
         reply = QMessageBox.question(self, "仕分け実行の確認",
                                     f"{len(files_to_process)} 件のファイルで仕分け処理を開始します。\n\n"
                                     f"使用する仕分けルールID:\n{sort_config_id}\n\n"
@@ -773,10 +836,12 @@ class MainWindow(QMainWindow):
             target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED
             fulltext = ""
             if isinstance(ocr_result_data_for_original, dict):
+                # ↓↓↓ このif/elifブロックを追加 ↓↓↓
                 if ocr_result_data_for_original.get("status") == "awaiting_manual_action":
                     target_file_info.status = "手動操作待ち"
-                    target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED
+                    target_file_info.ocr_engine_status = OCR_STATUS_COMPLETED # API呼び出しとポーリングは完了しているため
                     fulltext = ocr_result_data_for_original.get("message", "手動操作待ち")
+                # ↑↑↑ ここまで追加 ↑↑↑
                 elif ocr_result_data_for_original.get("status") == "ocr_registered":
                     fulltext = f"(登録成功 Job ID: {target_file_info.job_id or 'N/A'})"
                     target_file_info.status = "OCR登録済 (結果待機中)"
@@ -888,18 +953,26 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rescan_action'):
             self.rescan_action.setEnabled(can_rescan)
         
+        # 「仕分け」ボタンの有効/無効を制御するロジック
         can_start_sort = False
+        # 1. 処理中でない & 2. プロファイルがdx_standard_v2である
         if not running and self.active_api_profile and self.active_api_profile.get('id') == 'dx_standard_v2':
+            # 3. チェックされたファイルが1つ以上ある
             if any(f.is_checked for f in self.processed_files_info):
                 can_start_sort = True
         
         if hasattr(self, 'start_sort_action'):
             self.start_sort_action.setEnabled(can_start_sort)
-        
+
+        # 「CSVダウンロード」ボタンの有効/無効を制御するロジック
+        # (ここは元から can_download_csv で制御されているので変更なし)
+
         can_download_csv = False
         if not running and hasattr(self, 'list_view'):
             selected_rows = self.list_view.table.selectionModel().selectedRows()
             if len(selected_rows) == 1:
+                # 画面上の行インデックスから、元のデータリストのインデックスを引く必要がある
+                # ただし、ソートされているため、選択されたアイテムから直接Fileinfoを取得する
                 no_item = self.list_view.table.item(selected_rows[0].row(), 1)
                 if no_item:
                     try:
@@ -912,7 +985,7 @@ class MainWindow(QMainWindow):
                             self.active_api_profile.get('id') == 'dx_standard_v2'):
                             can_download_csv = True
                     except (ValueError, StopIteration):
-                        pass
+                        pass # itemから数値が取れない場合は何もしない
         
         if hasattr(self, 'download_csv_action'):
             self.download_csv_action.setEnabled(can_download_csv)
