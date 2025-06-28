@@ -1,4 +1,4 @@
-# ocr_worker_fulltext.py
+# ocr_worker_atypical.py
 
 import os
 import json
@@ -9,28 +9,28 @@ import threading
 import tempfile
 from typing import Optional, Dict, Any, List, Tuple
 
-from PyPDF2 import PdfReader, PdfWriter, PdfMerger
+from PyPDF2 import PdfReader, PdfWriter
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from app_constants import (
     OCR_STATUS_PROCESSING, OCR_STATUS_SPLITTING, OCR_STATUS_PART_PROCESSING,
     OCR_STATUS_MERGING, OCR_STATUS_COMPLETED, OCR_STATUS_FAILED
 )
-from api_client_fulltext import OCRApiClientFulltext
+from api_client_atypical import OCRApiClientAtypical
 
 # ポーリング設定のデフォルト値
 DEFAULT_POLLING_INTERVAL_SECONDS = 3
 DEFAULT_POLLING_MAX_ATTEMPTS = 60
 
 
-class OcrWorkerFulltext(QThread):
+class OcrWorkerAtypical(QThread):
     file_processed = pyqtSignal(int, str, object, object, object, object)
     auto_csv_processed = pyqtSignal(int, str, object)
     searchable_pdf_processed = pyqtSignal(int, str, object, object)
     all_files_processed = pyqtSignal()
     original_file_status_update = pyqtSignal(str, str)
 
-    def __init__(self, api_client: OCRApiClientFulltext, files_to_process_tuples: List[Tuple[str, int]],
+    def __init__(self, api_client: OCRApiClientAtypical, files_to_process_tuples: List[Tuple[str, int]],
                 input_root_folder: str, log_manager, config: Dict[str, Any],
                 api_profile: Optional[Dict[str, Any]]):
         super().__init__()
@@ -48,7 +48,7 @@ class OcrWorkerFulltext(QThread):
 
         self.file_actions_config = self.config.get("file_actions", {})
         self.main_temp_dir_for_splits: Optional[str] = None
-        self.log_manager.debug(f"FulltextOcrWorker initialized for API: {self.active_api_profile.get('name', 'N/A') if self.active_api_profile else 'Unknown'}",
+        self.log_manager.debug(f"AtypicalOcrWorker initialized for API: {self.active_api_profile.get('name', 'N/A') if self.active_api_profile else 'Unknown'}",
                                 context="WORKER_LIFECYCLE", num_original_files=len(self.files_to_process_tuples))
         self.encountered_fatal_error = False
         self.fatal_error_info: Optional[Dict[str, Any]] = None
@@ -210,33 +210,9 @@ class OcrWorkerFulltext(QThread):
         
         return split_part_paths, None
 
-    def _merge_searchable_pdfs(self, pdf_part_paths: List[str], final_merged_pdf_path: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
-        if not pdf_part_paths:
-            return None, {"message": "結合対象のPDF部品がありません。", "code": "MERGE_NO_PARTS"}
-        merger = PdfMerger()
-        try:
-            for part_path in pdf_part_paths:
-                if os.path.exists(part_path):
-                    merger.append(part_path)
-                else:
-                    try: merger.close()
-                    except Exception: pass
-                    return None, {"message": f"結合用のPDF部品が見つかりません: {os.path.basename(part_path)}", "code": "MERGE_PART_NOT_FOUND"}
-            os.makedirs(os.path.dirname(final_merged_pdf_path), exist_ok=True)
-            merger.write(final_merged_pdf_path)
-            return final_merged_pdf_path, None
-        except Exception as e:
-            if os.path.exists(final_merged_pdf_path):
-                try: os.remove(final_merged_pdf_path)
-                except Exception: pass
-            return None, {"message": f"PDF結合エラー: {str(e)}", "code": "MERGE_EXCEPTION", "detail": str(e)}
-        finally:
-            try: merger.close()
-            except Exception: pass
-
     def run(self):
         thread_id = threading.get_ident()
-        self.log_manager.debug(f"FulltextOcrWorker thread started.", context="WORKER_LIFECYCLE", thread_id=thread_id)
+        self.log_manager.debug(f"AtypicalOcrWorker thread started.", context="WORKER_LIFECYCLE", thread_id=thread_id)
         if not self._ensure_main_temp_dir_exists():
             self.all_files_processed.emit()
             return
@@ -249,7 +225,7 @@ class OcrWorkerFulltext(QThread):
         try:
             for _, (original_file_path, original_file_global_idx) in enumerate(self.files_to_process_tuples):
                 if not self.is_running or self.encountered_fatal_error: break
-
+                
                 self.original_file_status_update.emit(original_file_path, f"{OCR_STATUS_PROCESSING} (準備中)")
                 original_file_basename = os.path.basename(original_file_path)
                 original_file_parent_dir = os.path.dirname(original_file_path)
@@ -261,192 +237,120 @@ class OcrWorkerFulltext(QThread):
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, prep_error, "エラー", None)
                     self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイル準備エラー", "code": "FILE_PREP_ERROR"})
                     continue
+
+                is_multi_part = len(files_to_ocr) > 1
+                part_results = []
+                all_parts_ok = True
+                final_ocr_error = None
                 
                 parts_results_temp_dir = os.path.join(os.path.dirname(files_to_ocr[0]), base_name_for_output_prefix + "_results_parts")
                 os.makedirs(parts_results_temp_dir, exist_ok=True)
 
-                is_multi_part = len(files_to_ocr) > 1
-                part_ocr_results = []
-                part_pdf_paths = []
-                all_parts_ok = True
-                final_ocr_error = None
-                final_pdf_error = None
-                
                 for part_idx, part_path in enumerate(files_to_ocr):
                     if not self.is_running or self.encountered_fatal_error:
                         all_parts_ok = False
-                        if not final_ocr_error: final_ocr_error = {"message": "処理が中断/停止されました", "code": "USER_INTERRUPT"}
-                        if not final_pdf_error: final_pdf_error = {"message": "処理が中断/停止されました", "code": "USER_INTERRUPT"}
+                        final_ocr_error = {"message": "処理が中断/停止されました", "code": "USER_INTERRUPT"}
                         break
                     
                     status_msg = f"{OCR_STATUS_PART_PROCESSING} ({part_idx + 1}/{len(files_to_ocr)})" if is_multi_part else OCR_STATUS_PROCESSING
                     self.original_file_status_update.emit(original_file_path, status_msg)
 
-                    # --- OCR処理 ---
-                    part_ocr_result_json = None
-                    part_ocr_error = None
-                    part_job_id = None
-                    
                     ocr_response, ocr_error = self.api_client.read_document(part_path)
+                    
+                    part_result_json = None
                     if ocr_error:
-                        part_ocr_error = ocr_error
-                    elif ocr_response and "registered" in ocr_response.get("status", ""):
-                        part_job_id = ocr_response.get("job_id")
-                        if not part_job_id:
-                            part_ocr_error = {"message": "OCRジョブIDが取得できませんでした。", "code": "DXSUITE_NO_JOB_ID"}
-                        else:
-                            for attempt in range(max_polling_attempts):
-                                if not self.is_running: break
-                                poll_status_msg = f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})"
-                                self.original_file_status_update.emit(original_file_path, poll_status_msg)
-                                
-                                poll_res, poll_err = self.api_client.get_ocr_result(part_job_id)
-                                if poll_err:
-                                    part_ocr_error = poll_err
-                                    break
-                                
-                                api_status = poll_res.get("status")
-                                if api_status == "done":
-                                    part_ocr_result_json = poll_res
-                                    break
-                                elif api_status == "error":
-                                    part_ocr_error = {"message": "APIがエラーを返しました。", "code": "DXSUITE_OCR_API_ERROR", "detail": poll_res}
-                                    break
-                                time.sleep(polling_interval)
-                            
-                            if not part_ocr_result_json and not part_ocr_error and self.is_running:
-                                part_ocr_error = {"message": "結果取得がタイムアウトしました。", "code": "DXSUITE_OCR_TIMEOUT"}
-                    else: # Demoモードなど
-                        part_ocr_result_json = ocr_response
-
-                    if part_ocr_error:
                         all_parts_ok = False
-                        final_ocr_error = part_ocr_error
+                        final_ocr_error = ocr_error
                         break
 
-                    part_ocr_results.append({"path": part_path, "result": part_ocr_result_json, "job_id": part_job_id})
-                    
-                    # --- JSON保存 ---
-                    if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
+                    if ocr_response and "registered" in ocr_response.get("status", ""):
+                        reception_id = ocr_response.get("receptionId")
+                        if not reception_id:
+                            all_parts_ok = False
+                            final_ocr_error = {"message": "receptionIdが取得できませんでした。", "code": "POLL_NO_RECEPTIONID"}
+                            break
+                        
+                        for attempt in range(max_polling_attempts):
+                            if not self.is_running:
+                                all_parts_ok = False
+                                final_ocr_error = {"message": "ポーリングが中断されました。", "code": "USER_INTERRUPT_POLL"}
+                                break
+                            
+                            poll_status = f"{OCR_STATUS_PART_PROCESSING} (テキスト結果待機中 {attempt + 1}/{max_polling_attempts})"
+                            self.original_file_status_update.emit(original_file_path, poll_status)
+
+                            poll_res, poll_err = self.api_client.get_ocr_result(reception_id)
+                            if poll_err:
+                                all_parts_ok = False
+                                final_ocr_error = poll_err
+                                break
+                            
+                            api_status = poll_res.get("status")
+                            if api_status == 2:
+                                part_result_json = poll_res
+                                break
+                            elif api_status == 3:
+                                all_parts_ok = False
+                                final_ocr_error = {"message": "APIがエラーを返しました。", "code": "DX_ATYPICAL_API_ERROR", "detail": poll_res}
+                                break
+                            
+                            time.sleep(polling_interval)
+                        
+                        if final_ocr_error or not part_result_json:
+                            if not final_ocr_error:
+                                final_ocr_error = {"message": "結果取得がタイムアウトしました。", "code": "DX_ATYPICAL_OCR_TIMEOUT"}
+                            all_parts_ok = False
+                            break
+                    else: # Demoモードなど即時応答の場合
+                        part_result_json = ocr_response
+
+                    if part_result_json:
+                        part_results.append({"path": part_path, "result": part_result_json})
+                        # JSONを一時フォルダに保存
                         part_json_path = os.path.join(parts_results_temp_dir, f"{os.path.splitext(os.path.basename(part_path))[0]}.json")
                         with open(part_json_path, 'w', encoding='utf-8') as f:
-                            json.dump(part_ocr_result_json, f, ensure_ascii=False, indent=2)
-                    
-                    # --- サーチャブルPDF作成 ---
-                    if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                        pdf_options = {"fullOcrJobId": part_job_id, **self.current_api_options_values}
-                        pdf_response, pdf_error = self.api_client.make_searchable_pdf(part_path, pdf_options)
-                        
-                        part_pdf_content = None
-                        if pdf_error:
-                            final_pdf_error = pdf_error
-                            all_parts_ok = False
-                            break
-                        # --- ▼▼▼ ここから修正 ▼▼▼ ---
+                            json.dump(part_result_json, f, ensure_ascii=False, indent=2)
 
-                        # Demoモードではpdf_responseに直接PDFのbytesデータが入ることがあるため、型で判定
-                        if isinstance(pdf_response, bytes):
-                            part_pdf_content = pdf_response
+                    if delete_job_after_processing and ocr_response.get("receptionId"):
+                        self.api_client.delete_job(ocr_response["receptionId"])
 
-                        # Liveモードではpdf_responseはdict型で、特定のステータスを持つ
-                        elif isinstance(pdf_response, dict) and "searchable_pdf_registered" in pdf_response.get("status", ""):
-                            spdf_job_id = pdf_response.get("job_id")
-                            if not spdf_job_id:
-                                final_pdf_error = {"message": "サーチャブルPDFジョブIDが取得できませんでした。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
-                                all_parts_ok = False
-                                break
-                            
-                            for attempt in range(max_polling_attempts):
-                                if not self.is_running: break
-                                poll_status_msg = f"{OCR_STATUS_PART_PROCESSING} (PDF結果待機中 {attempt + 1}/{max_polling_attempts})"
-                                self.original_file_status_update.emit(original_file_path, poll_status_msg)
-
-                                pdf_content, pdf_poll_error = self.api_client.get_searchable_pdf_content(spdf_job_id)
-                                if pdf_poll_error:
-                                    if "STATUS_INPROGRESS" in pdf_poll_error.get("code", "").upper():
-                                        time.sleep(polling_interval)
-                                        continue
-                                    final_pdf_error = pdf_poll_error
-                                    all_parts_ok = False
-                                    break
-                                part_pdf_content = pdf_content
-                                break
-                            
-                            if not part_pdf_content and not final_pdf_error and self.is_running:
-                                final_pdf_error = {"message": "サーチャブルPDF取得がタイムアウトしました。", "code": "DXSUITE_SPDF_TIMEOUT"}
-                                all_parts_ok = False
-                        else: # Demoモードなど
-                            part_pdf_content = pdf_response
-                        
-                        if part_pdf_content:
-                            part_pdf_path = os.path.join(parts_results_temp_dir, os.path.basename(part_path))
-                            with open(part_pdf_path, 'wb') as f:
-                                f.write(part_pdf_content)
-                            part_pdf_paths.append(part_pdf_path)
-                        elif not final_pdf_error:
-                            all_parts_ok = False
-                            final_pdf_error = {"message": "PDF作成で有効な応答がありませんでした", "code": "PDF_NO_VALID_RESPONSE"}
-                            break
-
-                    if delete_job_after_processing and part_job_id:
-                        self.api_client.delete_job(part_job_id)
-
-                # --- 全部品の処理完了後 ---
-                job_id_for_signal = part_ocr_results[0]['job_id'] if part_ocr_results else None
+                # 部品ごとの処理ループ終了後
+                json_status_for_ui = "作成しない(設定)"
                 if all_parts_ok:
-                    final_ocr_result = part_ocr_results[0]['result'] if not is_multi_part else {"status": OCR_STATUS_COMPLETED, "detail": f"{len(part_ocr_results)}部品のOCR完了"}
+                    final_ocr_result = part_results[0]['result'] if not is_multi_part else {"status": OCR_STATUS_COMPLETED, "detail": f"{len(part_results)}部品のOCR完了"}
                     
-                    json_status_ui = "作成しない(設定)"
-                    if self.file_actions_config.get("output_format", "both") in ["json_only", "both"]:
-                        final_json_dir = os.path.join(original_file_parent_dir, results_folder_name)
-                        os.makedirs(final_json_dir, exist_ok=True)
-                        if is_multi_part:
-                            for item in os.listdir(parts_results_temp_dir):
-                                if item.endswith(".json"): shutil.copy2(os.path.join(parts_results_temp_dir, item), self._get_unique_filepath(final_json_dir, item))
-                            json_status_ui = f"{len(part_ocr_results)}個の部品JSON成功"
-                        else:
-                            shutil.copy2(os.path.join(parts_results_temp_dir, f"{os.path.splitext(os.path.basename(files_to_ocr[0]))[0]}.json"), self._get_unique_filepath(final_json_dir, f"{base_name_for_output_prefix}.json"))
-                            json_status_ui = "JSON作成成功"
-                    
-                    self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result, None, json_status_ui, job_id_for_signal)
+                    # 最終的なJSONを出力
+                    final_json_dir = os.path.join(original_file_parent_dir, results_folder_name)
+                    os.makedirs(final_json_dir, exist_ok=True)
+                    if is_multi_part:
+                        for item in os.listdir(parts_results_temp_dir):
+                            if item.endswith(".json"):
+                                shutil.copy2(os.path.join(parts_results_temp_dir, item), self._get_unique_filepath(final_json_dir, item))
+                        json_status_for_ui = f"{len(part_results)}個の部品JSON成功"
+                    else:
+                        final_json_path = self._get_unique_filepath(final_json_dir, f"{base_name_for_output_prefix}.json")
+                        shutil.copy2(os.path.join(parts_results_temp_dir, f"{os.path.splitext(os.path.basename(files_to_ocr[0]))[0]}.json"), final_json_path)
+                        json_status_for_ui = "JSON作成成功"
 
-                    pdf_final_path_for_signal = None
-                    if self.file_actions_config.get("output_format", "both") in ["pdf_only", "both"]:
-                        merge_pdfs = self.current_api_options_values.get("merge_split_pdf_parts", True)
-                        if is_multi_part and merge_pdfs:
-                            self.original_file_status_update.emit(original_file_path, OCR_STATUS_MERGING)
-                            final_pdf_dir = os.path.join(original_file_parent_dir, results_folder_name)
-                            merged_pdf_path = self._get_unique_filepath(final_pdf_dir, f"{base_name_for_output_prefix}.pdf")
-                            pdf_final_path_for_signal, final_pdf_error = self._merge_searchable_pdfs(part_pdf_paths, merged_pdf_path)
-                        elif part_pdf_paths:
-                            # 単一部品 or マージしない設定
-                            final_pdf_dir = os.path.join(original_file_parent_dir, results_folder_name)
-                            os.makedirs(final_pdf_dir, exist_ok=True)
-                            for pdf_path in part_pdf_paths:
-                                dest_path = self._get_unique_filepath(final_pdf_dir, os.path.basename(pdf_path))
-                                shutil.copy2(pdf_path, dest_path)
-                                if not is_multi_part: pdf_final_path_for_signal = dest_path
-                            if is_multi_part and not merge_pdfs:
-                                final_pdf_error = {"message": f"{len(part_pdf_paths)}個の部品PDF出力成功", "code": "PARTS_COPIED_SUCCESS"}
-                    elif self.file_actions_config.get("output_format", "both") == "json_only":
-                        final_pdf_error = {"message": "作成しない(設定)", "code": "PDF_NOT_REQUESTED"}
+                    self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result, None, json_status_for_ui, ocr_response.get("receptionId"))
+                else:
+                    json_status_for_ui = "エラー" if not (self.user_stopped or self.encountered_fatal_error) else "中断"
+                    self.file_processed.emit(original_file_global_idx, original_file_path, None, final_ocr_error, json_status_for_ui, None)
 
-                    self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, pdf_final_path_for_signal, final_pdf_error)
-
-                else: # if not all_parts_ok
-                    self.file_processed.emit(original_file_global_idx, original_file_path, None, final_ocr_error, "エラー", job_id_for_signal)
-                    self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, final_pdf_error or {"message": "OCRエラーのためPDF作成スキップ", "code": "PDF_SKIPPED_DUE_TO_OCR_ERROR"})
+                # 非定型はPDFをサポートしない
+                pdf_error = {"message": "作成対象外", "code": "NOT_APPLICABLE"}
+                self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, pdf_error)
 
                 # ファイル移動
                 if os.path.exists(original_file_path):
                     self._move_file_if_configured(original_file_path, all_parts_ok)
-                
+
                 self._try_cleanup_specific_temp_dirs(os.path.dirname(files_to_ocr[0]), parts_results_temp_dir)
 
         finally:
             self._cleanup_main_temp_dir()
             self.all_files_processed.emit()
-            self.log_manager.debug(f"FulltextOcrWorker thread finished.", context="WORKER_LIFECYCLE", thread_id=thread_id)
+            self.log_manager.debug(f"AtypicalOcrWorker thread finished.", context="WORKER_LIFECYCLE", thread_id=thread_id)
 
     def stop(self):
         self.is_running = False
@@ -473,7 +377,7 @@ class OcrWorkerFulltext(QThread):
                     return
             
             shutil.move(file_path, final_dest_path)
-    
+
     def _try_cleanup_specific_temp_dirs(self, source_parts_dir: Optional[str], results_parts_dir: Optional[str]):
         if source_parts_dir and os.path.isdir(source_parts_dir):
             shutil.rmtree(source_parts_dir)

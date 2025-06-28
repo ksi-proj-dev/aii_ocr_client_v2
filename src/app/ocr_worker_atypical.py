@@ -263,7 +263,13 @@ class OcrWorkerAtypical(QThread):
                         final_ocr_error = ocr_error
                         break
 
-                    if ocr_response and "registered" in ocr_response.get("status", ""):
+                    # --- ▼▼▼ ここから修正 ▼▼▼ ---
+                    # Liveモードの応答は {'status': 'registered', ...} という辞書。
+                    # Demoモードの応答は {'status': 2, ...} という辞書。
+                    # ocr_response.get("status") が文字列であることを確認してから `in` 演算子を使用する。
+                    response_status = ocr_response.get("status")
+                    if ocr_response and isinstance(response_status, str) and "registered" in response_status:
+                    # --- ▲▲▲ ここまで修正 ▲▲▲ ---
                         reception_id = ocr_response.get("receptionId")
                         if not reception_id:
                             all_parts_ok = False
