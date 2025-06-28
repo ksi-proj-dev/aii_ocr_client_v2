@@ -20,3 +20,19 @@ fi
 {作業ディレクトリ}/aii_ocr_client_v2
 $
 ```
+
+## Python パッケージ一覧
+
+### インストール済みパッケージ一覧を作成
+
+```
+- $ cd aii_ocr_client_v2/src
+- $ pip freeze > requirements.txt
+```
+
+### 一覧を元にパッケージインストール
+
+```
+- $ cd aii_ocr_client_v2/src
+- $ pip install -r requirements.txt
+```
