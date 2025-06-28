@@ -1,19 +1,28 @@
 ; Inno Setup スクリプト AI inside OCR DX Suite Client for API-V2
 
+; カレントディレクトリは .iss の設置場所
+
+#define MyAppName "AI inside OCR DX Suite Client for API-V2"
+#define MyAppExeName "dx_suite_client.exe"
+#define SrcDir "../../src"
+
+
 [Setup]
 ; --- アプリの基本情報 ---
-AppName=AI inside OCR DX Suite Client for API-V2
+
+AppName={#MyAppName}
 AppVersion=0.1.0
+
 ; {autopf} は Program Files フォルダ (例: C:\Program Files (x86)) を指します
-DefaultDirName={autopf}\AI inside OCR DX Suite Client for API-V2
-DefaultGroupName=AI inside OCR DX Suite Client for API-V2
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
 
 ; ↓ 以下の2行が重要です
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 
 ; アンインストール情報に表示されるアイコン
-UninstallDisplayIcon={app}\dx_suite_client.exe
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 ; インストーラーの出力先とファイル名
 OutputDir=.\Installer
@@ -32,7 +41,7 @@ Name: "japanese"; MessagesFile: "compiler:Default.isl"
 ; --- インストールするファイル ---
 ; pyinstallerで作成した .exe ファイルを指定します
 ; Source: "配布したいファイルのパス"; DestDir: "インストール先のフォルダ"
-Source: "C:\Users\MP21-06\Desktop\ksi\AI inside OCR Client\aii_ocr_client_v2\src\app\dist\dx_suite_client.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcDir}\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon_all"; Description: "デスクトップに「DX Suite 全文,標準,非定型 OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
@@ -42,20 +51,21 @@ Name: "desktopicon_atypical"; Description: "デスクトップに「DX Suite 非
 
 [Icons]
 ; --- スタートメニューのショートカット (上記のまま) ---
-Name: "{group}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\dx_suite_client.exe"
-Name: "{group}\DX Suite 全文OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_fullocr_v2"
-Name: "{group}\DX Suite 標準OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_standard_v2"
-Name: "{group}\DX Suite 非定型OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_atypical_v2"
+Name: "{group}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fullocr_v2"
+Name: "{group}\DX Suite 標準OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_standard_v2"
+Name: "{group}\DX Suite 非定型OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_atypical_v2"
 
 ; --- デスクトップのショートカット（ユーザーが選択可能） ---
-Name: "{autodesktop}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\dx_suite_client.exe"; Tasks: desktopicon_all
-Name: "{autodesktop}\DX Suite 全文OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_fullocr_v2"; Tasks: desktopicon_fullocr
-Name: "{autodesktop}\DX Suite 標準OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_standard_v2"; Tasks: desktopicon_standard
-Name: "{autodesktop}\DX Suite 非定型OCR"; Filename: "{app}\dx_suite_client.exe"; Parameters: "--api dx_atypical_v2"; Tasks: desktopicon_atypical
+Name: "{autodesktop}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon_all
+Name: "{autodesktop}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fullocr_v2"; Tasks: desktopicon_fullocr
+Name: "{autodesktop}\DX Suite 標準OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_standard_v2"; Tasks: desktopicon_standard
+Name: "{autodesktop}\DX Suite 非定型OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_atypical_v2"; Tasks: desktopicon_atypical
 
 [Run]
 ; --- インストール完了後にアプリを起動するかのチェックボックス ---
-Filename: "{app}\dx_suite_client.exe"; Description: "{cm:LaunchProgram,AI inside OCR DX Suite Client for API-V2}"; Flags: nowait postinstall skipifsilent
+; Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,AI inside OCR DX Suite Client for API-V2}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,アプリケーション}"; Flags: nowait postinstall skipifsilent
 
 ; =================================================================
 ; ★ アンインストール時に特定のファイルを削除する設定
@@ -70,11 +80,11 @@ Filename: "{app}\dx_suite_client.exe"; Description: "{cm:LaunchProgram,AI inside
 
 ; Roamingフォルダにある設定ファイル(config.json)を削除
 ; "DX Suite" を含んだ正しいパスを指定します
-Type: files; Name: "{userappdata}\KSI\AI inside OCR DX Suite Client for API-V2\config.json"
+Type: files; Name: "{userappdata}\KSI\{#MyAppName}\config.json"
 
 ; LocalフォルダにあるLogsフォルダを、中身ごとすべて削除
-Type: filesandordirs; Name: "{localappdata}\KSI\AI inside OCR DX Suite Client for API-V2\Logs"
+Type: filesandordirs; Name: "{localappdata}\KSI\{#MyAppName}\Logs"
 
 ; 上記の削除後、フォルダが空になった場合に、その親フォルダ自体も削除
-Type: dirifempty; Name: "{userappdata}\KSI\AI inside OCR DX Suite Client for API-V2"
-Type: dirifempty; Name: "{localappdata}\KSI\AI inside OCR DX Suite Client for API-V2"
+Type: dirifempty; Name: "{userappdata}\KSI\{#MyAppName}"
+Type: dirifempty; Name: "{localappdata}\KSI\{#MyAppName}"
