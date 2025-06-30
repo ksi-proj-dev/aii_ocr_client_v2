@@ -117,7 +117,7 @@ class SortWorker(QThread):
                 completed_ids_in_this_loop = []
                 
                 for unit_id in ocr_unit_ids_to_poll:
-                    ocr_status_result, ocr_status_error = self.api_client.get_status(unit_id)
+                    ocr_status_result, ocr_status_error = self.api_client.get_dx_standard_status(unit_id)
                     if ocr_status_error:
                         self.sort_finished.emit(False, ocr_status_error)
                         return
@@ -151,11 +151,11 @@ class SortWorker(QThread):
             for unit_id in all_unit_ids_for_download:
                 if not self.is_running: break
 
-                status_res, _ = self.api_client.get_status(unit_id)
+                status_res, _ = self.api_client.get_dx_standard_status(unit_id)
                 unit_name = status_res[0].get("unitName", unit_id) if (status_res and status_res[0]) else unit_id
 
                 if output_json:
-                    json_data, json_error = self.api_client.get_status(unit_id)
+                    json_data, json_error = self.api_client.get_dx_standard_result(unit_id)
                     if json_error:
                         download_errors.append(f"ユニット {unit_name} のJSON取得失敗: {json_error.get('message')}")
                     else:

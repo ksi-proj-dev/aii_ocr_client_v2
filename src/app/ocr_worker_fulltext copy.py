@@ -342,7 +342,14 @@ class OcrWorkerFulltext(QThread):
                             final_pdf_error = pdf_error
                             all_parts_ok = False
                             break
-                        elif pdf_response and "searchable_pdf_registered" in pdf_response.get("status", ""):
+                        # --- ▼▼▼ ここから修正 ▼▼▼ ---
+
+                        # Demoモードではpdf_responseに直接PDFのbytesデータが入ることがあるため、型で判定
+                        if isinstance(pdf_response, bytes):
+                            part_pdf_content = pdf_response
+
+                        # Liveモードではpdf_responseはdict型で、特定のステータスを持つ
+                        elif isinstance(pdf_response, dict) and "searchable_pdf_registered" in pdf_response.get("status", ""):
                             spdf_job_id = pdf_response.get("job_id")
                             if not spdf_job_id:
                                 final_pdf_error = {"message": "サーチャブルPDFジョブIDが取得できませんでした。", "code": "DXSUITE_SPDF_NO_JOB_ID"}
