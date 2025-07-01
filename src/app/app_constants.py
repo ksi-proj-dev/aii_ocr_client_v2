@@ -6,7 +6,7 @@ import os
 # --- アプリケーション情報 ---
 APP_NAME = "AI inside OCR Client for API-V2"
 APP_AUTHOR = "KSI"
-APP_VERSION = "0.0.18"
+APP_VERSION = "0.1.0"
 APP_COPYRIGHT = f"© {APP_AUTHOR}. All rights reserved."
 APP_WEBSITE_URL = "https://ksin.jp/"
 
