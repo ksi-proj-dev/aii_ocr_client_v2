@@ -744,11 +744,7 @@ class MainWindow(QMainWindow):
             return
 
         self.log_manager.info(f"'{file_info.name}' のCSVダウンロードを開始します (Unit ID: {file_info.job_id})", context="CSV_DOWNLOAD")
-        
-        # === 修正箇所 START ===
-        # self.api_client ではなく self.ocr_orchestrator.api_client を使用する
-        csv_data, error = self.ocr_orchestrator.api_client.download_standard_csv(file_info.job_id)
-        # === 修正箇所 END ===
+        csv_data, error = self.api_client.download_standard_csv(file_info.job_id)
 
         if error:
             self.log_manager.error(f"CSVダウンロードAPIエラー: {error}", context="CSV_DOWNLOAD")

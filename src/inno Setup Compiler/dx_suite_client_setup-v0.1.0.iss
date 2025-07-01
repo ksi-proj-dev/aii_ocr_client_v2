@@ -45,20 +45,20 @@ Source: "{#SrcDir}\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon_all"; Description: "デスクトップに「DX Suite 全文,標準,非定型 OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
-Name: "desktopicon_fullocr"; Description: "デスクトップに「DX Suite 全文OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
+Name: "desktopicon_fulltext"; Description: "デスクトップに「DX Suite 全文OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
 Name: "desktopicon_standard"; Description: "デスクトップに「DX Suite 標準OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
 Name: "desktopicon_atypical"; Description: "デスクトップに「DX Suite 非定型OCR」のショートカットを作成する"; GroupDescription: "デスクトップショートカット:";
 
 [Icons]
 ; --- スタートメニューのショートカット (上記のまま) ---
 Name: "{group}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fullocr_v2"
+Name: "{group}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fulltext_v2"
 Name: "{group}\DX Suite 標準OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_standard_v2"
 Name: "{group}\DX Suite 非定型OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_atypical_v2"
 
 ; --- デスクトップのショートカット（ユーザーが選択可能） ---
 Name: "{autodesktop}\DX Suite 全文,標準,非定型 OCR"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon_all
-Name: "{autodesktop}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fullocr_v2"; Tasks: desktopicon_fullocr
+Name: "{autodesktop}\DX Suite 全文OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_fulltext_v2"; Tasks: desktopicon_fulltext
 Name: "{autodesktop}\DX Suite 標準OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_standard_v2"; Tasks: desktopicon_standard
 Name: "{autodesktop}\DX Suite 非定型OCR"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--api dx_atypical_v2"; Tasks: desktopicon_atypical
 
