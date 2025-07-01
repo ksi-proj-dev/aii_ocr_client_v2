@@ -174,8 +174,9 @@ class OcrWorkerStandard(QThread):
         max_pages_per_part_for_page_split = self.current_api_options_values.get("split_max_pages_per_part", 100)
         upload_max_bytes_threshold = upload_max_size_mb_threshold * 1024 * 1024
 
+        _, ext = os.path.splitext(original_filepath)
         original_basename = os.path.basename(original_filepath)
-        ext_lower = os.path.splitext(original_basename)[1].lower()
+        ext_lower = ext.lower()
         split_part_paths: List[str] = []
         
         file_specific_temp_dir = os.path.join(base_temp_dir_for_parts, os.path.splitext(original_basename)[0] + "_parts")
@@ -183,19 +184,15 @@ class OcrWorkerStandard(QThread):
 
         should_attempt_split = False
         if split_master_enabled and ext_lower == ".pdf":
-            try:
-                original_file_size_bytes = os.path.getsize(original_filepath)
-                split_triggered_by_size = original_file_size_bytes > upload_max_bytes_threshold
-                split_triggered_by_pages = False
-                if page_split_enabled:
-                    reader = PdfReader(original_filepath)
-                    if len(reader.pages) > max_pages_per_part_for_page_split:
-                        split_triggered_by_pages = True
-                if split_triggered_by_size or split_triggered_by_pages:
-                    should_attempt_split = True
-            except Exception as e:
-                self.log_manager.warning(f"PDFファイル '{original_basename}' の分割要否チェック中にエラー: {e}", context="WORKER_PDF_SPLIT_CHECK")
-                should_attempt_split = False
+            original_file_size_bytes = os.path.getsize(original_filepath)
+            split_triggered_by_size = original_file_size_bytes > upload_max_bytes_threshold
+            split_triggered_by_pages = False
+            if page_split_enabled:
+                reader = PdfReader(original_filepath)
+                if len(reader.pages) > max_pages_per_part_for_page_split:
+                    split_triggered_by_pages = True
+            if split_triggered_by_size or split_triggered_by_pages:
+                should_attempt_split = True
 
         if should_attempt_split:
             self.original_file_status_update.emit(original_filepath, OCR_STATUS_SPLITTING)
@@ -205,10 +202,8 @@ class OcrWorkerStandard(QThread):
                 return [], error_info
         
         if not split_part_paths:
-            # === 修正箇所 START ===
-            # 分割しない場合は、元のファイル名で一時フォルダにコピーする
-            single_part_filepath = os.path.join(file_specific_temp_dir, original_basename)
-            # === 修正箇所 END ===
+            single_part_filename = self._get_part_filename(original_basename, 1, 1, ext)
+            single_part_filepath = os.path.join(file_specific_temp_dir, single_part_filename)
             shutil.copy2(original_filepath, single_part_filepath)
             split_part_paths.append(single_part_filepath)
         
@@ -238,9 +233,11 @@ class OcrWorkerStandard(QThread):
                 original_file_parent_dir = os.path.dirname(original_file_path)
                 base_name_for_output_prefix = os.path.splitext(original_file_basename)[0]
 
+                # === 修正箇所 START: 変数名を明確化し、結果を格納する変数を準備 ===
                 files_to_process_for_unit, prep_error = self._split_file(original_file_path, self.main_temp_dir_for_splits)
 
                 if prep_error or not files_to_process_for_unit:
+                # === 修正箇所 END ===
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, prep_error, "エラー", None)
                     self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイル準備エラー", "code": "FILE_PREP_ERROR"})
                     continue
@@ -252,8 +249,10 @@ class OcrWorkerStandard(QThread):
                 all_parts_ok = True
                 final_ocr_error = None
                 
+                # === 修正箇所 START: ループ内で取得した結果を保持する変数を追加 ===
                 unit_id = None
                 json_result_for_signal = None
+                # === 修正箇所 END ===
 
                 for part_idx, part_path in enumerate(files_to_process_for_unit):
                     if not self.is_running or self.encountered_fatal_error:
@@ -266,6 +265,7 @@ class OcrWorkerStandard(QThread):
 
                     part_ocr_result_info = None
                     part_ocr_error = None
+                    # unit_id はループの外で宣言
                     
                     ocr_response, ocr_error = self.api_client.read_document(part_path)
                     if ocr_error:
@@ -315,7 +315,9 @@ class OcrWorkerStandard(QThread):
                             final_ocr_error = json_err
                             all_parts_ok = False
                             break
+                        # === 修正箇所 START: 結果をシグナル送信用に保持 ===
                         json_result_for_signal = json_res
+                        # === 修正箇所 END ===
                         json_path = self._get_unique_filepath(final_dir, f"{unit_name}.json")
                         with open(json_path, 'w', encoding='utf-8') as f:
                             json.dump(json_res, f, ensure_ascii=False, indent=2)
@@ -334,9 +336,11 @@ class OcrWorkerStandard(QThread):
 
                 # --- 全部品の処理完了後 ---
                 if all_parts_ok:
+                    # === 修正箇所 START: UIへ渡す結果を、具体的なJSONデータか汎用メッセージに分岐 ===
                     final_ocr_result_for_ui = json_result_for_signal if json_result_for_signal else {"status": OCR_STATUS_COMPLETED, "detail": f"{len(files_to_process_for_unit)}部品の処理完了"}
                     json_status_ui = "JSON成功" if output_json else "作成しない(設定)"
                     self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_ui, None, json_status_ui, unit_id)
+                    # === 修正箇所 END ===
                 else:
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, final_ocr_error, "エラー", unit_id)
                     self.auto_csv_processed.emit(original_file_global_idx, original_file_path, {"message": "エラー"})
