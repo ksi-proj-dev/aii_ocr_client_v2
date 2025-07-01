@@ -68,11 +68,12 @@ class MainWindow(QMainWindow):
 
         self.log_manager.debug(f"MainWindow initializing with API Profile: {self.active_api_profile.get('name')}", context="MAINWIN_LIFECYCLE")
 
+        # 初期化処理の呼び出し順序を整理
         self._initialize_core_components_based_on_profile()
-        self._update_window_title()
-        self._connect_orchestrator_signals()
         self._setup_main_window_geometry()
         self._setup_ui_elements()
+        self._connect_orchestrator_signals()
+        self._update_window_title()
         self._load_previous_state_and_perform_initial_scan()
         self._restore_view_and_log_state()
         self._update_all_ui_controls_state()
@@ -364,10 +365,8 @@ class MainWindow(QMainWindow):
         self.option_action = QAction("⚙️設定", self); self.option_action.triggered.connect(self.show_option_dialog); toolbar.addAction(self.option_action)
         toolbar.addSeparator()
         
-        # === 修正箇所 START ===
         self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
         
-        # 「仕分け」アイコンを「開始」の右隣に移動
         self.start_sort_action = QAction("📊仕分け", self)
         self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
         self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
@@ -384,7 +383,6 @@ class MainWindow(QMainWindow):
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
-        # === 修正箇所 END ===
         
         toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
@@ -433,7 +431,20 @@ class MainWindow(QMainWindow):
             self._update_window_title(); self._update_api_mode_toggle_button_display(); self.update_ocr_controls(); self.log_manager.info(f"MainWindow components updated for {new_mode.upper()} mode.", context="CONFIG_CHANGE_MAIN")
 
     def _update_folder_display(self):
-        if hasattr(self, 'input_folder_button'): display_path = self.input_folder_path or "未選択"; self.input_folder_button.setText(display_path); self.input_folder_button.setToolTip(self.input_folder_path if self.input_folder_path else "入力フォルダが選択されていません")
+        if hasattr(self, 'input_folder_button'):
+            # === 修正箇所 START ===
+            # 式全体を bool() で囲み、結果を確実にブール値に変換する
+            is_valid_path = bool(self.input_folder_path and os.path.isdir(self.input_folder_path))
+            # === 修正箇所 END ===
+            
+            display_path = self.input_folder_path if is_valid_path else "未選択"
+            tooltip = self.input_folder_path if is_valid_path else "入力フォルダが選択されていません"
+
+            self.input_folder_button.setText(display_path)
+            self.input_folder_button.setToolTip(tooltip)
+            
+            self.input_folder_button.setEnabled(is_valid_path)
+            self.input_folder_button.setCursor(Qt.CursorShape.PointingHandCursor if is_valid_path else Qt.CursorShape.ArrowCursor)
 
     def _load_previous_state_and_perform_initial_scan(self):
         self.input_folder_path = self.config.get("last_target_dir", ""); self._update_folder_display()
