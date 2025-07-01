@@ -1,9 +1,8 @@
-# sort_worker.py (修正版)
+# sort_worker.py
 
 import os
 import time
 import json
-import random # randomをインポートします
 import threading
 from typing import Dict, Any, List
 
@@ -96,23 +95,13 @@ class SortWorker(QThread):
             
             self.log_manager.info("OCR処理への送信が正常に完了しました。後続OCR処理の監視を開始します。", context="SORT_WORKER_SUCCESS")
 
-            # === 修正箇所 START ===
+            final_sort_status, _ = self.api_client.get_sort_unit_status(sort_unit_id)
             ocr_unit_ids_to_poll = []
-            if self.api_client.api_execution_mode == "demo":
-                self.log_manager.info("SortWorker (Demo Mode): 入力ファイル数に基づいてダミーのOCRユニットを生成します。", context="SORT_WORKER_DEMO")
-                num_input_files = len(self.file_paths)
-                for i in range(num_input_files):
-                    dummy_ocr_unit_id = f"demo-ocr-unit-{random.randint(10000, 99999)}-{i+1}"
-                    ocr_unit_ids_to_poll.append(dummy_ocr_unit_id)
-            else: # Liveモードの場合
-                final_sort_status, _ = self.api_client.get_sort_unit_status(sort_unit_id)
-                if final_sort_status and "statusList" in final_sort_status:
-                    for item in final_sort_status["statusList"]:
-                        unit_id = item.get("readingUnitId")
-                        if unit_id and unit_id != "0":
-                            ocr_unit_ids_to_poll.append(unit_id)
-            # === 修正箇所 END ===
-
+            if final_sort_status and "statusList" in final_sort_status:
+                for item in final_sort_status["statusList"]:
+                    unit_id = item.get("readingUnitId")
+                    if unit_id and unit_id != "0":
+                        ocr_unit_ids_to_poll.append(unit_id)
 
             if not ocr_unit_ids_to_poll:
                 self.log_manager.info("仕分け後のOCR対象ユニットがありませんでした。処理を完了します。", context="SORT_WORKER_INFO")
@@ -148,7 +137,6 @@ class SortWorker(QThread):
                 self.sort_finished.emit(False, {"message": "処理がユーザーによって中断されました。", "code": "USER_INTERRUPT"})
                 return
 
-            # === ステージ3: 結果ダウンロード ===
             self.log_manager.info("後続のOCR処理が全て完了しました。結果をダウンロードします。", context="SORT_WORKER_SUCCESS")
             self.sort_status_update.emit("結果をダウンロード中...")
             
@@ -160,56 +148,14 @@ class SortWorker(QThread):
             os.makedirs(output_dir, exist_ok=True)
             
             download_errors = []
+            for unit_id in all_unit_ids_for_download:
+                if not self.is_running: break
 
-            if output_csv:
-                combined_csv_header = None
-                combined_csv_rows = []
+                status_res, _ = self.api_client.get_status(unit_id)
+                unit_name = status_res[0].get("unitName", unit_id) if (status_res and status_res[0]) else unit_id
 
-                for unit_id in all_unit_ids_for_download:
-                    if not self.is_running: break
-
-                    csv_data_bytes, csv_error = self.api_client.download_standard_csv(unit_id)
-                    if csv_error:
-                        status_res, _ = self.api_client.get_status(unit_id)
-                        unit_name = status_res[0].get("unitName", unit_id) if (status_res and status_res[0]) else unit_id
-                        download_errors.append(f"ユニット {unit_name} のCSV取得失敗: {csv_error.get('message')}")
-                        continue
-                    try:
-                        csv_content = csv_data_bytes.decode('utf-8-sig')
-                        lines = [line for line in csv_content.splitlines() if line.strip()]
-                        if not lines: continue
-
-                        if combined_csv_header is None:
-                            combined_csv_header = lines[0]
-                        
-                        combined_csv_rows.extend(lines[1:])
-                    except Exception as e:
-                        status_res, _ = self.api_client.get_status(unit_id)
-                        unit_name = status_res[0].get("unitName", unit_id) if (status_res and status_res[0]) else unit_id
-                        download_errors.append(f"ユニット {unit_name} のCSVデータ解析失敗: {e}")
-
-                if not self.is_running:
-                    self.sort_finished.emit(False, {"message": "処理がユーザーによって中断されました。", "code": "USER_INTERRUPT"})
-                    return
-                
-                if combined_csv_header and combined_csv_rows:
-                    final_csv_content = combined_csv_header + "\n" + "\n".join(combined_csv_rows)
-                    combined_csv_filename = f"仕分け結果_{os.path.basename(os.path.normpath(self.input_root_folder))}.csv"
-                    combined_csv_filepath = self._get_unique_filepath(output_dir, combined_csv_filename)
-                    try:
-                        with open(combined_csv_filepath, 'w', encoding='utf-8-sig', newline='') as f:
-                            f.write(final_csv_content)
-                        self.log_manager.info(f"結合CSVを正常に保存しました: {combined_csv_filepath}", context="SORT_WORKER_CSV")
-                    except Exception as e:
-                        download_errors.append(f"結合CSVの保存に失敗: {e}")
-
-            if output_json:
-                for unit_id in all_unit_ids_for_download:
-                    if not self.is_running: break
-                    status_res, _ = self.api_client.get_status(unit_id)
-                    unit_name = status_res[0].get("unitName", unit_id) if (status_res and status_res[0]) else unit_id
-
-                    json_data, json_error = self.api_client.get_result(unit_id) # get_resultが正しい
+                if output_json:
+                    json_data, json_error = self.api_client.get_status(unit_id)
                     if json_error:
                         download_errors.append(f"ユニット {unit_name} のJSON取得失敗: {json_error.get('message')}")
                     else:
@@ -219,6 +165,18 @@ class SortWorker(QThread):
                                 json.dump(json_data, f, ensure_ascii=False, indent=2)
                         except Exception as e:
                             download_errors.append(f"ユニット {unit_name} のJSON保存失敗: {e}")
+                
+                if output_csv:
+                    csv_data, csv_error = self.api_client.download_standard_csv(unit_id)
+                    if csv_error:
+                        download_errors.append(f"ユニット {unit_name} のCSV取得失敗: {csv_error.get('message')}")
+                    else:
+                        csv_filepath = self._get_unique_filepath(output_dir, f"{unit_name}.csv")
+                        try:
+                            with open(csv_filepath, 'wb') as f:
+                                f.write(csv_data)
+                        except Exception as e:
+                            download_errors.append(f"ユニット {unit_name} のCSV保存失敗: {e}")
 
             final_message = "仕分けと後続のOCR処理、結果ダウンロードがすべて完了しました。"
             if download_errors:

@@ -432,8 +432,10 @@ class MainWindow(QMainWindow):
 
     def _update_folder_display(self):
         if hasattr(self, 'input_folder_button'):
+            # === 修正箇所 START ===
             # 式全体を bool() で囲み、結果を確実にブール値に変換する
             is_valid_path = bool(self.input_folder_path and os.path.isdir(self.input_folder_path))
+            # === 修正箇所 END ===
             
             display_path = self.input_folder_path if is_valid_path else "未選択"
             tooltip = self.input_folder_path if is_valid_path else "入力フォルダが選択されていません"
@@ -854,64 +856,29 @@ class MainWindow(QMainWindow):
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
         self.log_manager.debug(f"Original File Searchable PDF processed: {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Path={pdf_final_path}, Error={pdf_error_info}", context="CALLBACK_PDF_ORIGINAL")
         if not (0 <= original_file_main_idx < len(self.processed_files_info)): self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx}. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR"); return
-        
-        target_file_info = self.processed_files_info[original_file_main_idx]
-        output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
-        ocr_engine_status_before_pdf = target_file_info.ocr_engine_status
-        pdf_stage_final_success = False
-
-        # === 修正箇所 START ===
-        # 「対象外」の場合の処理を明確に分離
-        if pdf_error_info and pdf_error_info.get("code") == "NOT_APPLICABLE":
-            target_file_info.searchable_pdf_status = "対象外"
-            # PDF処理は無いが、OCR処理が成功していれば全体として成功とみなす
-            if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
-                target_file_info.status = "完了"
-                if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=True)
-                self.update_status_bar()
-        # === 修正箇所 END ===
-        elif output_format_cfg == "json_only": 
-            target_file_info.searchable_pdf_status = "作成しない(設定)"
-        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path): 
-            target_file_info.searchable_pdf_status = "PDF作成成功"
-            pdf_stage_final_success = True
-            target_file_info.status = "完了"
+        target_file_info = self.processed_files_info[original_file_main_idx]; output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both"); ocr_engine_status_before_pdf = target_file_info.ocr_engine_status; pdf_stage_final_success = False
+        if output_format_cfg == "json_only": target_file_info.searchable_pdf_status = "作成しない(設定)"
+        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path): target_file_info.searchable_pdf_status = "PDF作成成功"; pdf_stage_final_success = True; target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
         elif pdf_error_info and isinstance(pdf_error_info, dict):
-            error_msg = pdf_error_info.get('message', 'PDF作成不明エラー')
-            error_code = pdf_error_info.get('code', '')
-            err_detail = pdf_error_info.get('detail', '')
+            error_msg = pdf_error_info.get('message', 'PDF作成不明エラー'); error_code = pdf_error_info.get('code', ''); err_detail = pdf_error_info.get('detail', '')
             target_file_info.searchable_pdf_status = f"PDFエラー: {error_msg}" + (f" (コード: {error_code})" if error_code else "")
-            
-            if error_code == "PARTS_COPIED_SUCCESS": 
-                pdf_stage_final_success = True
-                target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
-            elif error_code in ["PARTS_COPIED_PARTIAL", "PARTS_COPY_ERROR", "NO_PARTS_TO_COPY"] and ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
-                target_file_info.status = "部品PDFエラー"
+            if error_code == "PARTS_COPIED_SUCCESS": pdf_stage_final_success = True; target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
+            elif error_code in ["PARTS_COPIED_PARTIAL", "PARTS_COPY_ERROR", "NO_PARTS_TO_COPY"] and ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED: target_file_info.status = "部品PDFエラー"
             elif not ("作成対象外" in error_msg or "作成しない" in error_msg or "部品PDFは結合されません(設定)" in error_msg or "PDF_NOT_REQUESTED" == error_code):
                 if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
                     target_file_info.status = "PDF作成失敗"
-                    if target_file_info.ocr_result_summary and "エラー" not in target_file_info.ocr_result_summary and "部品のOCR完了" not in target_file_info.ocr_result_summary and "登録成功 Job ID" not in target_file_info.ocr_result_summary and "PDFエラー" not in target_file_info.ocr_result_summary:
-                        target_file_info.ocr_result_summary += f" (PDFエラー: {error_msg})"
-                    elif not target_file_info.ocr_result_summary:
-                        target_file_info.ocr_result_summary = f"PDFエラー: {error_msg}"
+                    if target_file_info.ocr_result_summary and "エラー" not in target_file_info.ocr_result_summary and "部品のOCR完了" not in target_file_info.ocr_result_summary and "登録成功 Job ID" not in target_file_info.ocr_result_summary and "PDFエラー" not in target_file_info.ocr_result_summary: target_file_info.ocr_result_summary += f" (PDFエラー: {error_msg})"
+                    elif not target_file_info.ocr_result_summary: target_file_info.ocr_result_summary = f"PDFエラー: {error_msg}"
                 popup_exclusions_pdf = ["USER_INTERRUPT_PDF", "PDF_NOT_REQUESTED", "PARTS_COPIED_SUCCESS", "NO_PARTS_TO_COPY", "PDF_CREATION_FAIL_DUE_TO_OCR_ERROR", "FATAL_ERROR_STOP_PDF", "NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_API_CALL_DX_SPDF"]
                 if error_code not in popup_exclusions_pdf: QMessageBox.warning(self, f"PDF処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のPDF処理中にエラーが発生しました。\n\nメッセージ: {error_msg}\nコード: {error_code}\n詳細: {err_detail or 'N/A'}\n\nログファイルをご確認ください。")
-        elif ocr_engine_status_before_pdf == OCR_STATUS_FAILED: 
-            target_file_info.searchable_pdf_status = "対象外(OCR失敗)"
-        elif output_format_cfg in ["pdf_only", "both"]: 
-            target_file_info.searchable_pdf_status = "PDF状態不明"
-            target_file_info.status = "PDF状態不明" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
-        else: 
-            target_file_info.searchable_pdf_status = "-"
-        
-        # 従来のPDF処理フローでのサマリー更新
-        if not (pdf_error_info and pdf_error_info.get("code") == "NOT_APPLICABLE") and output_format_cfg != "json_only":
+        elif ocr_engine_status_before_pdf == OCR_STATUS_FAILED: target_file_info.searchable_pdf_status = "対象外(OCR失敗)"
+        elif output_format_cfg in ["pdf_only", "both"]: target_file_info.searchable_pdf_status = "PDF状態不明"; target_file_info.status = "PDF状態不明" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
+        else: target_file_info.searchable_pdf_status = "-"
+        if output_format_cfg != "json_only":
             is_overall_success = (ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED and pdf_stage_final_success)
             if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=is_overall_success)
             self.update_status_bar()
-            
-        if not self.update_timer.isActive():
-            self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_all_files_processed(self, was_interrupted_by_orchestrator: bool, fatal_error_info: Optional[dict] = None):
         self._handle_ocr_process_finished_from_orchestrator(was_interrupted_by_orchestrator, fatal_error_info)

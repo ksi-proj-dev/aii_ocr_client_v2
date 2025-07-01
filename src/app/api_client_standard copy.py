@@ -1,8 +1,10 @@
-# api_client_standard.py (修正版)
+# api_client_standard.py
 
 import os
+import time
 import random
 import requests
+import json
 from typing import Optional, Dict, Any, Tuple, List
 
 from config_manager import ConfigManager
@@ -410,36 +412,8 @@ class OCRApiClientStandard:
         """DX Suite 標準APIで仕分けユニットの状態を取得する"""
         log_ctx_prefix = "API_DX_SORTER_STATUS"
         
-        # === 修正箇所 START ===
         if self.api_execution_mode == "demo":
-            # 後続のOCR処理をシミュレートできるよう、ダミーのOCRユニットIDを含む応答を返す
-            dummy_ocr_unit_id_1 = f"demo-ocr-unit-{random.randint(1000, 9999)}"
-            dummy_ocr_unit_id_2 = f"demo-ocr-unit-{random.randint(1000, 9999)}"
-            return {
-                "statusCode": 60,
-                "statusName": "仕分け完了",
-                "statusList": [
-                    {
-                        "documentId": f"demo-doc-{random.randint(100,999)}",
-                        "readingUnitId": dummy_ocr_unit_id_1,
-                        "workflowId": "demo-workflow-id-1",
-                        "workflowName": "【デモ】請求書"
-                    },
-                    {
-                        "documentId": f"demo-doc-{random.randint(100,999)}",
-                        "readingUnitId": dummy_ocr_unit_id_2,
-                        "workflowId": "demo-workflow-id-2",
-                        "workflowName": "【デモ】領収書"
-                    },
-                    {
-                        "documentId": f"demo-doc-{random.randint(100,999)}",
-                        "readingUnitId": "0", # 仕分けされなかったファイルのシミュレーション
-                        "workflowId": "0",
-                        "workflowName": ""
-                    }
-                ]
-            }, None
-        # === 修正箇所 END ===
+            return {"statusCode": 60, "statusName": "仕分け完了"}, None
 
         # Liveモード
         base_uri_from_endpoint = self._get_full_url("register_ocr")

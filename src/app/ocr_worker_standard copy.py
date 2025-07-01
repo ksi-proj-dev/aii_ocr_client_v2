@@ -1,4 +1,4 @@
-# ocr_worker_standard.py (修正版)
+# ocr_worker_standard.py
 
 import os
 import json
@@ -233,39 +233,32 @@ class OcrWorkerStandard(QThread):
                 original_file_parent_dir = os.path.dirname(original_file_path)
                 base_name_for_output_prefix = os.path.splitext(original_file_basename)[0]
 
-                # === 修正箇所 START: 変数名を明確化し、結果を格納する変数を準備 ===
-                files_to_process_for_unit, prep_error = self._split_file(original_file_path, self.main_temp_dir_for_splits)
+                files_to_ocr, prep_error = self._split_file(original_file_path, self.main_temp_dir_for_splits)
 
-                if prep_error or not files_to_process_for_unit:
-                # === 修正箇所 END ===
+                if prep_error or not files_to_ocr:
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, prep_error, "エラー", None)
                     self.searchable_pdf_processed.emit(original_file_global_idx, original_file_path, None, {"message": "ファイル準備エラー", "code": "FILE_PREP_ERROR"})
                     continue
                 
-                parts_results_temp_dir = os.path.join(os.path.dirname(files_to_process_for_unit[0]), base_name_for_output_prefix + "_results_parts")
+                parts_results_temp_dir = os.path.join(os.path.dirname(files_to_ocr[0]), base_name_for_output_prefix + "_results_parts")
                 os.makedirs(parts_results_temp_dir, exist_ok=True)
 
-                is_multi_part = len(files_to_process_for_unit) > 1
+                is_multi_part = len(files_to_ocr) > 1
                 all_parts_ok = True
                 final_ocr_error = None
                 
-                # === 修正箇所 START: ループ内で取得した結果を保持する変数を追加 ===
-                unit_id = None
-                json_result_for_signal = None
-                # === 修正箇所 END ===
-
-                for part_idx, part_path in enumerate(files_to_process_for_unit):
+                for part_idx, part_path in enumerate(files_to_ocr):
                     if not self.is_running or self.encountered_fatal_error:
                         all_parts_ok = False
                         if not final_ocr_error: final_ocr_error = {"message": "処理が中断/停止されました", "code": "USER_INTERRUPT"}
                         break
                     
-                    status_msg = f"{OCR_STATUS_PROCESSING} ({part_idx + 1}/{len(files_to_process_for_unit)})" if is_multi_part else OCR_STATUS_PROCESSING
+                    status_msg = f"{OCR_STATUS_PROCESSING} ({part_idx + 1}/{len(files_to_ocr)})" if is_multi_part else OCR_STATUS_PROCESSING
                     self.original_file_status_update.emit(original_file_path, status_msg)
 
                     part_ocr_result_info = None
                     part_ocr_error = None
-                    # unit_id はループの外で宣言
+                    unit_id = None
                     
                     ocr_response, ocr_error = self.api_client.read_document(part_path)
                     if ocr_error:
@@ -315,9 +308,6 @@ class OcrWorkerStandard(QThread):
                             final_ocr_error = json_err
                             all_parts_ok = False
                             break
-                        # === 修正箇所 START: 結果をシグナル送信用に保持 ===
-                        json_result_for_signal = json_res
-                        # === 修正箇所 END ===
                         json_path = self._get_unique_filepath(final_dir, f"{unit_name}.json")
                         with open(json_path, 'w', encoding='utf-8') as f:
                             json.dump(json_res, f, ensure_ascii=False, indent=2)
@@ -336,11 +326,9 @@ class OcrWorkerStandard(QThread):
 
                 # --- 全部品の処理完了後 ---
                 if all_parts_ok:
-                    # === 修正箇所 START: UIへ渡す結果を、具体的なJSONデータか汎用メッセージに分岐 ===
-                    final_ocr_result_for_ui = json_result_for_signal if json_result_for_signal else {"status": OCR_STATUS_COMPLETED, "detail": f"{len(files_to_process_for_unit)}部品の処理完了"}
+                    final_ocr_result = {"status": OCR_STATUS_COMPLETED, "detail": f"{len(files_to_ocr)}部品の処理完了"}
                     json_status_ui = "JSON成功" if output_json else "作成しない(設定)"
-                    self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result_for_ui, None, json_status_ui, unit_id)
-                    # === 修正箇所 END ===
+                    self.file_processed.emit(original_file_global_idx, original_file_path, final_ocr_result, None, json_status_ui, unit_id)
                 else:
                     self.file_processed.emit(original_file_global_idx, original_file_path, None, final_ocr_error, "エラー", unit_id)
                     self.auto_csv_processed.emit(original_file_global_idx, original_file_path, {"message": "エラー"})
@@ -352,7 +340,7 @@ class OcrWorkerStandard(QThread):
                 if os.path.exists(original_file_path):
                     self._move_file_if_configured(original_file_path, all_parts_ok)
                 
-                self._try_cleanup_specific_temp_dirs(os.path.dirname(files_to_process_for_unit[0]), parts_results_temp_dir)
+                self._try_cleanup_specific_temp_dirs(os.path.dirname(files_to_ocr[0]), parts_results_temp_dir)
 
         finally:
             self._cleanup_main_temp_dir()
