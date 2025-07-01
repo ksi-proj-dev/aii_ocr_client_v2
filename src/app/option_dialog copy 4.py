@@ -33,15 +33,26 @@ class OptionDialog(QDialog):
         is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
 
-        # === 修正箇所 START: プロファイルに応じて表示するウィジェットを切り替え ===
-        self.output_format_widget.setVisible(not is_dx_standard_v2 and not is_dx_atypical)
+        self.output_format_widget.setVisible(not is_dx_standard_v2)
         self.dx_standard_output_widget.setVisible(is_dx_standard_v2)
-        self.atypical_output_widget.setVisible(is_dx_atypical)
 
+        # === 修正箇所 START ===
+        # atypicalプロファイル用の注釈ラベルの表示を制御
+        if is_dx_atypical:
+            self.output_format_json_only_radio.setChecked(True)
+            self.output_format_widget.setEnabled(False)
+            self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
+            self.atypical_output_note_label.setVisible(True) # 注釈ラベルを表示
+        else:
+            self.output_format_widget.setEnabled(True)
+            self.output_format_widget.setToolTip("")
+            self.atypical_output_note_label.setVisible(False) # 他プロファイルでは非表示
+        # === 修正箇所 END ===
+            
         if is_dx_standard_v2:
+            self.output_format_widget.setEnabled(False)
             self.dx_standard_csv_check.stateChanged.connect(self._update_standard_delete_option_state)
             self._update_standard_delete_option_state()
-        # === 修正箇所 END ===
 
 
     def init_ui(self):
@@ -93,56 +104,48 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
-        output_format_group = QGroupBox("出力")
+        output_format_group = QGroupBox("出力形式")
         output_format_group.setStyleSheet(group_box_style)
         output_format_form_layout = QFormLayout()
         
         file_actions_config = self.global_config.get("file_actions", {})
         
-        # --- ウィジェットの定義 (修正箇所) ---
-
-        # 1. 通常プロファイル用のラジオボタンウィジェット
         self.output_format_widget = QWidget()
-        output_format_layout_v = QVBoxLayout(self.output_format_widget)
-        output_format_layout_v.setContentsMargins(0,0,0,0)
+        output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
         self.output_format_pdf_only_radio = QRadioButton("サーチャブルPDFのみ")
         self.output_format_both_radio = QRadioButton("JSON と サーチャブルPDF (両方)")
-        output_format_layout_v.addWidget(self.output_format_json_only_radio)
-        output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
-        output_format_layout_v.addWidget(self.output_format_both_radio)
         current_output_format = file_actions_config.get("output_format", "both")
         if current_output_format == "json_only": self.output_format_json_only_radio.setChecked(True)
         elif current_output_format == "pdf_only": self.output_format_pdf_only_radio.setChecked(True)
         else: self.output_format_both_radio.setChecked(True)
-        
-        # 2. dx_standard_v2 用のチェックボックスウィジェット
+        output_format_layout_v = QVBoxLayout(self.output_format_widget)
+        output_format_layout_v.setContentsMargins(0,0,0,0)
+        output_format_layout_v.addWidget(self.output_format_json_only_radio)
+        output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
+        output_format_layout_v.addWidget(self.output_format_both_radio)
+
+        # === 修正箇所 START ===
+        # 注釈用ラベルを追加
+        self.atypical_output_note_label = QLabel("(注: このプロファイルはJSON出力のみをサポートしています)")
+        self.atypical_output_note_label.setStyleSheet("font-style: italic; color: #555; margin-top: 4px;")
+        output_format_layout_v.addWidget(self.atypical_output_note_label)
+        # === 修正箇所 END ===
+
+        output_format_form_layout.addRow(output_format_label, self.output_format_widget)
+
         self.dx_standard_output_widget = QWidget()
-        dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
-        dx_standard_layout_v.setContentsMargins(0,0,0,0)
+        dx_standard_output_label = QLabel("出力形式 (dx standard):")
         self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
         self.dx_standard_json_check.setChecked(file_actions_config.get("dx_standard_output_json", True))
         self.dx_standard_csv_check = QCheckBox("OCR完了時にCSVファイルを自動でダウンロードする")
         self.dx_standard_csv_check.setChecked(file_actions_config.get("dx_standard_auto_download_csv", True))
+        dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
+        dx_standard_layout_v.setContentsMargins(0,0,0,0)
         dx_standard_layout_v.addWidget(self.dx_standard_json_check)
         dx_standard_layout_v.addWidget(self.dx_standard_csv_check)
+        output_format_form_layout.addRow(dx_standard_output_label, self.dx_standard_output_widget)
 
-        # 3. dx_atypical_v2 用の固定テキストウィジェット
-        self.atypical_output_widget = QWidget()
-        atypical_layout_v = QVBoxLayout(self.atypical_output_widget)
-        atypical_layout_v.setContentsMargins(0,0,0,0)
-        atypical_fixed_text_label = QLabel("JSONのみ")
-        atypical_note_label = QLabel("(注: このプロファイルはJSON出力のみをサポートしています)")
-        atypical_note_label.setStyleSheet("font-style: italic; color: #555;")
-        atypical_layout_v.addWidget(atypical_fixed_text_label)
-        atypical_layout_v.addWidget(atypical_note_label)
-
-        # レイアウトへの追加
-        output_format_form_layout.addRow("出力形式:", self.output_format_widget)
-        output_format_form_layout.addRow(self.dx_standard_output_widget) # ラベルなしで追加
-        # output_format_form_layout.addRow("出力形式:", self.atypical_output_widget)
-        output_format_form_layout.addRow(self.atypical_output_widget) # ラベルなしで追加
-        
         output_format_group.setLayout(output_format_form_layout)
         api_layout.addWidget(output_format_group)
         

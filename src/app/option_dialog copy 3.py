@@ -29,20 +29,23 @@ class OptionDialog(QDialog):
 
         self.init_ui()
 
-        # --- プロファイル別のUI制御 ---
         is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
 
-        # === 修正箇所 START: プロファイルに応じて表示するウィジェットを切り替え ===
-        self.output_format_widget.setVisible(not is_dx_standard_v2 and not is_dx_atypical)
+        self.output_format_widget.setVisible(not is_dx_standard_v2)
         self.dx_standard_output_widget.setVisible(is_dx_standard_v2)
-        self.atypical_output_widget.setVisible(is_dx_atypical)
 
-        if is_dx_standard_v2:
+        if is_dx_atypical:
+            self.output_format_json_only_radio.setChecked(True)
+            self.output_format_widget.setEnabled(False)
+            self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
+        elif is_dx_standard_v2:
+            self.output_format_widget.setEnabled(False)
             self.dx_standard_csv_check.stateChanged.connect(self._update_standard_delete_option_state)
             self._update_standard_delete_option_state()
-        # === 修正箇所 END ===
-
+        else: 
+            self.output_format_widget.setEnabled(True)
+            self.output_format_widget.setToolTip("")
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -93,62 +96,49 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
-        output_format_group = QGroupBox("出力")
+        output_format_group = QGroupBox("出力形式")
         output_format_group.setStyleSheet(group_box_style)
         output_format_form_layout = QFormLayout()
         
         file_actions_config = self.global_config.get("file_actions", {})
         
-        # --- ウィジェットの定義 (修正箇所) ---
-
-        # 1. 通常プロファイル用のラジオボタンウィジェット
         self.output_format_widget = QWidget()
-        output_format_layout_v = QVBoxLayout(self.output_format_widget)
-        output_format_layout_v.setContentsMargins(0,0,0,0)
+        output_format_label = QLabel("出力形式:")
         self.output_format_json_only_radio = QRadioButton("JSONのみ")
         self.output_format_pdf_only_radio = QRadioButton("サーチャブルPDFのみ")
         self.output_format_both_radio = QRadioButton("JSON と サーチャブルPDF (両方)")
-        output_format_layout_v.addWidget(self.output_format_json_only_radio)
-        output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
-        output_format_layout_v.addWidget(self.output_format_both_radio)
         current_output_format = file_actions_config.get("output_format", "both")
         if current_output_format == "json_only": self.output_format_json_only_radio.setChecked(True)
         elif current_output_format == "pdf_only": self.output_format_pdf_only_radio.setChecked(True)
         else: self.output_format_both_radio.setChecked(True)
-        
-        # 2. dx_standard_v2 用のチェックボックスウィジェット
+        output_format_layout_v = QVBoxLayout(self.output_format_widget)
+        output_format_layout_v.setContentsMargins(0,0,0,0)
+        output_format_layout_v.addWidget(self.output_format_json_only_radio)
+        output_format_layout_v.addWidget(self.output_format_pdf_only_radio)
+        output_format_layout_v.addWidget(self.output_format_both_radio)
+        output_format_form_layout.addRow(output_format_label, self.output_format_widget)
+
         self.dx_standard_output_widget = QWidget()
-        dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
-        dx_standard_layout_v.setContentsMargins(0,0,0,0)
+        dx_standard_output_label = QLabel("出力形式 (dx standard):")
         self.dx_standard_json_check = QCheckBox("OCR結果をJSONファイルとして出力する")
         self.dx_standard_json_check.setChecked(file_actions_config.get("dx_standard_output_json", True))
         self.dx_standard_csv_check = QCheckBox("OCR完了時にCSVファイルを自動でダウンロードする")
         self.dx_standard_csv_check.setChecked(file_actions_config.get("dx_standard_auto_download_csv", True))
+        dx_standard_layout_v = QVBoxLayout(self.dx_standard_output_widget)
+        dx_standard_layout_v.setContentsMargins(0,0,0,0)
         dx_standard_layout_v.addWidget(self.dx_standard_json_check)
         dx_standard_layout_v.addWidget(self.dx_standard_csv_check)
+        output_format_form_layout.addRow(dx_standard_output_label, self.dx_standard_output_widget)
 
-        # 3. dx_atypical_v2 用の固定テキストウィジェット
-        self.atypical_output_widget = QWidget()
-        atypical_layout_v = QVBoxLayout(self.atypical_output_widget)
-        atypical_layout_v.setContentsMargins(0,0,0,0)
-        atypical_fixed_text_label = QLabel("JSONのみ")
-        atypical_note_label = QLabel("(注: このプロファイルはJSON出力のみをサポートしています)")
-        atypical_note_label.setStyleSheet("font-style: italic; color: #555;")
-        atypical_layout_v.addWidget(atypical_fixed_text_label)
-        atypical_layout_v.addWidget(atypical_note_label)
-
-        # レイアウトへの追加
-        output_format_form_layout.addRow("出力形式:", self.output_format_widget)
-        output_format_form_layout.addRow(self.dx_standard_output_widget) # ラベルなしで追加
-        # output_format_form_layout.addRow("出力形式:", self.atypical_output_widget)
-        output_format_form_layout.addRow(self.atypical_output_widget) # ラベルなしで追加
-        
         output_format_group.setLayout(output_format_form_layout)
         api_layout.addWidget(output_format_group)
         
+        # === 修正箇所 START ===
+        # 3. API別オプションのグループを生成（OCR用と仕分け用に分離）
         if self.options_schema:
             is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
 
+            # グループボックスとレイアウトを準備
             ocr_options_group = QGroupBox("OCRオプション")
             ocr_options_group.setStyleSheet(group_box_style)
             ocr_form_layout = QFormLayout()
@@ -157,16 +147,20 @@ class OptionDialog(QDialog):
             sort_options_group.setStyleSheet(group_box_style)
             sort_form_layout = QFormLayout()
             
+            # 全オプションをループし、適切なグループに振り分け
             for key, schema_item in self.options_schema.items():
                 if key in ["api_key", "base_uri"]: continue
                 
+                # QFormLayoutがコロンを自動付加するため、手動での追加をやめる
                 label_text = schema_item.get("label", key)
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
                 widget = None
                 tooltip = schema_item.get("tooltip", "")
                 
+                # ターゲットとなるレイアウトを決定
                 target_layout = sort_form_layout if key == "sortConfigId" else ocr_form_layout
 
+                # ウィジェット生成ロジック（従来通り）
                 if schema_item.get("type") == "bool":
                     widget = QCheckBox(schema_item.get("label", key)); widget.setChecked(bool(current_value));
                     if tooltip: widget.setToolTip(tooltip);
@@ -219,6 +213,8 @@ class OptionDialog(QDialog):
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox): widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
             
+            # 作成したグループボックスをレイアウトに追加
+            # 標準V2プロファイルの場合のみ、両方のボックスを表示する可能性あり
             if is_dx_standard_v2:
                 if sort_form_layout.rowCount() > 0:
                     sort_options_group.setLayout(sort_form_layout)
@@ -226,14 +222,16 @@ class OptionDialog(QDialog):
                 if ocr_form_layout.rowCount() > 0:
                     ocr_options_group.setLayout(ocr_form_layout)
                     api_layout.addWidget(ocr_options_group)
-            else:
+            else: # その他のプロファイル
                 if ocr_form_layout.rowCount() > 0:
+                    # グループボックスのタイトルを汎用的に変更
                     ocr_options_group.setTitle("API別 OCRオプション")
                     ocr_options_group.setLayout(ocr_form_layout)
                     api_layout.addWidget(ocr_options_group)
             
             self.toggle_dynamic_split_options_enabled_state()
-        
+        # === 修正箇所 END ===
+
         api_layout.addStretch(1)
 
         # ===================================================================
@@ -301,6 +299,7 @@ class OptionDialog(QDialog):
         self.setMinimumWidth(550)
 
     def _update_standard_delete_option_state(self):
+        """標準OCRプロファイルにて、CSV自動ダウンロードとユニット削除オプションを連動させる"""
         if not (self.api_profile and self.api_profile.get("id") == "dx_standard_v2"):
             return
 
