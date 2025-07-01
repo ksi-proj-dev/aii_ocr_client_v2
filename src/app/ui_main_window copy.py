@@ -1,4 +1,4 @@
-# ui_main_window.py (完全なソースコード)
+# ui_main_window.py (修正版)
 
 import sys
 import os
@@ -68,11 +68,12 @@ class MainWindow(QMainWindow):
 
         self.log_manager.debug(f"MainWindow initializing with API Profile: {self.active_api_profile.get('name')}", context="MAINWIN_LIFECYCLE")
 
+        # 初期化処理の呼び出し順序を整理
         self._initialize_core_components_based_on_profile()
-        self._update_window_title()
-        self._connect_orchestrator_signals()
         self._setup_main_window_geometry()
         self._setup_ui_elements()
+        self._connect_orchestrator_signals()
+        self._update_window_title()
         self._load_previous_state_and_perform_initial_scan()
         self._restore_view_and_log_state()
         self._update_all_ui_controls_state()
@@ -363,22 +364,26 @@ class MainWindow(QMainWindow):
         self.toggle_view_action = QAction("📑ビュー", self); self.toggle_view_action.triggered.connect(self.toggle_view); toolbar.addAction(self.toggle_view_action)
         self.option_action = QAction("⚙️設定", self); self.option_action.triggered.connect(self.show_option_dialog); toolbar.addAction(self.option_action)
         toolbar.addSeparator()
+        
         self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
+        
+        self.start_sort_action = QAction("📊仕分け", self)
+        self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
+        self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
+        toolbar.addAction(self.start_sort_action)
+
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
         self.rescan_action = QAction("🔄再スキャン", self)
         self.rescan_action.triggered.connect(self.confirm_rescan_ui)
         toolbar.addAction(self.rescan_action)
         toolbar.addSeparator()
-        self.start_sort_action = QAction("📊仕分け", self)
-        self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
-        self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
-        toolbar.addAction(self.start_sort_action)
-        toolbar.addSeparator()
+
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
+        
         toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
@@ -426,7 +431,18 @@ class MainWindow(QMainWindow):
             self._update_window_title(); self._update_api_mode_toggle_button_display(); self.update_ocr_controls(); self.log_manager.info(f"MainWindow components updated for {new_mode.upper()} mode.", context="CONFIG_CHANGE_MAIN")
 
     def _update_folder_display(self):
-        if hasattr(self, 'input_folder_button'): display_path = self.input_folder_path or "未選択"; self.input_folder_button.setText(display_path); self.input_folder_button.setToolTip(self.input_folder_path if self.input_folder_path else "入力フォルダが選択されていません")
+        if hasattr(self, 'input_folder_button'):
+            # 式全体を bool() で囲み、結果を確実にブール値に変換する
+            is_valid_path = bool(self.input_folder_path and os.path.isdir(self.input_folder_path))
+            
+            display_path = self.input_folder_path if is_valid_path else "未選択"
+            tooltip = self.input_folder_path if is_valid_path else "入力フォルダが選択されていません"
+
+            self.input_folder_button.setText(display_path)
+            self.input_folder_button.setToolTip(tooltip)
+            
+            self.input_folder_button.setEnabled(is_valid_path)
+            self.input_folder_button.setCursor(Qt.CursorShape.PointingHandCursor if is_valid_path else Qt.CursorShape.ArrowCursor)
 
     def _load_previous_state_and_perform_initial_scan(self):
         self.input_folder_path = self.config.get("last_target_dir", ""); self._update_folder_display()
@@ -526,6 +542,11 @@ class MainWindow(QMainWindow):
                 return
             if level == LogLevel.DEBUG and not log_settings.get("log_level_debug_enabled", False):
                 return
+
+            # ログ追加前に、スクロールバーが一番下にあるか（またはそれに近いか）をチェック
+            scrollbar = self.log_widget.verticalScrollBar()
+            is_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10  # 若干の遊びを持たせる
+
             color_map = {
                 LogLevel.ERROR: "red",
                 LogLevel.WARNING: "orange",
@@ -534,7 +555,10 @@ class MainWindow(QMainWindow):
             }
             color = color_map.get(level, "black")
             self.log_widget.append(f'<font color="{color}">{message}</font>')
-            self.log_widget.ensureCursorVisible()
+
+            # スクロールバーが一番下にあった場合のみ、自動で一番下までスクロールする
+            if is_at_bottom:
+                self.log_widget.ensureCursorVisible()
 
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
@@ -720,7 +744,11 @@ class MainWindow(QMainWindow):
             return
 
         self.log_manager.info(f"'{file_info.name}' のCSVダウンロードを開始します (Unit ID: {file_info.job_id})", context="CSV_DOWNLOAD")
-        csv_data, error = self.api_client.download_standard_csv(file_info.job_id)
+        
+        # === 修正箇所 START ===
+        # self.api_client ではなく self.ocr_orchestrator.api_client を使用する
+        csv_data, error = self.ocr_orchestrator.api_client.download_standard_csv(file_info.job_id)
+        # === 修正箇所 END ===
 
         if error:
             self.log_manager.error(f"CSVダウンロードAPIエラー: {error}", context="CSV_DOWNLOAD")
@@ -830,29 +858,64 @@ class MainWindow(QMainWindow):
     def on_file_searchable_pdf_processed(self, original_file_main_idx, original_file_path, pdf_final_path, pdf_error_info):
         self.log_manager.debug(f"Original File Searchable PDF processed: {os.path.basename(original_file_path)}, Original Idx={original_file_main_idx}, Path={pdf_final_path}, Error={pdf_error_info}", context="CALLBACK_PDF_ORIGINAL")
         if not (0 <= original_file_main_idx < len(self.processed_files_info)): self.log_manager.error(f"Invalid original_file_main_idx {original_file_main_idx}. Max idx: {len(self.processed_files_info)-1}. File: {original_file_path}", context="CALLBACK_ERROR"); return
-        target_file_info = self.processed_files_info[original_file_main_idx]; output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both"); ocr_engine_status_before_pdf = target_file_info.ocr_engine_status; pdf_stage_final_success = False
-        if output_format_cfg == "json_only": target_file_info.searchable_pdf_status = "作成しない(設定)"
-        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path): target_file_info.searchable_pdf_status = "PDF作成成功"; pdf_stage_final_success = True; target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
+        
+        target_file_info = self.processed_files_info[original_file_main_idx]
+        output_format_cfg = self.config.get("file_actions", {}).get("output_format", "both")
+        ocr_engine_status_before_pdf = target_file_info.ocr_engine_status
+        pdf_stage_final_success = False
+
+        # === 修正箇所 START ===
+        # 「対象外」の場合の処理を明確に分離
+        if pdf_error_info and pdf_error_info.get("code") == "NOT_APPLICABLE":
+            target_file_info.searchable_pdf_status = "対象外"
+            # PDF処理は無いが、OCR処理が成功していれば全体として成功とみなす
+            if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
+                target_file_info.status = "完了"
+                if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=True)
+                self.update_status_bar()
+        # === 修正箇所 END ===
+        elif output_format_cfg == "json_only": 
+            target_file_info.searchable_pdf_status = "作成しない(設定)"
+        elif pdf_final_path and not pdf_error_info and os.path.exists(pdf_final_path): 
+            target_file_info.searchable_pdf_status = "PDF作成成功"
+            pdf_stage_final_success = True
+            target_file_info.status = "完了"
         elif pdf_error_info and isinstance(pdf_error_info, dict):
-            error_msg = pdf_error_info.get('message', 'PDF作成不明エラー'); error_code = pdf_error_info.get('code', ''); err_detail = pdf_error_info.get('detail', '')
+            error_msg = pdf_error_info.get('message', 'PDF作成不明エラー')
+            error_code = pdf_error_info.get('code', '')
+            err_detail = pdf_error_info.get('detail', '')
             target_file_info.searchable_pdf_status = f"PDFエラー: {error_msg}" + (f" (コード: {error_code})" if error_code else "")
-            if error_code == "PARTS_COPIED_SUCCESS": pdf_stage_final_success = True; target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
-            elif error_code in ["PARTS_COPIED_PARTIAL", "PARTS_COPY_ERROR", "NO_PARTS_TO_COPY"] and ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED: target_file_info.status = "部品PDFエラー"
+            
+            if error_code == "PARTS_COPIED_SUCCESS": 
+                pdf_stage_final_success = True
+                target_file_info.status = "完了" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
+            elif error_code in ["PARTS_COPIED_PARTIAL", "PARTS_COPY_ERROR", "NO_PARTS_TO_COPY"] and ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
+                target_file_info.status = "部品PDFエラー"
             elif not ("作成対象外" in error_msg or "作成しない" in error_msg or "部品PDFは結合されません(設定)" in error_msg or "PDF_NOT_REQUESTED" == error_code):
                 if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED:
                     target_file_info.status = "PDF作成失敗"
-                    if target_file_info.ocr_result_summary and "エラー" not in target_file_info.ocr_result_summary and "部品のOCR完了" not in target_file_info.ocr_result_summary and "登録成功 Job ID" not in target_file_info.ocr_result_summary and "PDFエラー" not in target_file_info.ocr_result_summary: target_file_info.ocr_result_summary += f" (PDFエラー: {error_msg})"
-                    elif not target_file_info.ocr_result_summary: target_file_info.ocr_result_summary = f"PDFエラー: {error_msg}"
+                    if target_file_info.ocr_result_summary and "エラー" not in target_file_info.ocr_result_summary and "部品のOCR完了" not in target_file_info.ocr_result_summary and "登録成功 Job ID" not in target_file_info.ocr_result_summary and "PDFエラー" not in target_file_info.ocr_result_summary:
+                        target_file_info.ocr_result_summary += f" (PDFエラー: {error_msg})"
+                    elif not target_file_info.ocr_result_summary:
+                        target_file_info.ocr_result_summary = f"PDFエラー: {error_msg}"
                 popup_exclusions_pdf = ["USER_INTERRUPT_PDF", "PDF_NOT_REQUESTED", "PARTS_COPIED_SUCCESS", "NO_PARTS_TO_COPY", "PDF_CREATION_FAIL_DUE_TO_OCR_ERROR", "FATAL_ERROR_STOP_PDF", "NOT_IMPLEMENTED_API_CALL_PDF", "NOT_IMPLEMENTED_API_CALL_DX_SPDF"]
                 if error_code not in popup_exclusions_pdf: QMessageBox.warning(self, f"PDF処理エラー ({target_file_info.name})", f"ファイル「{target_file_info.name}」のPDF処理中にエラーが発生しました。\n\nメッセージ: {error_msg}\nコード: {error_code}\n詳細: {err_detail or 'N/A'}\n\nログファイルをご確認ください。")
-        elif ocr_engine_status_before_pdf == OCR_STATUS_FAILED: target_file_info.searchable_pdf_status = "対象外(OCR失敗)"
-        elif output_format_cfg in ["pdf_only", "both"]: target_file_info.searchable_pdf_status = "PDF状態不明"; target_file_info.status = "PDF状態不明" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
-        else: target_file_info.searchable_pdf_status = "-"
-        if output_format_cfg != "json_only":
+        elif ocr_engine_status_before_pdf == OCR_STATUS_FAILED: 
+            target_file_info.searchable_pdf_status = "対象外(OCR失敗)"
+        elif output_format_cfg in ["pdf_only", "both"]: 
+            target_file_info.searchable_pdf_status = "PDF状態不明"
+            target_file_info.status = "PDF状態不明" if ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED else target_file_info.status
+        else: 
+            target_file_info.searchable_pdf_status = "-"
+        
+        # 従来のPDF処理フローでのサマリー更新
+        if not (pdf_error_info and pdf_error_info.get("code") == "NOT_APPLICABLE") and output_format_cfg != "json_only":
             is_overall_success = (ocr_engine_status_before_pdf == OCR_STATUS_COMPLETED and pdf_stage_final_success)
             if hasattr(self, 'summary_view'): self.summary_view.update_for_processed_file(is_success=is_overall_success)
             self.update_status_bar()
-        if not self.update_timer.isActive(): self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
+            
+        if not self.update_timer.isActive():
+            self.update_timer.start(LISTVIEW_UPDATE_INTERVAL_MS)
 
     def on_all_files_processed(self, was_interrupted_by_orchestrator: bool, fatal_error_info: Optional[dict] = None):
         self._handle_ocr_process_finished_from_orchestrator(was_interrupted_by_orchestrator, fatal_error_info)
@@ -905,12 +968,21 @@ class MainWindow(QMainWindow):
                     try:
                         file_no = int(no_item.text())
                         file_info = next((f for f in self.processed_files_info if f.no == file_no), None)
+
+                        # === 修正箇所 START ===
+                        # ユニット削除オプションの値を取得
+                        active_options = ConfigManager.get_active_api_options_values(self.config)
+                        delete_job_enabled = active_options.get("delete_job_after_processing", True) if active_options else True
+
                         if (file_info and
                             file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
                             file_info.job_id and
                             self.active_api_profile and
-                            self.active_api_profile.get('id') == 'dx_standard_v2'):
+                            self.active_api_profile.get('id') == 'dx_standard_v2' and
+                            not delete_job_enabled):  # ユニット削除がOFFの場合のみ有効
                             can_download_csv = True
+                        # === 修正箇所 END ===
+
                     except (ValueError, StopIteration):
                         pass
         

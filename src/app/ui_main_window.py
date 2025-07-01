@@ -26,7 +26,7 @@ from file_scanner import FileScanner
 from ocr_orchestrator import OcrOrchestrator
 from file_model import FileInfo
 from app_constants import (
-    APP_VERSION,
+    APP_NAME, APP_VERSION,
     OCR_STATUS_NOT_PROCESSED, OCR_STATUS_PROCESSING, OCR_STATUS_COMPLETED,
     OCR_STATUS_FAILED, OCR_STATUS_SKIPPED_SIZE_LIMIT, OCR_STATUS_SPLITTING,
     OCR_STATUS_PART_PROCESSING, OCR_STATUS_MERGING,
@@ -53,7 +53,10 @@ class MainWindow(QMainWindow):
                                 f"  -> セキュリティソフトの設定で、このアプリケーションを許可してください。")
             sys.exit(1)
 
-        self.log_manager.info(f"AI inside OCR API V2対応：OCR Client Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
+        # === 修正箇所 START ===
+        # ログメッセージでAPP_NAME定数を使用
+        self.log_manager.info(f"{APP_NAME} Ver.{APP_VERSION} 起動処理開始...", context="SYSTEM_LIFECYCLE")
+        # === 修正箇所 END ===
 
         self.config = ConfigManager.load()
         self.cli_args = cli_args
@@ -230,7 +233,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'active_api_profile') and self.active_api_profile and "name" in self.active_api_profile:
             profile_name = self.active_api_profile.get("name", "N/A")
         mode = self.config.get("api_execution_mode", "demo").upper()
-        self.setWindowTitle(f"AI inside OCR API V2対応：OCR Client Ver.{APP_VERSION} - {profile_name} ({mode} MODE)")
+        # === 修正箇所 START ===
+        # ウィンドウタイトルでAPP_NAME定数を使用
+        self.setWindowTitle(f"{APP_NAME} Ver.{APP_VERSION} - {profile_name} ({mode} MODE)")
+        # === 修正箇所 END ===
 
     def _connect_orchestrator_signals(self):
         if hasattr(self, 'ocr_orchestrator') and self.ocr_orchestrator:
