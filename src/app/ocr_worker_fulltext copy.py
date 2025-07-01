@@ -379,10 +379,18 @@ class OcrWorkerFulltext(QThread):
                             part_pdf_content = pdf_response
                         
                         if part_pdf_content:
-                            part_pdf_path = os.path.join(parts_results_temp_dir, os.path.basename(part_path))
+                            # --- ▼▼▼ ここから修正 ▼▼▼ ---
+                            # 入力ファイル名から拡張子を除いたベース名を取得
+                            base_name_without_ext = os.path.splitext(os.path.basename(part_path))[0]
+                            # 新しいPDFファイル名を生成 (拡張子を.pdfに)
+                            pdf_filename = f"{base_name_without_ext}.pdf"
+                            part_pdf_path = os.path.join(parts_results_temp_dir, pdf_filename)
+                            # --- ▲▲▲ ここまで修正 ▲▲▲ ---
+                            
                             with open(part_pdf_path, 'wb') as f:
                                 f.write(part_pdf_content)
                             part_pdf_paths.append(part_pdf_path)
+
                         elif not final_pdf_error:
                             all_parts_ok = False
                             final_pdf_error = {"message": "PDF作成で有効な応答がありませんでした", "code": "PDF_NO_VALID_RESPONSE"}

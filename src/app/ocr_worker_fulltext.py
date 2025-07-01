@@ -1,4 +1,4 @@
-# ocr_worker_fulltext.py
+# ocr_worker_fulltext.py (修正版)
 
 import os
 import json
@@ -175,9 +175,8 @@ class OcrWorkerFulltext(QThread):
         max_pages_per_part_for_page_split = self.current_api_options_values.get("split_max_pages_per_part", 100)
         upload_max_bytes_threshold = upload_max_size_mb_threshold * 1024 * 1024
 
-        _, ext = os.path.splitext(original_filepath)
         original_basename = os.path.basename(original_filepath)
-        ext_lower = ext.lower()
+        ext_lower = os.path.splitext(original_basename)[1].lower()
         split_part_paths: List[str] = []
         
         file_specific_temp_dir = os.path.join(base_temp_dir_for_parts, os.path.splitext(original_basename)[0] + "_parts")
@@ -185,15 +184,20 @@ class OcrWorkerFulltext(QThread):
 
         should_attempt_split = False
         if split_master_enabled and ext_lower == ".pdf":
-            original_file_size_bytes = os.path.getsize(original_filepath)
-            split_triggered_by_size = original_file_size_bytes > upload_max_bytes_threshold
-            split_triggered_by_pages = False
-            if page_split_enabled:
-                reader = PdfReader(original_filepath)
-                if len(reader.pages) > max_pages_per_part_for_page_split:
-                    split_triggered_by_pages = True
-            if split_triggered_by_size or split_triggered_by_pages:
-                should_attempt_split = True
+            try:
+                original_file_size_bytes = os.path.getsize(original_filepath)
+                split_triggered_by_size = original_file_size_bytes > upload_max_bytes_threshold
+                split_triggered_by_pages = False
+                if page_split_enabled:
+                    reader = PdfReader(original_filepath)
+                    if len(reader.pages) > max_pages_per_part_for_page_split:
+                        split_triggered_by_pages = True
+                if split_triggered_by_size or split_triggered_by_pages:
+                    should_attempt_split = True
+            except Exception as e:
+                self.log_manager.warning(f"PDFファイル '{original_basename}' の分割要否チェック中にエラー: {e}", context="WORKER_PDF_SPLIT_CHECK")
+                should_attempt_split = False
+
 
         if should_attempt_split:
             self.original_file_status_update.emit(original_filepath, OCR_STATUS_SPLITTING)
@@ -203,8 +207,10 @@ class OcrWorkerFulltext(QThread):
                 return [], error_info
         
         if not split_part_paths:
-            single_part_filename = self._get_part_filename(original_basename, 1, 1, ext)
-            single_part_filepath = os.path.join(file_specific_temp_dir, single_part_filename)
+            # === 修正箇所 START ===
+            # 分割しない場合は、元のファイル名で一時フォルダにコピーする
+            single_part_filepath = os.path.join(file_specific_temp_dir, original_basename)
+            # === 修正箇所 END ===
             shutil.copy2(original_filepath, single_part_filepath)
             split_part_paths.append(single_part_filepath)
         
@@ -342,13 +348,8 @@ class OcrWorkerFulltext(QThread):
                             final_pdf_error = pdf_error
                             all_parts_ok = False
                             break
-                        # --- ▼▼▼ ここから修正 ▼▼▼ ---
-
-                        # Demoモードではpdf_responseに直接PDFのbytesデータが入ることがあるため、型で判定
                         if isinstance(pdf_response, bytes):
                             part_pdf_content = pdf_response
-
-                        # Liveモードではpdf_responseはdict型で、特定のステータスを持つ
                         elif isinstance(pdf_response, dict) and "searchable_pdf_registered" in pdf_response.get("status", ""):
                             spdf_job_id = pdf_response.get("job_id")
                             if not spdf_job_id:
@@ -379,13 +380,9 @@ class OcrWorkerFulltext(QThread):
                             part_pdf_content = pdf_response
                         
                         if part_pdf_content:
-                            # --- ▼▼▼ ここから修正 ▼▼▼ ---
-                            # 入力ファイル名から拡張子を除いたベース名を取得
                             base_name_without_ext = os.path.splitext(os.path.basename(part_path))[0]
-                            # 新しいPDFファイル名を生成 (拡張子を.pdfに)
                             pdf_filename = f"{base_name_without_ext}.pdf"
                             part_pdf_path = os.path.join(parts_results_temp_dir, pdf_filename)
-                            # --- ▲▲▲ ここまで修正 ▲▲▲ ---
                             
                             with open(part_pdf_path, 'wb') as f:
                                 f.write(part_pdf_content)
