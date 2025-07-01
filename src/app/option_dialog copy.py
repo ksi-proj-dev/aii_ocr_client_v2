@@ -1,4 +1,4 @@
-# option_dialog.py (修正版)
+# option_dialog.py
 
 import json
 import re
@@ -33,21 +33,20 @@ class OptionDialog(QDialog):
         is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
 
+        # 標準V2の場合、専用のチェックボックスを表示し、従来のラジオボタンは非表示にする
         self.output_format_widget.setVisible(not is_dx_standard_v2)
         self.dx_standard_output_widget.setVisible(is_dx_standard_v2)
 
+        # 出力形式ラジオボタンの有効/無効とツールチップを制御
         if is_dx_atypical:
             self.output_format_json_only_radio.setChecked(True)
             self.output_format_widget.setEnabled(False)
             self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
+        # 【修正】 is_dx_standard_v1 のチェックを削除
         elif is_dx_standard_v2:
+            # V2は専用UIが表示されるため、従来のラジオボタンは操作不要
             self.output_format_widget.setEnabled(False)
-            # === 修正箇所 START ===
-            # 標準V2プロファイルの場合、連動ロジックを接続して初期状態を更新
-            self.dx_standard_csv_check.stateChanged.connect(self._update_standard_delete_option_state)
-            self._update_standard_delete_option_state()
-            # === 修正箇所 END ===
-        else: # 全文OCRなど
+        else: # 全文OCRなど、その他のプロファイル
             self.output_format_widget.setEnabled(True)
             self.output_format_widget.setToolTip("")
 
@@ -89,7 +88,7 @@ class OptionDialog(QDialog):
         # ===================================================================
         #  「API別オプション」タブの中身を作成
         # ===================================================================
-        # 1. API接続設定グループ
+        # 1. API接続設定グループ (変更なし)
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
         api_connection_group.setStyleSheet(group_box_style)
         api_connection_form_layout = QFormLayout()
@@ -184,20 +183,27 @@ class OptionDialog(QDialog):
                         if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"]);
                         if tooltip: widget.setToolTip(tooltip);
                         dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                
+                # 【修正】 enumの処理を簡略化。v1でしか使われなかった単純な文字列リストのロジックを削除
                 elif schema_item.get("type") == "enum":
                     widget = QComboBox()
                     if "values" in schema_item and isinstance(schema_item["values"], list) and schema_item["values"]:
+                        # 辞書リストから display と value を読み込む（v2プロファイル用）
                         if isinstance(schema_item["values"][0], dict):
                             for item_dict in schema_item["values"]:
                                 widget.addItem(item_dict.get("display", ""), item_dict.get("value", ""))
+                            
                             index = widget.findData(current_value)
                             if index != -1:
                                 widget.setCurrentIndex(index)
                             else:
+                                # 現在値が見つからない場合はデフォルト値を設定
                                 default_val = schema_item.get("default")
                                 default_idx = widget.findData(default_val)
                                 if default_idx != -1:
                                     widget.setCurrentIndex(default_idx)
+                        # v1で使っていた単純な文字列リストのロジックは不要になったため削除
+                    
                     if tooltip: widget.setToolTip(tooltip)
                     if key == "model": widget.currentIndexChanged.connect(self.on_model_changed)
                     dynamic_form_layout.addRow(label_text, widget)
@@ -252,7 +258,7 @@ class OptionDialog(QDialog):
         file_move_group.setLayout(file_move_form_layout)
         common_layout.addWidget(file_move_group)
 
-        # 2. ログ設定グループ
+        # 2. ログ設定グループ (変更なし)
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
         log_settings_group.setStyleSheet(group_box_style)
         log_settings_config = self.global_config.get("log_settings", {})
@@ -282,30 +288,6 @@ class OptionDialog(QDialog):
         main_layout.addLayout(button_layout)
 
         self.setMinimumWidth(550)
-
-    # === 修正箇所 START ===
-    def _update_standard_delete_option_state(self):
-        """標準OCRプロファイルにて、CSV自動ダウンロードとユニット削除オプションを連動させる"""
-        # この機能は standard_v2 プロファイルでのみ意味を持つ
-        if not (self.api_profile and self.api_profile.get("id") == "dx_standard_v2"):
-            return
-
-        delete_widget = self.widgets_map.get("delete_job_after_processing")
-        if not isinstance(delete_widget, QCheckBox):
-            return
-            
-        is_auto_download_enabled = self.dx_standard_csv_check.isChecked()
-        
-        delete_widget.setEnabled(is_auto_download_enabled)
-        delete_widget.setToolTip(
-            "サーバーからユニットを削除するには、先に「CSVファイルを自動でダウンロードする」を有効にしてください。" if not is_auto_download_enabled else 
-            "有効な場合、各ファイルのOCR処理完了後、関連する読取ユニットをDX Suiteサーバーから削除します。"
-        )
-        
-        if not is_auto_download_enabled:
-            # 自動ダウンロードが無効な場合は、ユニット削除も強制的に無効にする
-            delete_widget.setChecked(False)
-    # === 修正箇所 END ===
 
     def on_model_changed(self):
         """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
@@ -400,9 +382,11 @@ class OptionDialog(QDialog):
                     elif schema_item.get("type") == "string" and isinstance(widget, QLineEdit):
                         updated_profile_options[key] = widget.text().strip()
                     elif schema_item.get("type") == "enum" and isinstance(widget, QComboBox):
+                        # 【修正】v1のロジックを削除し、v2（辞書リスト）専用のロジックに
                         if schema_item.get("values") and isinstance(schema_item["values"][0], dict):
                             updated_profile_options[key] = widget.currentData()
                         else:
+                            # このパスはv2プロファイルでは通らないはずだが、念のため残す
                             updated_profile_options[key] = widget.currentText()
         
         upload_max_size = updated_profile_options.get("upload_max_size_mb")
@@ -442,9 +426,11 @@ class OptionDialog(QDialog):
         
         is_dx_standard = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         if is_dx_standard:
+            # dx_standard の場合はチェックボックスから設定を保存
             file_actions["dx_standard_output_json"] = self.dx_standard_json_check.isChecked()
             file_actions["dx_standard_auto_download_csv"] = self.dx_standard_csv_check.isChecked()
         else:
+            # それ以外のプロファイルではラジオボタンから設定を保存
             if self.output_format_json_only_radio.isChecked(): file_actions["output_format"] = "json_only"
             elif self.output_format_pdf_only_radio.isChecked(): file_actions["output_format"] = "pdf_only"
             else: file_actions["output_format"] = "both"

@@ -968,21 +968,12 @@ class MainWindow(QMainWindow):
                     try:
                         file_no = int(no_item.text())
                         file_info = next((f for f in self.processed_files_info if f.no == file_no), None)
-
-                        # === 修正箇所 START ===
-                        # ユニット削除オプションの値を取得
-                        active_options = ConfigManager.get_active_api_options_values(self.config)
-                        delete_job_enabled = active_options.get("delete_job_after_processing", True) if active_options else True
-
                         if (file_info and
                             file_info.ocr_engine_status == OCR_STATUS_COMPLETED and
                             file_info.job_id and
                             self.active_api_profile and
-                            self.active_api_profile.get('id') == 'dx_standard_v2' and
-                            not delete_job_enabled):  # ユニット削除がOFFの場合のみ有効
+                            self.active_api_profile.get('id') == 'dx_standard_v2'):
                             can_download_csv = True
-                        # === 修正箇所 END ===
-
                     except (ValueError, StopIteration):
                         pass
         
