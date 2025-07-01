@@ -29,6 +29,7 @@ class OptionDialog(QDialog):
 
         self.init_ui()
 
+        # --- プロファイル別のUI制御 ---
         is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
         is_dx_atypical = self.api_profile and self.api_profile.get("id") == "dx_atypical_v2"
 
@@ -41,27 +42,35 @@ class OptionDialog(QDialog):
             self.output_format_widget.setToolTip("このプロファイルはJSON出力のみをサポートしています。")
         elif is_dx_standard_v2:
             self.output_format_widget.setEnabled(False)
+            # === 修正箇所 START ===
+            # 標準V2プロファイルの場合、連動ロジックを接続して初期状態を更新
             self.dx_standard_csv_check.stateChanged.connect(self._update_standard_delete_option_state)
             self._update_standard_delete_option_state()
-        else: 
+            # === 修正箇所 END ===
+        else: # 全文OCRなど
             self.output_format_widget.setEnabled(True)
             self.output_format_widget.setToolTip("")
 
     def init_ui(self):
+        # メインレイアウト
         main_layout = QVBoxLayout(self)
         self.setLayout(main_layout)
 
+        # タブウィジェットの作成
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
+        # --- タブページ用のウィジェットを作成 ---
         api_options_tab = QWidget()
         common_settings_tab = QWidget()
         
+        # --- 各タブのレイアウトを作成 ---
         api_layout = QVBoxLayout(api_options_tab)
         api_layout.setContentsMargins(5, 10, 5, 10)
         common_layout = QVBoxLayout(common_settings_tab)
         common_layout.setContentsMargins(5, 10, 5, 10)
 
+        # グループボックスの共通スタイル
         group_box_style = """
             QGroupBox {
                 background-color: #f0f0f0;
@@ -80,6 +89,7 @@ class OptionDialog(QDialog):
         # ===================================================================
         #  「API別オプション」タブの中身を作成
         # ===================================================================
+        # 1. API接続設定グループ
         api_connection_group = QGroupBox("API接続設定 (現在アクティブなプロファイル用)")
         api_connection_group.setStyleSheet(group_box_style)
         api_connection_form_layout = QFormLayout()
@@ -96,6 +106,7 @@ class OptionDialog(QDialog):
         api_connection_group.setLayout(api_connection_form_layout)
         api_layout.addWidget(api_connection_group)
 
+        # 2. 出力形式グループ
         output_format_group = QGroupBox("出力形式")
         output_format_group.setStyleSheet(group_box_style)
         output_format_form_layout = QFormLayout()
@@ -133,38 +144,20 @@ class OptionDialog(QDialog):
         output_format_group.setLayout(output_format_form_layout)
         api_layout.addWidget(output_format_group)
         
-        # === 修正箇所 START ===
-        # 3. API別オプションのグループを生成（OCR用と仕分け用に分離）
+        # 3. API別OCRオプションのグループ
         if self.options_schema:
-            is_dx_standard_v2 = self.api_profile and self.api_profile.get("id") == "dx_standard_v2"
-
-            # グループボックスとレイアウトを準備
-            ocr_options_group = QGroupBox("OCRオプション")
-            ocr_options_group.setStyleSheet(group_box_style)
-            ocr_form_layout = QFormLayout()
-
-            sort_options_group = QGroupBox("仕分けオプション (Elastic Sorter)")
-            sort_options_group.setStyleSheet(group_box_style)
-            sort_form_layout = QFormLayout()
-            
-            # 全オプションをループし、適切なグループに振り分け
+            dynamic_options_group = QGroupBox("API別 OCRオプション")
+            dynamic_options_group.setStyleSheet(group_box_style)
+            dynamic_form_layout = QFormLayout()
             for key, schema_item in self.options_schema.items():
                 if key in ["api_key", "base_uri"]: continue
-                
-                # QFormLayoutがコロンを自動付加するため、手動での追加をやめる
-                label_text = schema_item.get("label", key)
+                label_text = schema_item.get("label", key) + ":"
                 current_value = self.current_option_values.get(key, schema_item.get("default"))
-                widget = None
-                tooltip = schema_item.get("tooltip", "")
-                
-                # ターゲットとなるレイアウトを決定
-                target_layout = sort_form_layout if key == "sortConfigId" else ocr_form_layout
-
-                # ウィジェット生成ロジック（従来通り）
+                widget = None; tooltip = schema_item.get("tooltip", "")
                 if schema_item.get("type") == "bool":
                     widget = QCheckBox(schema_item.get("label", key)); widget.setChecked(bool(current_value));
                     if tooltip: widget.setToolTip(tooltip);
-                    target_layout.addRow(widget); self.widgets_map[key] = widget
+                    dynamic_form_layout.addRow(widget); self.widgets_map[key] = widget
                 elif schema_item.get("type") == "int":
                     widget = QSpinBox();
                     if "min" in schema_item: widget.setMinimum(schema_item["min"]);
@@ -172,12 +165,12 @@ class OptionDialog(QDialog):
                     widget.setValue(int(current_value) if current_value is not None else schema_item.get("default", 0));
                     if "suffix" in schema_item: widget.setSuffix(schema_item["suffix"]);
                     if tooltip: widget.setToolTip(tooltip);
-                    target_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                    dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
                 elif key == "classes":
                     h_layout = QHBoxLayout(); line_edit = QLineEdit(str(current_value) if current_value is not None else ""); line_edit.setReadOnly(True); line_edit.setToolTip(tooltip);
                     select_button = QPushButton("クラスを選択..."); select_button.clicked.connect(self.open_class_selection_dialog);
                     h_layout.addWidget(line_edit); h_layout.addWidget(select_button);
-                    target_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
+                    dynamic_form_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
                 elif schema_item.get("type") == "string":
                     if key == "workflowId":
                         h_layout = QHBoxLayout(); line_edit = QLineEdit(str(current_value) if current_value is not None else "");
@@ -185,12 +178,12 @@ class OptionDialog(QDialog):
                         if tooltip: line_edit.setToolTip(tooltip);
                         search_button = QPushButton("検索..."); search_button.setToolTip("利用可能なワークフローを検索してIDを設定します。"); search_button.clicked.connect(self.open_workflow_search_dialog);
                         h_layout.addWidget(line_edit); h_layout.addWidget(search_button);
-                        target_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
+                        dynamic_form_layout.addRow(label_text, h_layout); self.widgets_map[key] = line_edit
                     else:
                         widget = QLineEdit(str(current_value) if current_value is not None else "");
                         if "placeholder" in schema_item: widget.setPlaceholderText(schema_item["placeholder"]);
                         if tooltip: widget.setToolTip(tooltip);
-                        target_layout.addRow(label_text, widget); self.widgets_map[key] = widget
+                        dynamic_form_layout.addRow(label_text, widget); self.widgets_map[key] = widget
                 elif schema_item.get("type") == "enum":
                     widget = QComboBox()
                     if "values" in schema_item and isinstance(schema_item["values"], list) and schema_item["values"]:
@@ -207,36 +200,25 @@ class OptionDialog(QDialog):
                                     widget.setCurrentIndex(default_idx)
                     if tooltip: widget.setToolTip(tooltip)
                     if key == "model": widget.currentIndexChanged.connect(self.on_model_changed)
-                    target_layout.addRow(label_text, widget)
+                    dynamic_form_layout.addRow(label_text, widget)
                     self.widgets_map[key] = widget
 
                 if key in ["split_large_files_enabled", "split_by_page_count_enabled"]:
                     if isinstance(widget, QCheckBox): widget.stateChanged.connect(self.toggle_dynamic_split_options_enabled_state)
             
-            # 作成したグループボックスをレイアウトに追加
-            # 標準V2プロファイルの場合のみ、両方のボックスを表示する可能性あり
-            if is_dx_standard_v2:
-                if sort_form_layout.rowCount() > 0:
-                    sort_options_group.setLayout(sort_form_layout)
-                    api_layout.addWidget(sort_options_group)
-                if ocr_form_layout.rowCount() > 0:
-                    ocr_options_group.setLayout(ocr_form_layout)
-                    api_layout.addWidget(ocr_options_group)
-            else: # その他のプロファイル
-                if ocr_form_layout.rowCount() > 0:
-                    # グループボックスのタイトルを汎用的に変更
-                    ocr_options_group.setTitle("API別 OCRオプション")
-                    ocr_options_group.setLayout(ocr_form_layout)
-                    api_layout.addWidget(ocr_options_group)
-            
-            self.toggle_dynamic_split_options_enabled_state()
-        # === 修正箇所 END ===
-
+            if dynamic_form_layout.rowCount() > 0:
+                dynamic_options_group.setLayout(dynamic_form_layout)
+                api_layout.addWidget(dynamic_options_group)
+                self.toggle_dynamic_split_options_enabled_state()
+            else:
+                dynamic_options_group.setVisible(False)
+        
         api_layout.addStretch(1)
 
         # ===================================================================
         #  「共通設定」タブの中身を作成
         # ===================================================================
+        # 1. ファイル移動と結果フォルダ設定のグループ
         file_move_group = QGroupBox("ファイル移動と結果フォルダ (共通設定)")
         file_move_group.setStyleSheet(group_box_style)
         file_move_form_layout = QFormLayout()
@@ -270,6 +252,7 @@ class OptionDialog(QDialog):
         file_move_group.setLayout(file_move_form_layout)
         common_layout.addWidget(file_move_group)
 
+        # 2. ログ設定グループ
         log_settings_group = QGroupBox("ログ表示設定 (共通設定)")
         log_settings_group.setStyleSheet(group_box_style)
         log_settings_config = self.global_config.get("log_settings", {})
@@ -283,9 +266,11 @@ class OptionDialog(QDialog):
         
         common_layout.addStretch(1)
 
+        # --- タブをウィジェットに追加 ---
         self.tabs.addTab(api_options_tab, "API別オプション")
         self.tabs.addTab(common_settings_tab, "共通設定")
 
+        # --- 保存/キャンセルボタン ---
         button_layout = QHBoxLayout()
         self.save_btn = QPushButton("保存")
         self.cancel_btn = QPushButton("キャンセル")
@@ -298,8 +283,10 @@ class OptionDialog(QDialog):
 
         self.setMinimumWidth(550)
 
+    # === 修正箇所 START ===
     def _update_standard_delete_option_state(self):
         """標準OCRプロファイルにて、CSV自動ダウンロードとユニット削除オプションを連動させる"""
+        # この機能は standard_v2 プロファイルでのみ意味を持つ
         if not (self.api_profile and self.api_profile.get("id") == "dx_standard_v2"):
             return
 
@@ -316,15 +303,19 @@ class OptionDialog(QDialog):
         )
         
         if not is_auto_download_enabled:
+            # 自動ダウンロードが無効な場合は、ユニット削除も強制的に無効にする
             delete_widget.setChecked(False)
+    # === 修正箇所 END ===
 
     def on_model_changed(self):
+        """帳票モデルのドロップダウンが変更されたときに呼び出される。"""
         if "classes" in self.widgets_map:
             classes_widget = self.widgets_map["classes"]
             if isinstance(classes_widget, QLineEdit):
                 classes_widget.setText("")
 
     def open_class_selection_dialog(self):
+        """「クラスを選択...」ボタンが押されたときに呼び出される。"""
         model_widget = self.widgets_map.get("model")
         classes_widget = self.widgets_map.get("classes")
 
@@ -479,6 +470,7 @@ class OptionDialog(QDialog):
         return self.saved_settings
     
     def open_workflow_search_dialog(self):
+        """「検索...」ボタンが押されたときに呼び出される。"""
         if not self.api_client:
             QMessageBox.critical(self, "エラー", "APIクライアントが利用できません。")
             return
