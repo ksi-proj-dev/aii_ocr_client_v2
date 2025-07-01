@@ -363,29 +363,22 @@ class MainWindow(QMainWindow):
         self.toggle_view_action = QAction("📑ビュー", self); self.toggle_view_action.triggered.connect(self.toggle_view); toolbar.addAction(self.toggle_view_action)
         self.option_action = QAction("⚙️設定", self); self.option_action.triggered.connect(self.show_option_dialog); toolbar.addAction(self.option_action)
         toolbar.addSeparator()
-        
-        # === 修正箇所 START ===
         self.start_ocr_action = QAction("▶️開始", self); self.start_ocr_action.triggered.connect(self.confirm_start_ocr); toolbar.addAction(self.start_ocr_action)
-        
-        # 「仕分け」アイコンを「開始」の右隣に移動
-        self.start_sort_action = QAction("📊仕分け", self)
-        self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
-        self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
-        toolbar.addAction(self.start_sort_action)
-
         self.resume_ocr_action = QAction("↪️再開", self); self.resume_ocr_action.setToolTip("未処理または失敗したファイルのOCR処理を再開します"); self.resume_ocr_action.triggered.connect(self.confirm_resume_ocr); toolbar.addAction(self.resume_ocr_action)
         self.stop_ocr_action = QAction("⏹️中止", self); self.stop_ocr_action.triggered.connect(self.confirm_stop_ocr); toolbar.addAction(self.stop_ocr_action)
         self.rescan_action = QAction("🔄再スキャン", self)
         self.rescan_action.triggered.connect(self.confirm_rescan_ui)
         toolbar.addAction(self.rescan_action)
         toolbar.addSeparator()
-
+        self.start_sort_action = QAction("📊仕分け", self)
+        self.start_sort_action.setToolTip("選択したファイルで仕分け処理を開始します。")
+        self.start_sort_action.triggered.connect(self.on_start_sort_clicked)
+        toolbar.addAction(self.start_sort_action)
+        toolbar.addSeparator()
         self.download_csv_action = QAction("💾CSV", self)
         self.download_csv_action.setToolTip("選択した完了済みファイルのOCR結果をCSV形式でダウンロードします。")
         self.download_csv_action.triggered.connect(self.on_download_csv_clicked)
         toolbar.addAction(self.download_csv_action)
-        # === 修正箇所 END ===
-        
         toolbar.addSeparator()
         self.log_toggle_action = QAction("📄ログ表示", self); self.log_toggle_action.triggered.connect(self.toggle_log_display); toolbar.addAction(self.log_toggle_action)
         self.clear_log_action = QAction("🗑️ログクリア", self); self.clear_log_action.triggered.connect(self.clear_log_display); toolbar.addAction(self.clear_log_action)
@@ -525,6 +518,7 @@ class MainWindow(QMainWindow):
         self.update_all_status_displays(); self.update_ocr_controls()    
 
     def append_log_message_to_widget(self, level, message):
+        # === 修正箇所 START ===
         if hasattr(self, 'log_widget') and self.log_widget:
             log_settings = self.config.get("log_settings", {})
             if level == LogLevel.INFO and not log_settings.get("log_level_info_enabled", True):
@@ -550,6 +544,7 @@ class MainWindow(QMainWindow):
             # スクロールバーが一番下にあった場合のみ、自動で一番下までスクロールする
             if is_at_bottom:
                 self.log_widget.ensureCursorVisible()
+        # === 修正箇所 END ===
 
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
