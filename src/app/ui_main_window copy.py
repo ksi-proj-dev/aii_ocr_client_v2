@@ -1,4 +1,4 @@
-# ui_main_window.py (修正版)
+# ui_main_window.py (完全なソースコード)
 
 import sys
 import os
@@ -518,7 +518,6 @@ class MainWindow(QMainWindow):
         self.update_all_status_displays(); self.update_ocr_controls()    
 
     def append_log_message_to_widget(self, level, message):
-        # === 修正箇所 START ===
         if hasattr(self, 'log_widget') and self.log_widget:
             log_settings = self.config.get("log_settings", {})
             if level == LogLevel.INFO and not log_settings.get("log_level_info_enabled", True):
@@ -527,11 +526,6 @@ class MainWindow(QMainWindow):
                 return
             if level == LogLevel.DEBUG and not log_settings.get("log_level_debug_enabled", False):
                 return
-
-            # ログ追加前に、スクロールバーが一番下にあるか（またはそれに近いか）をチェック
-            scrollbar = self.log_widget.verticalScrollBar()
-            is_at_bottom = scrollbar.value() >= scrollbar.maximum() - 10  # 若干の遊びを持たせる
-
             color_map = {
                 LogLevel.ERROR: "red",
                 LogLevel.WARNING: "orange",
@@ -540,11 +534,7 @@ class MainWindow(QMainWindow):
             }
             color = color_map.get(level, "black")
             self.log_widget.append(f'<font color="{color}">{message}</font>')
-
-            # スクロールバーが一番下にあった場合のみ、自動で一番下までスクロールする
-            if is_at_bottom:
-                self.log_widget.ensureCursorVisible()
-        # === 修正箇所 END ===
+            self.log_widget.ensureCursorVisible()
 
     def select_input_folder(self):
         self.log_manager.debug("Selecting input folder.", context="UI_ACTION"); last_dir = self.input_folder_path or self.config.get("last_target_dir", os.path.expanduser("~"))
