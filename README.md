@@ -7,13 +7,14 @@
 - $ cat /c/Users/{ユーザ名}/.bashrc
 
 ```
-# bash 起動時、自動的に venv を有効化
-if [ -f "./.venv/Scripts/activate" ]; then
+# Windows環境下で Git bash 起動時、自動的に venv を有効化
+# すでに VIRTUAL_ENV が設定されていなければ自動有効化
+if [ -z "$VIRTUAL_ENV" ] && [ -f "./.venv/Scripts/activate" ]; then
     source ./.venv/Scripts/activate
 fi
 ```
 
-- ターミナルで bash を起動すると自動的に venv が有効になり、プロンプトに "(.venv)" が表示される。
+- ターミナルで Git bash を起動すると自動的に venv が有効になり、プロンプトに "(.venv)" が表示される。
 
 ```
 (.venv)
