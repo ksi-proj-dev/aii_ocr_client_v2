@@ -1,0 +1,12 @@
+.venv
+__pycache__
+build/
+dist/
+venv/
+*.pyc
+*.pyo
+*.swp
+*.exe
+.DS_Store
+OCR入力フォルダ
+OCR出力フォルダ
